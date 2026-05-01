@@ -27,11 +27,11 @@ log = logging.getLogger("sge_collector")
 
 # ── Variáveis de ambiente ─────────────────────────────────────
 SGE_URL      = os.getenv("SGE_URL", "https://sistema.sge.com.br")
-SGE_USER     = os.getenv("SGE_USER", "")       # Seu login SGE
-SGE_PASSWORD = os.getenv("SGE_PASSWORD", "")   # Sua senha SGE
+SGE_USER     = os.getenv("SGE_USER", "")
+SGE_PASSWORD = os.getenv("SGE_PASSWORD", "")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")  # service_role key
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -74,64 +74,67 @@ class SGECollector:
     def fazer_login(self) -> bool:
         """Faz login no SGE"""
         try:
-            log.info(f"Acessando {self.base_url}...")
-            self.page.goto(self.base_url, wait_until="networkidle", timeout=30000)
-            time.sleep(2)
+            login_url = f"{self.base_url}/SCA/Forms/Login.aspx"
+            log.info(f"Acessando página de login: {login_url}")
+            self.page.goto(login_url, wait_until="domcontentloaded", timeout=45000)
+            time.sleep(3)
 
-            # Tenta encontrar campos de login
-            # O SGE usa ASP.NET — os IDs podem variar, ajuste se necessário
-            selectors_user = [
-                'input[name*="login"]', 'input[name*="user"]',
-                'input[id*="login"]', 'input[id*="user"]',
-                'input[type="text"]:first-of-type'
-            ]
-            selectors_pass = [
-                'input[name*="senha"]', 'input[name*="pass"]',
-                'input[id*="senha"]', 'input[type="password"]'
-            ]
+            log.info(f"URL atual: {self.page.url}")
 
-            user_field = None
-            for sel in selectors_user:
+            # Campo de email/usuário
+            email_field = None
+            for sel in ['input[type="email"]', 'input[type="text"]',
+                        'input[id*="Email"]', 'input[id*="Login"]']:
                 try:
-                    user_field = self.page.locator(sel).first
-                    if user_field.is_visible():
+                    f = self.page.locator(sel).first
+                    if f.count() > 0 and f.is_visible(timeout=2000):
+                        email_field = f
+                        log.info(f"Campo email encontrado: {sel}")
                         break
                 except:
                     continue
 
+            # Campo de senha
             pass_field = None
-            for sel in selectors_pass:
-                try:
-                    pass_field = self.page.locator(sel).first
-                    if pass_field.is_visible():
-                        break
-                except:
-                    continue
+            try:
+                pass_field = self.page.locator('input[type="password"]').first
+                if not pass_field.is_visible(timeout=2000):
+                    pass_field = None
+            except:
+                pass_field = None
 
-            if not user_field or not pass_field:
-                log.error("Campos de login não encontrados")
+            if not email_field or not pass_field:
+                html = self.page.content()[:3000]
+                log.error(f"Campos não encontrados. HTML: {html}")
                 return False
 
-            user_field.fill(SGE_USER)
+            email_field.clear()
+            email_field.fill(SGE_USER)
+            pass_field.clear()
             pass_field.fill(SGE_PASSWORD)
+            log.info("Credenciais preenchidas")
 
-            # Clica no botão de login
-            btn_selectors = [
-                'input[type="submit"]', 'button[type="submit"]',
-                'button:has-text("Entrar")', 'button:has-text("Login")',
-                'input[value*="Entrar"]', 'input[value*="Login"]'
-            ]
-            for sel in btn_selectors:
+            # Botão Entrar
+            for sel in ['button:has-text("Entrar")', 'input[value="Entrar"]',
+                        'button[type="submit"]', 'input[type="submit"]']:
                 try:
                     btn = self.page.locator(sel).first
-                    if btn.is_visible():
+                    if btn.count() > 0 and btn.is_visible(timeout=2000):
                         btn.click()
+                        log.info(f"Botão clicado: {sel}")
                         break
                 except:
                     continue
 
-            self.page.wait_for_load_state("networkidle", timeout=15000)
-            log.info("Login realizado com sucesso")
+            self.page.wait_for_load_state("domcontentloaded", timeout=20000)
+            time.sleep(2)
+            log.info(f"URL após login: {self.page.url}")
+
+            if "Login.aspx" in self.page.url:
+                log.error("Ainda na página de login — verifique as credenciais")
+                return False
+
+            log.info("Login realizado com sucesso!")
             return True
 
         except PlaywrightTimeout:
@@ -151,7 +154,6 @@ class SGECollector:
             self.page.goto(url_relatorio, wait_until="networkidle", timeout=30000)
             time.sleep(2)
 
-            # Extrai tabelas HTML da página
             dados = self.page.evaluate("""
                 () => {
                     const tabelas = document.querySelectorAll('table');
@@ -161,16 +163,14 @@ class SGECollector:
                         const headers = [];
                         const linhas = [];
 
-                        // Pega cabeçalhos
                         const ths = tabela.querySelectorAll('tr:first-child th, tr:first-child td');
                         ths.forEach(th => headers.push(th.innerText.trim()));
 
                         if (headers.length === 0) return;
 
-                        // Pega dados
                         const trs = tabela.querySelectorAll('tr');
                         trs.forEach((tr, idx) => {
-                            if (idx === 0) return; // pula cabeçalho
+                            if (idx === 0) return;
                             const cells = tr.querySelectorAll('td');
                             if (cells.length === 0) return;
 
@@ -204,7 +204,6 @@ class SGECollector:
 
         turmas = []
         for row in raw:
-            # Mapeamento de colunas — ajuste conforme o SGE retornar
             turma = {
                 "codigo": row.get("Código", row.get("Cód", row.get("ID", ""))),
                 "nome": row.get("Turma", row.get("Nome", row.get("Descrição", ""))),
@@ -296,7 +295,6 @@ class SGECollector:
 # FUNÇÕES AUXILIARES
 # ══════════════════════════════════════════════════════════════
 def _parse_data(valor: str) -> str | None:
-    """Converte string de data brasileira para ISO"""
     if not valor or valor.strip() in ("", "-", "—"):
         return None
     valor = valor.strip()
@@ -310,7 +308,6 @@ def _parse_data(valor: str) -> str | None:
 
 
 def _parse_valor(valor: str) -> float:
-    """Converte string de valor monetário brasileiro para float"""
     if not valor or valor.strip() in ("", "-", "—"):
         return 0.0
     valor = valor.strip()
@@ -322,7 +319,6 @@ def _parse_valor(valor: str) -> float:
 
 
 def _parse_int(valor: str) -> int:
-    """Converte string para inteiro"""
     try:
         return int(str(valor).strip())
     except (ValueError, TypeError):
@@ -330,7 +326,6 @@ def _parse_int(valor: str) -> int:
 
 
 def _determinar_status_pgto(status_raw: str, vencimento: str | None, pagamento: str | None) -> str:
-    """Determina o status correto do pagamento"""
     if pagamento:
         return "pago"
     if status_raw:
@@ -353,12 +348,10 @@ def _determinar_status_pgto(status_raw: str, vencimento: str | None, pagamento: 
 # SINCRONIZAÇÃO COM SUPABASE
 # ══════════════════════════════════════════════════════════════
 def upsert_dados(supabase: Client, tabela: str, dados: list[dict], chave: str = "codigo_sge") -> int:
-    """Insere ou atualiza dados no Supabase"""
     if not dados:
         log.info(f"  Nenhum dado para {tabela}")
         return 0
 
-    # Remove registros sem chave primária
     dados_validos = [d for d in dados if d.get(chave)]
 
     if not dados_validos:
@@ -375,7 +368,6 @@ def upsert_dados(supabase: Client, tabela: str, dados: list[dict], chave: str = 
 
 
 def registrar_sync(supabase: Client, fonte: str, status: str, registros: int, msg: str, duracao: float):
-    """Registra o resultado da sincronização no banco"""
     try:
         supabase.table("sync_log").insert({
             "fonte": fonte,
@@ -415,35 +407,4 @@ def main():
             raise Exception("Falha no login do SGE")
 
         log.info("\n📋 Coletando turmas...")
-        turmas = coletor.coletar_turmas()
-        total_registros += upsert_dados(supabase, "turmas", turmas, "codigo")
-
-        log.info("\n💰 Coletando vendas...")
-        vendas = coletor.coletar_vendas()
-        total_registros += upsert_dados(supabase, "vendas", vendas, "codigo_sge")
-
-        log.info("\n💳 Coletando pagamentos...")
-        pagamentos = coletor.coletar_pagamentos()
-        total_registros += upsert_dados(supabase, "pagamentos", pagamentos, "codigo_sge")
-
-        log.info("\n📑 Coletando contas a pagar...")
-        contas = coletor.coletar_contas_pagar()
-        total_registros += upsert_dados(supabase, "contas_pagar", contas, "codigo_sge")
-
-        msg_final = f"Sincronização concluída: {total_registros} registros"
-
-    except Exception as e:
-        status_final = "erro"
-        msg_final = str(e)
-        log.error(f"ERRO na coleta: {e}")
-
-    finally:
-        coletor.encerrar()
-        duracao = time.time() - inicio
-        registrar_sync(supabase, "sge", status_final, total_registros, msg_final, duracao)
-        log.info(f"\n{'✅' if status_final == 'sucesso' else '❌'} {msg_final}")
-        log.info(f"⏱  Tempo total: {duracao:.1f}s")
-
-
-if __name__ == "__main__":
-    main()
+        turmas = coletor.c
