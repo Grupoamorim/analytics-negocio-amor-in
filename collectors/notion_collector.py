@@ -22,12 +22,14 @@ SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_KEY", "")
 # IDs dos bancos Notion
 DB_IDS = {
     "crm":        os.getenv("NOTION_DB_CRM", ""),
+    "propostas":  os.getenv("NOTION_DB_PROPOSTAS", ""),
     "projetos":   os.getenv("NOTION_DB_PROJETOS", ""),
     "atividades": os.getenv("NOTION_DB_ATIVIDADES", ""),
     "equipe":     os.getenv("NOTION_DB_EQUIPE", ""),
     "ice":        os.getenv("NOTION_DB_ICE", ""),
     "estoque":    os.getenv("NOTION_DB_ESTOQUE", ""),
     "curadoria":  os.getenv("NOTION_DB_CURADORIA", ""),
+    "eventos":    os.getenv("NOTION_DB_EVENTOS", ""),
 }
 
 HEADERS = {
@@ -230,6 +232,38 @@ def converter_curadoria(pagina):
         "updated_at": datetime.now().isoformat()
     }
 
+def converter_propostas(pagina):
+    p = pagina.get("properties", {})
+    return {
+        "notion_id":       pagina["id"],
+        "nome":            txt(find(p, "Nome","Name","Cliente","Título","Lead")),
+        "email":           txt(find(p, "Email","E-mail")),
+        "telefone":        txt(find(p, "Telefone","Tel","WhatsApp","Celular")),
+        "status":          txt(find(p, "Status","Estágio","Stage","Pipeline")),
+        "turma_interesse": txt(find(p, "Turma","Turma de Interesse","Evento")),
+        "valor_estimado":  num(find(p, "Valor","Ticket","Valor Estimado","Proposta")),
+        "data_contato":    dt(find(p, "Data","Data do Contato","Created","Criado")),
+        "responsavel":     txt(find(p, "Responsável","Owner","Vendedor")),
+        "notas":           txt(find(p, "Notas","Obs","Observações","Notes")),
+        "raw_data": {k: txt(v) for k,v in list(p.items())[:20]},
+        "updated_at": datetime.now().isoformat()
+    }
+
+def converter_eventos(pagina):
+    p = pagina.get("properties", {})
+    return {
+        "notion_id":  pagina["id"],
+        "titulo":     txt(find(p, "Nome","Name","Título","Evento","Atividade")),
+        "tipo":       txt(find(p, "Tipo","Categoria","Type","Tag")),
+        "status":     txt(find(p, "Status","Situação")),
+        "data":       dt(find(p, "Data","Date","Início","Start","Prazo")),
+        "data_fim":   dt(find(p, "Data fim","Fim","End")),
+        "projeto":    txt(find(p, "Projeto","Turma","Relacionado","Cliente")),
+        "responsavel":txt(find(p, "Responsável","Owner","Pessoa")),
+        "raw_data": {k: txt(v) for k,v in list(p.items())[:20]},
+        "updated_at": datetime.now().isoformat()
+    }
+
 
 # ══════════════════════════════════════════════════════════
 # SALVAR NO SUPABASE
@@ -265,12 +299,14 @@ def main():
     # Mapa: nome_banco → (ID, conversor, tabela_supabase)
     bancos = [
         ("CRM/Leads",    DB_IDS["crm"],        converter_crm,        "crm_notion"),
+        ("Propostas",    DB_IDS["propostas"],   converter_propostas,  "notion_propostas"),
         ("Projetos",     DB_IDS["projetos"],    converter_projetos,   "notion_projetos"),
         ("Atividades",   DB_IDS["atividades"],  converter_atividades, "notion_atividades"),
         ("Equipe",       DB_IDS["equipe"],      converter_equipe,     "notion_equipe"),
         ("ICE Score",    DB_IDS["ice"],         converter_ice,        "notion_ice"),
         ("Estoque",      DB_IDS["estoque"],     converter_estoque,    "notion_estoque"),
         ("Curadoria",    DB_IDS["curadoria"],   converter_curadoria,  "notion_curadoria"),
+        ("Eventos",      DB_IDS["eventos"],     converter_eventos,    "notion_eventos"),
     ]
 
     for nome, db_id, conversor, tabela in bancos:
