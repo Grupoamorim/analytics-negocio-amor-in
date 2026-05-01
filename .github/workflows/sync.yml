@@ -17,6 +17,15 @@ jobs:
       - name: Executar coletor Notion
         env:
           NOTION_TOKEN:         ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_CRM:        ${{ secrets.NOTION_DB_CRM }}
+          NOTION_DB_PROPOSTAS:  ${{ secrets.NOTION_DB_PROPOSTAS }}
+          NOTION_DB_PROJETOS:   ${{ secrets.NOTION_DB_PROJETOS }}
+          NOTION_DB_ATIVIDADES: ${{ secrets.NOTION_DB_ATIVIDADES }}
+          NOTION_DB_EQUIPE:     ${{ secrets.NOTION_DB_EQUIPE }}
+          NOTION_DB_ICE:        ${{ secrets.NOTION_DB_ICE }}
+          NOTION_DB_ESTOQUE:    ${{ secrets.NOTION_DB_ESTOQUE }}
+          NOTION_DB_CURADORIA:  ${{ secrets.NOTION_DB_CURADORIA }}
+          NOTION_DB_EVENTOS:    ${{ secrets.NOTION_DB_EVENTOS }}
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python collectors/notion_collector.py
