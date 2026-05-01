@@ -70,7 +70,7 @@ class SGECollector:
                         email_field = f
                         log.info(f"Campo email: {sel}")
                         break
-                except:
+                except Exception:
                     continue
 
             pass_field = None
@@ -78,7 +78,7 @@ class SGECollector:
                 pass_field = self.page.locator('input[type="password"]').first
                 if not pass_field.is_visible(timeout=2000):
                     pass_field = None
-            except:
+            except Exception:
                 pass_field = None
 
             if not email_field or not pass_field:
@@ -108,7 +108,7 @@ class SGECollector:
                         log.info(f"Clicou: {sel}")
                         clicou = True
                         break
-                except:
+                except Exception:
                     continue
 
             if not clicou:
@@ -117,7 +117,7 @@ class SGECollector:
 
             try:
                 self.page.wait_for_load_state("networkidle", timeout=25000)
-            except:
+            except Exception:
                 self.page.wait_for_load_state("domcontentloaded", timeout=10000)
 
             time.sleep(2)
@@ -128,7 +128,7 @@ class SGECollector:
                     () => Array.from(document.querySelectorAll('span,div,p'))
                         .map(e => e.innerText.trim())
                         .filter(t => t.length > 3 && t.length < 150 &&
-                            /senha|usu.rio|inv.lid|erro|incorret/i.test(t))
+                            /senha|usuario|invalido|erro|incorreto/i.test(t))
                         .slice(0,3).join(' | ')
                 """)
                 log.error(f"Login falhou. Erro SGE: '{erro}'")
@@ -248,4 +248,149 @@ class SGECollector:
             c = {
                 "codigo_sge": row.get("Codigo", row.get("Cod", "")),
                 "descricao": row.get("Descricao", row.get("Historico", "")),
-                "forn
+                "fornecedor": row.get("Fornecedor", ""),
+                "categoria": row.get("Categoria", row.get("Tipo", "")),
+                "valor": _parse_valor(row.get("Valor", "0")),
+                "data_vencimento": _parse_data(row.get("Vencimento", "")),
+                "data_pagamento": _parse_data(row.get("Pagamento", "")),
+                "status": row.get("Status", row.get("Situacao", "pendente")).lower(),
+                "updated_at": datetime.now().isoformat()
+            }
+            if c["codigo_sge"] and c["valor"] > 0:
+                contas.append(c)
+        return contas
+
+
+def _parse_data(valor):
+    if not valor or str(valor).strip() in ("", "-"):
+        return None
+    valor = str(valor).strip()
+    for fmt in ["%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d", "%d-%m-%Y"]:
+        try:
+            return datetime.strptime(valor, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_valor(valor):
+    if not valor or str(valor).strip() in ("", "-"):
+        return 0.0
+    valor = str(valor).strip().replace("R$", "").replace(".", "").replace(",", ".").strip()
+    try:
+        return float(valor)
+    except ValueError:
+        return 0.0
+
+
+def _parse_int(valor):
+    try:
+        return int(str(valor).strip())
+    except (ValueError, TypeError):
+        return 1
+
+
+def _determinar_status_pgto(status_raw, vencimento, pagamento):
+    if pagamento:
+        return "pago"
+    if status_raw:
+        s = status_raw.lower()
+        if any(x in s for x in ["pago", "quitado", "liquidado"]):
+            return "pago"
+        if any(x in s for x in ["cancel", "estorn"]):
+            return "cancelado"
+    if vencimento:
+        try:
+            if datetime.strptime(vencimento, "%Y-%m-%d").date() < date.today():
+                return "atrasado"
+        except ValueError:
+            pass
+    return "pendente"
+
+
+def upsert_dados(supabase, tabela, dados, chave="codigo_sge"):
+    if not dados:
+        log.info(f"  Nenhum dado para {tabela}")
+        return 0
+    dados_validos = [d for d in dados if d.get(chave)]
+    if not dados_validos:
+        return 0
+    try:
+        result = supabase.table(tabela).upsert(dados_validos, on_conflict=chave).execute()
+        count = len(result.data) if result.data else 0
+        log.info(f"  OK {tabela}: {count} registros")
+        return count
+    except Exception as e:
+        log.error(f"  ERRO {tabela}: {e}")
+        return 0
+
+
+def registrar_sync(supabase, fonte, status, registros, msg, duracao):
+    try:
+        supabase.table("sync_log").insert({
+            "fonte": fonte,
+            "status": status,
+            "registros_atualizados": registros,
+            "mensagem": msg,
+            "duracao_segundos": round(duracao, 2)
+        }).execute()
+    except Exception as e:
+        log.error(f"Erro sync_log: {e}")
+
+
+def main():
+    inicio = time.time()
+    log.info("=" * 50)
+    log.info("SGE Collector iniciado")
+    log.info(f"Horario: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    log.info("=" * 50)
+
+    if not SGE_USER or not SGE_PASSWORD:
+        log.error("SGE_USER e SGE_PASSWORD nao configurados!")
+        return
+
+    supabase = get_supabase()
+    coletor = SGECollector()
+    total = 0
+    status_final = "sucesso"
+    msg_final = ""
+
+    try:
+        coletor.iniciar()
+
+        if not coletor.fazer_login():
+            raise Exception("Falha no login do SGE")
+
+        log.info("\nColetando turmas...")
+        turmas = coletor.coletar_turmas()
+        total += upsert_dados(supabase, "turmas", turmas, "codigo")
+
+        log.info("\nColetando vendas...")
+        vendas = coletor.coletar_vendas()
+        total += upsert_dados(supabase, "vendas", vendas, "codigo_sge")
+
+        log.info("\nColetando pagamentos...")
+        pagamentos = coletor.coletar_pagamentos()
+        total += upsert_dados(supabase, "pagamentos", pagamentos, "codigo_sge")
+
+        log.info("\nColetando contas a pagar...")
+        contas = coletor.coletar_contas_pagar()
+        total += upsert_dados(supabase, "contas_pagar", contas, "codigo_sge")
+
+        msg_final = f"Concluido: {total} registros"
+
+    except Exception as e:
+        status_final = "erro"
+        msg_final = str(e)
+        log.error(f"ERRO: {e}")
+
+    finally:
+        coletor.encerrar()
+        duracao = time.time() - inicio
+        registrar_sync(supabase, "sge", status_final, total, msg_final, duracao)
+        log.info(f"\n{'OK' if status_final == 'sucesso' else 'ERRO'} {msg_final}")
+        log.info(f"Tempo: {duracao:.1f}s")
+
+
+if __name__ == "__main__":
+    main()
