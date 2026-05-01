@@ -29,3 +29,20 @@ jobs:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python collectors/notion_collector.py
+
+  sync-sge:
+    name: SGE → Supabase
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: 'pip' }
+      - run: pip install playwright supabase python-dotenv && playwright install chromium --with-deps
+      - name: Executar coletor SGE
+        env:
+          SGE_URL:              ${{ secrets.SGE_URL }}
+          SGE_USER:             ${{ secrets.SGE_USER }}
+          SGE_PASSWORD:         ${{ secrets.SGE_PASSWORD }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python collectors/sge_collector.py
