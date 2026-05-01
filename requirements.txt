@@ -1,6 +1,7 @@
-supabase==2.9.1
-streamlit==1.36.0
-streamlit-authenticator==0.3.2
-python-dotenv==1.0.0
-plotly==5.22.0
-pandas==2.2.2
+supabase
+streamlit
+streamlit-authenticator
+python-dotenv
+plotly
+pandas
+Pillow>=11.0.0
