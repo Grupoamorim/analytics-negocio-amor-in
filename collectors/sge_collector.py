@@ -67,8 +67,8 @@ def sge_get(endpoint, params=None, tentativas=3):
     return None
 
 
-# ── Datas utilitárias ─────────────────────────────────────────
-def fmt(d): return d.strftime("%Y-%m-%d")
+# ── Datas utilitárias (formato dd/MM/yyyy para a API do SGE) ──
+def fmt(d): return d.strftime("%d/%m/%Y")
 
 hoje      = date.today()
 inicio_ano = fmt(date(hoje.year, 1, 1))          # 01/01 deste ano
@@ -290,6 +290,9 @@ def upsert(sb, tabela, dados, chave="codigo_sge"):
     validos = [d for d in dados if d.get(chave)]
     if not validos:
         log.warning(f"  Nenhum registro com chave '{chave}' em {tabela}")
+        if dados:
+            log.warning(f"  Campos disponiveis: {list(dados[0].keys())}")
+            log.warning(f"  Primeiro registro: {dados[0]}")
         return 0
     try:
         res = sb.table(tabela).upsert(validos, on_conflict=chave).execute()
