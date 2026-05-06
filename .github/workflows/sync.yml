@@ -1,48 +1,51 @@
-name: Sincronização Automática de Dados
+name: Sincronizacao Automatica de Dados
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '0 * * * *'   # toda hora
+  workflow_dispatch:        # rodar manualmente
 
 jobs:
   sync-notion:
-    name: Notion → Supabase
+    name: Notion -> Supabase
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11', cache: 'pip' }
+        with:
+          python-version: '3.11'
+          cache: 'pip'
       - run: pip install requests supabase python-dotenv
       - name: Executar coletor Notion
         env:
-          NOTION_TOKEN:         ${{ secrets.NOTION_TOKEN }}
-          NOTION_DB_CRM:        ${{ secrets.NOTION_DB_CRM }}
-          NOTION_DB_PROPOSTAS:  ${{ secrets.NOTION_DB_PROPOSTAS }}
-          NOTION_DB_PROJETOS:   ${{ secrets.NOTION_DB_PROJETOS }}
-          NOTION_DB_ATIVIDADES: ${{ secrets.NOTION_DB_ATIVIDADES }}
-          NOTION_DB_EQUIPE:     ${{ secrets.NOTION_DB_EQUIPE }}
-          NOTION_DB_ICE:        ${{ secrets.NOTION_DB_ICE }}
-          NOTION_DB_ESTOQUE:    ${{ secrets.NOTION_DB_ESTOQUE }}
-          NOTION_DB_CURADORIA:  ${{ secrets.NOTION_DB_CURADORIA }}
-          NOTION_DB_EVENTOS:    ${{ secrets.NOTION_DB_EVENTOS }}
-          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NOTION_TOKEN:          ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_CRM:         ${{ secrets.NOTION_DB_CRM }}
+          NOTION_DB_PROPOSTAS:   ${{ secrets.NOTION_DB_PROPOSTAS }}
+          NOTION_DB_PROJETOS:    ${{ secrets.NOTION_DB_PROJETOS }}
+          NOTION_DB_ATIVIDADES:  ${{ secrets.NOTION_DB_ATIVIDADES }}
+          NOTION_DB_EQUIPE:      ${{ secrets.NOTION_DB_EQUIPE }}
+          NOTION_DB_ICE:         ${{ secrets.NOTION_DB_ICE }}
+          NOTION_DB_ESTOQUE:     ${{ secrets.NOTION_DB_ESTOQUE }}
+          NOTION_DB_CURADORIA:   ${{ secrets.NOTION_DB_CURADORIA }}
+          NOTION_DB_EVENTOS:     ${{ secrets.NOTION_DB_EVENTOS }}
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python collectors/notion_collector.py
 
   sync-sge:
-    name: SGE → Supabase
+    name: SGE API -> Supabase
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11', cache: 'pip' }
-      - run: pip install playwright supabase python-dotenv && playwright install chromium --with-deps
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install requests supabase python-dotenv
       - name: Executar coletor SGE
         env:
-          SGE_URL:              ${{ secrets.SGE_URL }}
-          SGE_USER:             ${{ secrets.SGE_USER }}
-          SGE_PASSWORD:         ${{ secrets.SGE_PASSWORD }}
+          SGE_CNPJ:             ${{ secrets.SGE_CNPJ }}
+          SGE_TOKEN:            ${{ secrets.SGE_TOKEN }}
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python collectors/sge_collector.py
