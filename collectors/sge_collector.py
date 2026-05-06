@@ -49,17 +49,19 @@ def sge_get(endpoint, params=None, tentativas=3):
     for i in range(tentativas):
         try:
             r = requests.get(url, headers=headers, params=params, timeout=30)
-            log.info(f"  HTTP {r.status_code} | Resposta: {r.text[:300]}")
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 401:
-                log.error(f"Autenticacao falhou (401) em {endpoint}")
-                log.error(f"Resposta SGE: {r.text[:500]}")
+                log.error(f"Auth falhou (401): {r.text[:300]}")
                 return None
             if r.status_code == 404:
-                log.warning(f"Endpoint nao encontrado (404): {endpoint}")
+                log.warning(f"Nao encontrado (404): {endpoint}")
                 return None
-            log.warning(f"  HTTP {r.status_code} em {endpoint} (tentativa {i+1})")
+            if r.status_code == 500:
+                log.warning(f"  HTTP 500 em {endpoint} | Resposta: {r.text[:500]} (tentativa {i+1})")
+                time.sleep(2)
+                continue
+            log.warning(f"  HTTP {r.status_code} | {r.text[:300]} (tentativa {i+1})")
             time.sleep(2)
         except Exception as e:
             log.error(f"  Erro em {endpoint}: {e} (tentativa {i+1})")
