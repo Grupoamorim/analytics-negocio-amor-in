@@ -1,393 +1,377 @@
+"""
+SGE Collector via API REST
+===========================
+Coleta dados da API oficial do SGE (e-api.sge.com.br) e salva no Supabase.
+Autenticação: Basic Auth com CNPJ + Token em base64.
+
+Secrets necessários no GitHub:
+  SGE_CNPJ         -> CNPJ da empresa (só números, ex: 12345678000190)
+  SGE_TOKEN        -> Token gerado em Configurações > Segurança no SGE
+  SUPABASE_URL     -> URL do projeto Supabase
+  SUPABASE_SERVICE_KEY -> Chave service_role do Supabase
+"""
+
 import os
+import base64
 import time
 import logging
-from datetime import datetime, date
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+import requests
+from datetime import datetime, date, timedelta
 from supabase import create_client, Client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-log = logging.getLogger("sge_collector")
+log = logging.getLogger("sge_api")
 
-SGE_URL      = os.getenv("SGE_URL", "https://sistema.sge.com.br")
-SGE_USER     = os.getenv("SGE_USER", "")
-SGE_PASSWORD = os.getenv("SGE_PASSWORD", "")
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-
-
-def get_supabase():
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise ValueError("Configure SUPABASE_URL e SUPABASE_SERVICE_KEY")
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+# ── Credenciais ───────────────────────────────────────────────
+SGE_CNPJ         = os.getenv("SGE_CNPJ", "")
+SGE_TOKEN        = os.getenv("SGE_TOKEN", "")
+SGE_BASE_URL     = "https://e-api.sge.com.br"
+SUPABASE_URL     = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY     = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 
-class SGECollector:
-    def __init__(self):
-        self.base_url = SGE_URL
-        self.page = None
-        self.browser = None
-        self.playwright = None
+# ── Autenticação Basic (CNPJ:TOKEN em base64) ─────────────────
+def get_headers():
+    credencial = base64.b64encode(f"{SGE_CNPJ}:{SGE_TOKEN}".encode()).decode()
+    return {
+        "Authorization": f"Basic {credencial}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
 
-    def iniciar(self):
-        log.info("Iniciando navegador headless...")
-        self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=True)
-        context = self.browser.new_context(
-            viewport={"width": 1280, "height": 800},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        )
-        self.page = context.new_page()
 
-    def encerrar(self):
-        if self.browser:
-            self.browser.close()
-        if self.playwright:
-            self.playwright.stop()
-
-    def fazer_login(self):
+# ── Requisição genérica com retry ────────────────────────────
+def sge_get(endpoint, params=None, tentativas=3):
+    url = f"{SGE_BASE_URL}/{endpoint}"
+    for i in range(tentativas):
         try:
-            login_url = f"{self.base_url}/SCA/Forms/Login.aspx"
-            log.info(f"Acessando: {login_url}")
-            self.page.goto(login_url, wait_until="domcontentloaded", timeout=45000)
-            time.sleep(3)
-            log.info(f"URL atual: {self.page.url}")
-
-            inputs_info = self.page.evaluate("""
-                () => Array.from(document.querySelectorAll('input')).map(el => ({
-                    type: el.type||'', id: el.id||'', name: el.name||'',
-                    placeholder: el.placeholder||''
-                }))
-            """)
-            log.info(f"Inputs na pagina: {inputs_info}")
-
-            email_field = None
-            for sel in ['input[type="email"]', 'input[type="text"]',
-                        'input[id*="Email"]', 'input[id*="Login"]',
-                        'input[name*="Email"]', 'input[name*="Login"]']:
-                try:
-                    f = self.page.locator(sel).first
-                    if f.count() > 0 and f.is_visible(timeout=2000):
-                        email_field = f
-                        log.info(f"Campo email: {sel}")
-                        break
-                except Exception:
-                    continue
-
-            pass_field = None
-            try:
-                pass_field = self.page.locator('input[type="password"]').first
-                if not pass_field.is_visible(timeout=2000):
-                    pass_field = None
-            except Exception:
-                pass_field = None
-
-            if not email_field or not pass_field:
-                log.error(f"Campos nao encontrados. HTML: {self.page.content()[:4000]}")
-                return False
-
-            email_field.click()
-            email_field.fill("")
-            email_field.type(SGE_USER, delay=80)
-            time.sleep(0.5)
-
-            pass_field.click()
-            pass_field.fill("")
-            pass_field.type(SGE_PASSWORD, delay=80)
-            time.sleep(0.5)
-
-            log.info(f"Digitado: {SGE_USER[:5]}***")
-
-            clicou = False
-            for sel in ['input[value="Entrar"]', 'input[type="submit"]',
-                        'button[type="submit"]', 'button:has-text("Entrar")',
-                        'a:has-text("Entrar")', 'button']:
-                try:
-                    btn = self.page.locator(sel).first
-                    if btn.count() > 0 and btn.is_visible(timeout=2000):
-                        btn.click()
-                        log.info(f"Clicou: {sel}")
-                        clicou = True
-                        break
-                except Exception:
-                    continue
-
-            if not clicou:
-                log.info("Nenhum botao, usando Enter...")
-                pass_field.press("Enter")
-
-            try:
-                self.page.wait_for_load_state("networkidle", timeout=25000)
-            except Exception:
-                self.page.wait_for_load_state("domcontentloaded", timeout=10000)
-
+            r = requests.get(url, headers=get_headers(), params=params, timeout=30)
+            if r.status_code == 200:
+                return r.json()
+            if r.status_code == 401:
+                log.error(f"Autenticacao falhou em {endpoint} — verifique SGE_CNPJ e SGE_TOKEN")
+                return None
+            if r.status_code == 404:
+                log.warning(f"Endpoint nao encontrado: {endpoint}")
+                return None
+            log.warning(f"  HTTP {r.status_code} em {endpoint} (tentativa {i+1})")
             time.sleep(2)
-            log.info(f"URL apos login: {self.page.url}")
-
-            if "Login.aspx" in self.page.url:
-                erro = self.page.evaluate("""
-                    () => Array.from(document.querySelectorAll('span,div,p'))
-                        .map(e => e.innerText.trim())
-                        .filter(t => t.length > 3 && t.length < 150 &&
-                            /senha|usuario|invalido|erro|incorreto/i.test(t))
-                        .slice(0,3).join(' | ')
-                """)
-                log.error(f"Login falhou. Erro SGE: '{erro}'")
-                return False
-
-            log.info("Login OK!")
-            return True
-
-        except PlaywrightTimeout:
-            log.error("Timeout ao fazer login")
-            return False
         except Exception as e:
-            log.error(f"Erro no login: {e}")
-            return False
-
-    def exportar_relatorio(self, url_relatorio, nome):
-        try:
-            log.info(f"Exportando: {nome}")
-            self.page.goto(url_relatorio, wait_until="networkidle", timeout=30000)
+            log.error(f"  Erro em {endpoint}: {e} (tentativa {i+1})")
             time.sleep(2)
-            dados = self.page.evaluate("""
-                () => {
-                    const tabelas = document.querySelectorAll('table');
-                    const resultado = [];
-                    tabelas.forEach(tabela => {
-                        const headers = [];
-                        const ths = tabela.querySelectorAll('tr:first-child th, tr:first-child td');
-                        ths.forEach(th => headers.push(th.innerText.trim()));
-                        if (headers.length === 0) return;
-                        const trs = tabela.querySelectorAll('tr');
-                        trs.forEach((tr, idx) => {
-                            if (idx === 0) return;
-                            const cells = tr.querySelectorAll('td');
-                            if (cells.length === 0) return;
-                            const row = {};
-                            cells.forEach((td, i) => {
-                                if (headers[i]) row[headers[i]] = td.innerText.trim();
-                            });
-                            if (Object.keys(row).length > 0) resultado.push(row);
-                        });
-                    });
-                    return resultado;
-                }
-            """)
-            log.info(f"  -> {len(dados)} registros em '{nome}'")
-            return dados
-        except Exception as e:
-            log.error(f"Erro ao exportar {nome}: {e}")
-            return []
-
-    def coletar_turmas(self):
-        url = f"{self.base_url}/SGE/Forms/Turma/Consulta.aspx"
-        raw = self.exportar_relatorio(url, "turmas")
-        turmas = []
-        for row in raw:
-            t = {
-                "codigo": row.get("Codigo", row.get("Cod", row.get("ID", ""))),
-                "nome": row.get("Turma", row.get("Nome", row.get("Descricao", ""))),
-                "curso": row.get("Curso", row.get("Evento", "")),
-                "instituicao": row.get("Instituicao", row.get("Escola", "")),
-                "status": row.get("Status", row.get("Situacao", "ativa")).lower(),
-                "updated_at": datetime.now().isoformat()
-            }
-            if t["codigo"] and t["nome"]:
-                turmas.append(t)
-        return turmas
-
-    def coletar_vendas(self):
-        url = f"{self.base_url}/SGE/Forms/Contrato/Consulta.aspx"
-        raw = self.exportar_relatorio(url, "vendas")
-        vendas = []
-        for row in raw:
-            v = {
-                "codigo_sge": row.get("Contrato", row.get("Codigo", row.get("No", ""))),
-                "data_venda": _parse_data(row.get("Data", row.get("Dt. Venda", ""))),
-                "valor_total": _parse_valor(row.get("Valor Total", row.get("Vlr Total", "0"))),
-                "valor_entrada": _parse_valor(row.get("Entrada", row.get("Vlr Entrada", "0"))),
-                "num_parcelas": _parse_int(row.get("Parcelas", "1")),
-                "status": row.get("Status", row.get("Situacao", "ativo")).lower(),
-                "produto": row.get("Produto", row.get("Pacote", "")),
-                "vendedor": row.get("Vendedor", row.get("Consultor", "")),
-                "updated_at": datetime.now().isoformat()
-            }
-            if v["codigo_sge"] and v["valor_total"] > 0:
-                vendas.append(v)
-        return vendas
-
-    def coletar_pagamentos(self):
-        url = f"{self.base_url}/SGE/Forms/Financeiro/ContasReceber.aspx"
-        raw = self.exportar_relatorio(url, "pagamentos")
-        pagamentos = []
-        for row in raw:
-            p = {
-                "codigo_sge": row.get("Codigo", row.get("Cod", row.get("No", ""))),
-                "data_vencimento": _parse_data(row.get("Vencimento", row.get("Dt. Venc.", ""))),
-                "data_pagamento": _parse_data(row.get("Pagamento", row.get("Dt. Pgto.", ""))),
-                "valor": _parse_valor(row.get("Valor", row.get("Vlr", "0"))),
-                "valor_pago": _parse_valor(row.get("Valor Pago", row.get("Vlr Pago", "0"))),
-                "status": _determinar_status_pgto(
-                    row.get("Status", row.get("Situacao", "")),
-                    _parse_data(row.get("Vencimento", "")),
-                    _parse_data(row.get("Pagamento", ""))
-                ),
-                "forma_pagamento": row.get("Forma", row.get("Forma Pgto.", "")),
-                "num_parcela": _parse_int(row.get("Parcela", "1")),
-                "updated_at": datetime.now().isoformat()
-            }
-            if p["codigo_sge"]:
-                pagamentos.append(p)
-        return pagamentos
-
-    def coletar_contas_pagar(self):
-        url = f"{self.base_url}/SGE/Forms/Financeiro/ContasPagar.aspx"
-        raw = self.exportar_relatorio(url, "contas_pagar")
-        contas = []
-        for row in raw:
-            c = {
-                "codigo_sge": row.get("Codigo", row.get("Cod", "")),
-                "descricao": row.get("Descricao", row.get("Historico", "")),
-                "fornecedor": row.get("Fornecedor", ""),
-                "categoria": row.get("Categoria", row.get("Tipo", "")),
-                "valor": _parse_valor(row.get("Valor", "0")),
-                "data_vencimento": _parse_data(row.get("Vencimento", "")),
-                "data_pagamento": _parse_data(row.get("Pagamento", "")),
-                "status": row.get("Status", row.get("Situacao", "pendente")).lower(),
-                "updated_at": datetime.now().isoformat()
-            }
-            if c["codigo_sge"] and c["valor"] > 0:
-                contas.append(c)
-        return contas
-
-
-def _parse_data(valor):
-    if not valor or str(valor).strip() in ("", "-"):
-        return None
-    valor = str(valor).strip()
-    for fmt in ["%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d", "%d-%m-%Y"]:
-        try:
-            return datetime.strptime(valor, fmt).strftime("%Y-%m-%d")
-        except ValueError:
-            continue
     return None
 
 
-def _parse_valor(valor):
-    if not valor or str(valor).strip() in ("", "-"):
-        return 0.0
-    valor = str(valor).strip().replace("R$", "").replace(".", "").replace(",", ".").strip()
-    try:
-        return float(valor)
-    except ValueError:
-        return 0.0
+# ── Datas utilitárias ─────────────────────────────────────────
+def fmt(d): return d.strftime("%Y-%m-%d")
+
+hoje      = date.today()
+inicio_ano = fmt(date(hoje.year, 1, 1))          # 01/01 deste ano
+fim_ano    = fmt(date(hoje.year, 12, 31))         # 31/12 deste ano
+ha_1_ano   = fmt(hoje - timedelta(days=365))      # 1 ano atrás
+ha_6_meses = fmt(hoje - timedelta(days=180))      # 6 meses atrás
+em_1_ano   = fmt(hoje + timedelta(days=365))      # 1 ano à frente
+em_90_dias = fmt(hoje + timedelta(days=90))       # 90 dias à frente
+hoje_str   = fmt(hoje)
 
 
-def _parse_int(valor):
-    try:
-        return int(str(valor).strip())
-    except (ValueError, TypeError):
-        return 1
+# ══════════════════════════════════════════════════════════════
+# COLETORES — um por endpoint
+# ══════════════════════════════════════════════════════════════
+
+def coletar_vendas():
+    """GET api/emp/venda/listar-vendas-por-periodo — vendas dos últimos 12 meses"""
+    log.info("Coletando vendas...")
+    dados = sge_get("api/emp/venda/listar-vendas-por-periodo", {
+        "PeriodoInicial": ha_1_ano,
+        "PeriodoFinal": hoje_str
+    })
+    if not dados:
+        return []
+    registros = []
+    for v in (dados if isinstance(dados, list) else dados.get("data", dados.get("vendas", []))):
+        registros.append({
+            "codigo_sge":    str(v.get("codigo", v.get("id", v.get("numero", "")))),
+            "data_venda":    v.get("data", v.get("dataVenda", v.get("dataCadastro", ""))),
+            "cliente":       v.get("nomeCliente", v.get("cliente", v.get("aluno", ""))),
+            "cpf_cliente":   v.get("cpf", v.get("cpfCliente", "")),
+            "produto":       v.get("produto", v.get("plano", v.get("pacote", ""))),
+            "valor_total":   float(v.get("valorTotal", v.get("valor", 0)) or 0),
+            "valor_entrada": float(v.get("valorEntrada", v.get("entrada", 0)) or 0),
+            "num_parcelas":  int(v.get("numeroParcelas", v.get("parcelas", 1)) or 1),
+            "status":        str(v.get("status", v.get("situacao", "ativo"))).lower(),
+            "vendedor":      v.get("vendedor", v.get("consultor", "")),
+            "turma":         v.get("turma", v.get("evento", v.get("projeto", ""))),
+            "raw_data":      v,
+            "updated_at":    datetime.now().isoformat()
+        })
+    log.info(f"  -> {len(registros)} vendas")
+    return registros
 
 
-def _determinar_status_pgto(status_raw, vencimento, pagamento):
-    if pagamento:
-        return "pago"
-    if status_raw:
-        s = status_raw.lower()
-        if any(x in s for x in ["pago", "quitado", "liquidado"]):
-            return "pago"
-        if any(x in s for x in ["cancel", "estorn"]):
-            return "cancelado"
-    if vencimento:
-        try:
-            if datetime.strptime(vencimento, "%Y-%m-%d").date() < date.today():
-                return "atrasado"
-        except ValueError:
-            pass
-    return "pendente"
+def coletar_adesoes():
+    """GET api/emp/adesao/listar-por-periodo — adesões dos últimos 12 meses"""
+    log.info("Coletando adesoes...")
+    dados = sge_get("api/emp/adesao/listar-por-periodo", {
+        "PeriodoInicial": ha_1_ano,
+        "PeriodoFinal": hoje_str
+    })
+    if not dados:
+        return []
+    registros = []
+    for a in (dados if isinstance(dados, list) else dados.get("data", dados.get("adesoes", []))):
+        registros.append({
+            "codigo_sge":   str(a.get("codigo", a.get("id", ""))),
+            "data_adesao":  a.get("data", a.get("dataAdesao", a.get("dataCadastro", ""))),
+            "cliente":      a.get("nomeCliente", a.get("cliente", a.get("aluno", ""))),
+            "cpf_cliente":  a.get("cpf", a.get("cpfCliente", "")),
+            "plano":        a.get("plano", a.get("produto", a.get("pacote", ""))),
+            "valor":        float(a.get("valor", a.get("valorTotal", 0)) or 0),
+            "status":       str(a.get("status", a.get("situacao", "ativo"))).lower(),
+            "turma":        a.get("turma", a.get("evento", a.get("projeto", ""))),
+            "raw_data":     a,
+            "updated_at":   datetime.now().isoformat()
+        })
+    log.info(f"  -> {len(registros)} adesoes")
+    return registros
 
 
-def upsert_dados(supabase, tabela, dados, chave="codigo_sge"):
+def coletar_contas_receber():
+    """GET api/emp/financeiro/contas-a-receber — recebimentos: últimos 6 meses + próximos 12"""
+    log.info("Coletando contas a receber...")
+    dados = sge_get("api/emp/financeiro/contas-a-receber", {
+        "VencimentoInicial": ha_6_meses,
+        "VencimentoFinal": em_1_ano
+    })
+    if not dados:
+        return []
+    registros = []
+    for p in (dados if isinstance(dados, list) else dados.get("data", dados.get("parcelas", []))):
+        registros.append({
+            "codigo_sge":       str(p.get("codigo", p.get("id", p.get("numeroParcela", "")))),
+            "cliente":          p.get("nomeCliente", p.get("cliente", p.get("aluno", ""))),
+            "cpf_cliente":      p.get("cpf", p.get("cpfCliente", "")),
+            "descricao":        p.get("descricao", p.get("historico", p.get("produto", ""))),
+            "valor":            float(p.get("valor", p.get("valorParcela", 0)) or 0),
+            "valor_pago":       float(p.get("valorPago", p.get("valorRecebido", 0)) or 0),
+            "data_vencimento":  p.get("vencimento", p.get("dataVencimento", "")),
+            "data_pagamento":   p.get("pagamento", p.get("dataPagamento", "")),
+            "status":           str(p.get("status", p.get("situacao", p.get("situacaoRecebimento", "pendente")))).lower(),
+            "forma_pagamento":  p.get("formaPagamento", p.get("forma", "")),
+            "num_parcela":      int(p.get("numeroParcela", p.get("parcela", 1)) or 1),
+            "turma":            p.get("turma", p.get("projeto", p.get("evento", ""))),
+            "raw_data":         p,
+            "updated_at":       datetime.now().isoformat()
+        })
+    log.info(f"  -> {len(registros)} parcelas a receber")
+    return registros
+
+
+def coletar_contas_pagar():
+    """GET api/emp/financeiro/contas-a-pagar — pagamentos: últimos 6 meses + próximos 12"""
+    log.info("Coletando contas a pagar...")
+    dados = sge_get("api/emp/financeiro/contas-a-pagar", {
+        "VencimentoInicial": ha_6_meses,
+        "VencimentoFinal": em_1_ano
+    })
+    if not dados:
+        return []
+    registros = []
+    for p in (dados if isinstance(dados, list) else dados.get("data", dados.get("parcelas", []))):
+        registros.append({
+            "codigo_sge":      str(p.get("codigo", p.get("id", ""))),
+            "fornecedor":      p.get("fornecedor", p.get("nomeFornecedor", "")),
+            "descricao":       p.get("descricao", p.get("historico", "")),
+            "categoria":       p.get("categoria", p.get("tipo", p.get("projeto", ""))),
+            "valor":           float(p.get("valor", p.get("valorParcela", 0)) or 0),
+            "valor_pago":      float(p.get("valorPago", 0) or 0),
+            "data_vencimento": p.get("vencimento", p.get("dataVencimento", "")),
+            "data_pagamento":  p.get("pagamento", p.get("dataPagamento", "")),
+            "status":          str(p.get("status", p.get("situacao", p.get("situacaoPagamento", "pendente")))).lower(),
+            "forma_pagamento": p.get("formaPagamento", p.get("forma", "")),
+            "raw_data":        p,
+            "updated_at":      datetime.now().isoformat()
+        })
+    log.info(f"  -> {len(registros)} contas a pagar")
+    return registros
+
+
+def coletar_cobranca():
+    """GET api/emp/financeiro/cobranca — parcelas vencidas e a vencer (próximos 90 dias)"""
+    log.info("Coletando cobranca...")
+    dados = sge_get("api/emp/financeiro/cobranca", {
+        "VencimentoInicial": ha_6_meses,
+        "VencimentoFinal": em_90_dias
+    })
+    if not dados:
+        return []
+    registros = []
+    for c in (dados if isinstance(dados, list) else dados.get("data", dados.get("parcelas", []))):
+        registros.append({
+            "codigo_sge":      str(c.get("codigo", c.get("id", ""))),
+            "cliente":         c.get("nomeCliente", c.get("cliente", c.get("aluno", ""))),
+            "cpf_cliente":     c.get("cpf", c.get("cpfCliente", "")),
+            "telefone":        c.get("telefone", c.get("celular", "")),
+            "email":           c.get("email", ""),
+            "valor":           float(c.get("valor", c.get("valorParcela", 0)) or 0),
+            "data_vencimento": c.get("vencimento", c.get("dataVencimento", "")),
+            "dias_atraso":     int(c.get("diasAtraso", c.get("atraso", 0)) or 0),
+            "status":          str(c.get("status", c.get("situacao", "pendente"))).lower(),
+            "turma":           c.get("turma", c.get("projeto", c.get("evento", ""))),
+            "raw_data":        c,
+            "updated_at":      datetime.now().isoformat()
+        })
+    log.info(f"  -> {len(registros)} parcelas cobranca")
+    return registros
+
+
+def coletar_fluxo_caixa():
+    """GET api/emp/financeiro/fluxo-de-caixa"""
+    log.info("Coletando fluxo de caixa...")
+    dados = sge_get("api/emp/financeiro/fluxo-de-caixa")
+    if not dados:
+        return []
+    registros = []
+    items = dados if isinstance(dados, list) else dados.get("data", dados.get("fluxo", [dados] if isinstance(dados, dict) else []))
+    for f in items:
+        registros.append({
+            "data":           f.get("data", f.get("competencia", f.get("periodo", hoje_str))),
+            "entradas":       float(f.get("entradas", f.get("receitas", f.get("creditos", 0)) or 0)),
+            "saidas":         float(f.get("saidas", f.get("despesas", f.get("debitos", 0)) or 0)),
+            "saldo":          float(f.get("saldo", f.get("resultado", 0)) or 0),
+            "descricao":      f.get("descricao", f.get("historico", "")),
+            "raw_data":       f,
+            "updated_at":     datetime.now().isoformat()
+        })
+    log.info(f"  -> {len(registros)} registros fluxo caixa")
+    return registros
+
+
+def coletar_contas():
+    """GET api/emp/conta/listagem-simplificada — contas cadastradas"""
+    log.info("Coletando contas...")
+    dados = sge_get("api/emp/conta/listagem-simplificada")
+    if not dados:
+        return []
+    registros = []
+    for c in (dados if isinstance(dados, list) else dados.get("data", dados.get("contas", []))):
+        registros.append({
+            "codigo_sge": str(c.get("codigo", c.get("id", ""))),
+            "nome":       c.get("nome", c.get("descricao", "")),
+            "tipo":       c.get("tipo", ""),
+            "banco":      c.get("banco", c.get("nomeBanco", "")),
+            "agencia":    str(c.get("agencia", "")),
+            "conta_num":  str(c.get("conta", c.get("numeroConta", ""))),
+            "saldo":      float(c.get("saldo", c.get("saldoAtual", 0)) or 0),
+            "ativa":      bool(c.get("ativa", c.get("ativo", True))),
+            "raw_data":   c,
+            "updated_at": datetime.now().isoformat()
+        })
+    log.info(f"  -> {len(registros)} contas")
+    return registros
+
+
+# ══════════════════════════════════════════════════════════════
+# SUPABASE
+# ══════════════════════════════════════════════════════════════
+def get_supabase():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def upsert(sb, tabela, dados, chave="codigo_sge"):
     if not dados:
         log.info(f"  Nenhum dado para {tabela}")
         return 0
-    dados_validos = [d for d in dados if d.get(chave)]
-    if not dados_validos:
+    validos = [d for d in dados if d.get(chave)]
+    if not validos:
+        log.warning(f"  Nenhum registro com chave '{chave}' em {tabela}")
         return 0
     try:
-        result = supabase.table(tabela).upsert(dados_validos, on_conflict=chave).execute()
-        count = len(result.data) if result.data else 0
-        log.info(f"  OK {tabela}: {count} registros")
+        res = sb.table(tabela).upsert(validos, on_conflict=chave).execute()
+        count = len(res.data) if res.data else 0
+        log.info(f"  OK {tabela}: {count} registros salvos")
         return count
     except Exception as e:
         log.error(f"  ERRO {tabela}: {e}")
         return 0
 
 
-def registrar_sync(supabase, fonte, status, registros, msg, duracao):
-    try:
-        supabase.table("sync_log").insert({
-            "fonte": fonte,
-            "status": status,
-            "registros_atualizados": registros,
-            "mensagem": msg,
-            "duracao_segundos": round(duracao, 2)
-        }).execute()
-    except Exception as e:
-        log.error(f"Erro sync_log: {e}")
+def upsert_fluxo(sb, dados):
+    """Fluxo de caixa usa 'data' como chave"""
+    return upsert(sb, "sge_fluxo_caixa", dados, chave="data")
 
 
+# ══════════════════════════════════════════════════════════════
+# PRINCIPAL
+# ══════════════════════════════════════════════════════════════
 def main():
     inicio = time.time()
     log.info("=" * 50)
-    log.info("SGE Collector iniciado")
+    log.info("SGE API Collector iniciado")
     log.info(f"Horario: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
     log.info("=" * 50)
 
-    if not SGE_USER or not SGE_PASSWORD:
-        log.error("SGE_USER e SGE_PASSWORD nao configurados!")
+    if not SGE_CNPJ or not SGE_TOKEN:
+        log.error("SGE_CNPJ e SGE_TOKEN sao obrigatorios!")
         return
 
-    supabase = get_supabase()
-    coletor = SGECollector()
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        log.error("SUPABASE_URL e SUPABASE_SERVICE_KEY sao obrigatorios!")
+        return
+
+    sb = get_supabase()
     total = 0
     status_final = "sucesso"
     msg_final = ""
 
     try:
-        coletor.iniciar()
+        # Vendas
+        vendas = coletar_vendas()
+        total += upsert(sb, "sge_vendas", vendas)
 
-        if not coletor.fazer_login():
-            raise Exception("Falha no login do SGE")
+        # Adesoes
+        adesoes = coletar_adesoes()
+        total += upsert(sb, "sge_adesoes", adesoes)
 
-        log.info("\nColetando turmas...")
-        turmas = coletor.coletar_turmas()
-        total += upsert_dados(supabase, "turmas", turmas, "codigo")
+        # Contas a receber
+        receber = coletar_contas_receber()
+        total += upsert(sb, "sge_contas_receber", receber)
 
-        log.info("\nColetando vendas...")
-        vendas = coletor.coletar_vendas()
-        total += upsert_dados(supabase, "vendas", vendas, "codigo_sge")
+        # Contas a pagar
+        pagar = coletar_contas_pagar()
+        total += upsert(sb, "sge_contas_pagar", pagar)
 
-        log.info("\nColetando pagamentos...")
-        pagamentos = coletor.coletar_pagamentos()
-        total += upsert_dados(supabase, "pagamentos", pagamentos, "codigo_sge")
+        # Cobranca
+        cobranca = coletar_cobranca()
+        total += upsert(sb, "sge_cobranca", cobranca)
 
-        log.info("\nColetando contas a pagar...")
-        contas = coletor.coletar_contas_pagar()
-        total += upsert_dados(supabase, "contas_pagar", contas, "codigo_sge")
+        # Fluxo de caixa
+        fluxo = coletar_fluxo_caixa()
+        total += upsert_fluxo(sb, fluxo)
 
-        msg_final = f"Concluido: {total} registros"
+        # Contas bancarias
+        contas = coletar_contas()
+        total += upsert(sb, "sge_contas", contas)
+
+        msg_final = f"Concluido: {total} registros de 7 endpoints"
 
     except Exception as e:
         status_final = "erro"
         msg_final = str(e)
-        log.error(f"ERRO: {e}")
+        log.error(f"ERRO GERAL: {e}")
 
     finally:
-        coletor.encerrar()
         duracao = time.time() - inicio
-        registrar_sync(supabase, "sge", status_final, total, msg_final, duracao)
+        try:
+            sb.table("sync_log").insert({
+                "fonte": "sge_api",
+                "status": status_final,
+                "registros_atualizados": total,
+                "mensagem": msg_final,
+                "duracao_segundos": round(duracao, 2)
+            }).execute()
+        except Exception:
+            pass
         log.info(f"\n{'OK' if status_final == 'sucesso' else 'ERRO'} {msg_final}")
         log.info(f"Tempo: {duracao:.1f}s")
 
