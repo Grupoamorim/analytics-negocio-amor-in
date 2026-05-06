@@ -43,16 +43,21 @@ def get_headers():
 # ── Requisição genérica com retry ────────────────────────────
 def sge_get(endpoint, params=None, tentativas=3):
     url = f"{SGE_BASE_URL}/{endpoint}"
+    headers = get_headers()
+    log.info(f"  Requisicao: GET {url}")
+    log.info(f"  CNPJ (primeiros 6): {SGE_CNPJ[:6]}*** | Token (primeiros 6): {SGE_TOKEN[:6]}***")
     for i in range(tentativas):
         try:
-            r = requests.get(url, headers=get_headers(), params=params, timeout=30)
+            r = requests.get(url, headers=headers, params=params, timeout=30)
+            log.info(f"  HTTP {r.status_code} | Resposta: {r.text[:300]}")
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 401:
-                log.error(f"Autenticacao falhou em {endpoint} — verifique SGE_CNPJ e SGE_TOKEN")
+                log.error(f"Autenticacao falhou (401) em {endpoint}")
+                log.error(f"Resposta SGE: {r.text[:500]}")
                 return None
             if r.status_code == 404:
-                log.warning(f"Endpoint nao encontrado: {endpoint}")
+                log.warning(f"Endpoint nao encontrado (404): {endpoint}")
                 return None
             log.warning(f"  HTTP {r.status_code} em {endpoint} (tentativa {i+1})")
             time.sleep(2)
