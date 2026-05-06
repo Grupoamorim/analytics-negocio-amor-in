@@ -1,7 +1,13 @@
 """
-SGE Collector via API REST
-===========================
-Coleta dados da API oficial do SGE (e-api.sge.com.br) e salva no Supabase.
+SGE Collector via API REST - Versao Final
+==========================================
+Faz multiplas chamadas por janelas para cobrir periodos longos.
+Limites da API SGE:
+  - Vendas/Adesoes: max 90 dias por chamada
+  - Contas a receber: max 2 meses atras, janela max 2 meses
+  - Contas a pagar: sem limite confirmado
+  - Cobranca: max 60 dias atras
+  - Fluxo de caixa: requer codigo de conta
 """
 
 import os
@@ -24,11 +30,11 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 
 def get_headers():
-    credencial = base64.b64encode(f"{SGE_CNPJ}:{SGE_TOKEN}".encode()).decode()
-    return {"Authorization": f"Basic {credencial}", "Accept": "application/json"}
+    cred = base64.b64encode(f"{SGE_CNPJ}:{SGE_TOKEN}".encode()).decode()
+    return {"Authorization": f"Basic {cred}", "Accept": "application/json"}
 
 
-def sge_get(endpoint, params=None):
+def sge_get(endpoint, params=None, silencioso=False):
     url = f"{SGE_BASE_URL}/{endpoint}"
     for i in range(3):
         try:
@@ -36,44 +42,62 @@ def sge_get(endpoint, params=None):
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 401:
-                log.error(f"Auth falhou (401) em {endpoint}: {r.text[:200]}")
+                log.error(f"Auth falhou (401): {r.text[:200]}")
                 return None
             if r.status_code == 404:
                 log.warning(f"Endpoint nao encontrado: {endpoint}")
                 return None
-            log.warning(f"  HTTP {r.status_code} em {endpoint}: {r.text[:200]} (tent. {i+1})")
-            time.sleep(10)  # SGE pede 10s entre chamadas repetidas
+            if not silencioso:
+                log.warning(f"  HTTP {r.status_code}: {r.text[:150]} (tent {i+1})")
+            time.sleep(12)
         except Exception as e:
-            log.error(f"  Erro em {endpoint}: {e} (tent. {i+1})")
+            log.error(f"  Erro {endpoint}: {e}")
             time.sleep(5)
     return None
 
 
-# ── Datas (ISO format, limites respeitados) ───────────────────
-def fmt(d): return d.strftime("%Y-%m-%d")
-
-hoje       = date.today()
-ha_89_dias = fmt(hoje - timedelta(days=89))   # vendas/adesoes: max 90 dias
-ha_59_dias = fmt(hoje - timedelta(days=59))   # financeiro: max 2 meses
-ha_58_dias = fmt(hoje - timedelta(days=58))   # cobranca: max 60 dias
-em_30_dias = fmt(hoje + timedelta(days=30))
-hoje_str   = fmt(hoje)
+def fmt(d):
+    return d.strftime("%Y-%m-%d")
 
 
 def gerar_chave(*campos):
-    """Gera chave única a partir de múltiplos campos"""
     texto = "|".join(str(c or "") for c in campos)
-    return hashlib.md5(texto.encode()).hexdigest()[:16]
+    return hashlib.md5(texto.encode()).hexdigest()[:20]
 
 
 def lista(dados, *chaves):
-    """Extrai lista de resposta independente do formato"""
     if isinstance(dados, list):
         return dados
     for k in chaves:
-        if k in dados and isinstance(dados[k], list):
+        if isinstance(dados, dict) and k in dados and isinstance(dados[k], list):
             return dados[k]
     return []
+
+
+def coletar_em_janelas(endpoint, param_ini, param_fim, data_ini, data_fim, janela_dias, delay=2):
+    """Quebra periodo longo em janelas menores e acumula resultados"""
+    todos = []
+    atual = data_ini
+    chamadas = 0
+    while atual <= data_fim:
+        fim_janela = min(atual + timedelta(days=janela_dias - 1), data_fim)
+        params = {param_ini: fmt(atual), param_fim: fmt(fim_janela)}
+        dados = sge_get(endpoint, params)
+        if dados:
+            items = lista(dados, "data", "vendas", "adesoes", "parcelas", "itens")
+            todos.extend(items)
+            if items:
+                log.info(f"    {fmt(atual)} -> {fmt(fim_janela)}: {len(items)} registros")
+        atual = fim_janela + timedelta(days=1)
+        chamadas += 1
+        if atual <= data_fim:
+            time.sleep(delay)
+    log.info(f"  Total: {len(todos)} registros em {chamadas} janelas")
+    return todos
+
+
+# ── Datas base ────────────────────────────────────────────────
+hoje = date.today()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -81,7 +105,7 @@ def lista(dados, *chaves):
 # ══════════════════════════════════════════════════════════════
 
 def coletar_contas():
-    """Contas cadastradas — usado para fluxo de caixa também"""
+    """Contas cadastradas - necessario para fluxo de caixa"""
     log.info("Coletando contas...")
     dados = sge_get("api/emp/conta/listagem-simplificada")
     if not dados:
@@ -90,17 +114,17 @@ def coletar_contas():
     registros = []
     codigos = []
     for c in items:
-        cod = str(c.get("Codigo", c.get("codigo", c.get("id", ""))))
+        cod = str(c.get("Codigo", c.get("codigo", "")))
         codigos.append(cod)
         registros.append({
             "codigo_sge": cod,
-            "nome":       c.get("Descricao", c.get("descricao", c.get("nome", ""))),
+            "nome":       c.get("Descricao", c.get("Nome", c.get("nome", ""))),
             "tipo":       c.get("Tipo", c.get("tipo", "")),
             "banco":      c.get("Banco", c.get("banco", "")),
             "agencia":    str(c.get("Agencia", c.get("agencia", ""))),
-            "conta_num":  str(c.get("NumeroConta", c.get("conta", ""))),
+            "conta_num":  str(c.get("NumeroConta", c.get("Conta", ""))),
             "saldo":      float(c.get("Saldo", c.get("saldo", 0)) or 0),
-            "ativa":      bool(c.get("Ativo", c.get("ativa", c.get("ativo", True)))),
+            "ativa":      bool(c.get("Ativo", c.get("ativa", True))),
             "raw_data":   c,
             "updated_at": datetime.now().isoformat()
         })
@@ -109,23 +133,34 @@ def coletar_contas():
 
 
 def coletar_vendas():
-    """Vendas — máximo 90 dias por chamada"""
-    log.info("Coletando vendas (ultimos 89 dias)...")
-    dados = sge_get("api/emp/venda/listar-vendas-por-periodo", {
-        "PeriodoInicial": ha_89_dias,
-        "PeriodoFinal":   hoje_str
-    })
-    if not dados:
-        return []
+    """
+    Vendas - API limita 90 dias por chamada.
+    Estrategia: multiplas janelas de 89 dias cobrindo 1 ano.
+    """
+    log.info("Coletando vendas (1 ano em janelas de 89 dias)...")
+    data_ini = hoje - timedelta(days=365)
+    data_fim = hoje
+    items = coletar_em_janelas(
+        "api/emp/venda/listar-vendas-por-periodo",
+        "PeriodoInicial", "PeriodoFinal",
+        data_ini, data_fim, 89, delay=2
+    )
     registros = []
-    for v in lista(dados, "vendas", "data"):
+    vistos = set()
+    for v in items:
+        cod = str(v.get("Codigo", v.get("Id", v.get("codigo",
+            gerar_chave(v.get("DataVenda",""), v.get("NomeCliente",""), v.get("ValorTotal",""))
+        ))))
+        if cod in vistos:
+            continue
+        vistos.add(cod)
         registros.append({
-            "codigo_sge":    str(v.get("Codigo", v.get("codigo", v.get("Id", v.get("id", gerar_chave(v.get("DataVenda",""), v.get("NomeCliente",""), v.get("ValorTotal",""))))))),
+            "codigo_sge":    cod,
             "data_venda":    v.get("DataVenda", v.get("Data", v.get("data", ""))),
-            "cliente":       v.get("NomeCliente", v.get("Cliente", v.get("Aluno", v.get("cliente", "")))),
-            "cpf_cliente":   v.get("CpfCliente", v.get("Cpf", v.get("cpf", ""))),
-            "produto":       v.get("Produto", v.get("Plano", v.get("Pacote", v.get("produto", "")))),
-            "valor_total":   float(v.get("ValorTotal", v.get("Valor", v.get("valor", 0))) or 0),
+            "cliente":       v.get("NomeCliente", v.get("Cliente", v.get("Aluno", ""))),
+            "cpf_cliente":   v.get("CpfCliente", v.get("Cpf", "")),
+            "produto":       v.get("Produto", v.get("Plano", v.get("Pacote", ""))),
+            "valor_total":   float(v.get("ValorTotal", v.get("Valor", 0)) or 0),
             "valor_entrada": float(v.get("ValorEntrada", v.get("Entrada", 0)) or 0),
             "num_parcelas":  int(v.get("NumeroParcelas", v.get("Parcelas", 1)) or 1),
             "status":        str(v.get("Status", v.get("Situacao", "ativo"))).lower(),
@@ -134,23 +169,34 @@ def coletar_vendas():
             "raw_data":      v,
             "updated_at":    datetime.now().isoformat()
         })
-    log.info(f"  -> {len(registros)} vendas")
+    log.info(f"  -> {len(registros)} vendas unicas")
     return registros
 
 
 def coletar_adesoes():
-    """Adesões — máximo 90 dias por chamada"""
-    log.info("Coletando adesoes (ultimos 89 dias)...")
-    dados = sge_get("api/emp/adesao/listar-por-periodo", {
-        "PeriodoInicial": ha_89_dias,
-        "PeriodoFinal":   hoje_str
-    })
-    if not dados:
-        return []
+    """
+    Adesoes - API limita 90 dias por chamada.
+    Estrategia: multiplas janelas de 89 dias cobrindo 1 ano.
+    """
+    log.info("Coletando adesoes (1 ano em janelas de 89 dias)...")
+    data_ini = hoje - timedelta(days=365)
+    data_fim = hoje
+    items = coletar_em_janelas(
+        "api/emp/adesao/listar-por-periodo",
+        "PeriodoInicial", "PeriodoFinal",
+        data_ini, data_fim, 89, delay=2
+    )
     registros = []
-    for a in lista(dados, "adesoes", "data"):
+    vistos = set()
+    for a in items:
+        cod = str(a.get("Codigo", a.get("Id", a.get("codigo",
+            gerar_chave(a.get("Data",""), a.get("NomeCliente",""), a.get("Plano",""))
+        ))))
+        if cod in vistos:
+            continue
+        vistos.add(cod)
         registros.append({
-            "codigo_sge":  str(a.get("Codigo", a.get("Id", a.get("codigo", gerar_chave(a.get("Data",""), a.get("NomeCliente",""), a.get("Plano","")))))),
+            "codigo_sge":  cod,
             "data_adesao": a.get("Data", a.get("DataAdesao", a.get("DataCadastro", ""))),
             "cliente":     a.get("NomeCliente", a.get("Cliente", a.get("Aluno", ""))),
             "cpf_cliente": a.get("CpfCliente", a.get("Cpf", "")),
@@ -161,26 +207,37 @@ def coletar_adesoes():
             "raw_data":    a,
             "updated_at":  datetime.now().isoformat()
         })
-    log.info(f"  -> {len(registros)} adesoes")
+    log.info(f"  -> {len(registros)} adesoes unicas")
     return registros
 
 
 def coletar_contas_receber():
-    """Contas a receber — máximo 2 meses atrás, janela máx 2 meses"""
-    log.info("Coletando contas a receber...")
-    dados = sge_get("api/emp/financeiro/contas-a-receber", {
-        "VencimentoInicial": ha_59_dias,
-        "VencimentoFinal":   em_30_dias
-    })
-    if not dados:
-        return []
+    """
+    Contas a receber.
+    API limita: max 2 meses atras, janela max 2 meses por chamada.
+    Cobertura: 2 meses atras + 5 anos a frente em janelas de 59 dias.
+    (Para historico completo, o Supabase acumula execucoes anteriores)
+    """
+    log.info("Coletando contas a receber (2 meses atras + 5 anos a frente)...")
+    data_ini = hoje - timedelta(days=59)   # limite da API: 2 meses atras
+    data_fim = hoje + timedelta(days=1825) # 5 anos a frente
+    items = coletar_em_janelas(
+        "api/emp/financeiro/contas-a-receber",
+        "VencimentoInicial", "VencimentoFinal",
+        data_ini, data_fim, 59, delay=2
+    )
     registros = []
-    for p in lista(dados, "parcelas", "data"):
-        codigo = str(p.get("Codigo", p.get("Id", p.get("codigo",
-            gerar_chave(p.get("NomeCliente",""), p.get("Vencimento",""), p.get("Valor",""), p.get("Parcela",""))
+    vistos = set()
+    for p in items:
+        cod = str(p.get("Codigo", p.get("Id", p.get("codigo",
+            gerar_chave(p.get("NomeCliente",""), p.get("Vencimento",""),
+                        p.get("Valor",""), p.get("Parcela",""))
         ))))
+        if cod in vistos:
+            continue
+        vistos.add(cod)
         registros.append({
-            "codigo_sge":      codigo,
+            "codigo_sge":      cod,
             "cliente":         p.get("NomeCliente", p.get("Cliente", p.get("Aluno", ""))),
             "cpf_cliente":     p.get("CpfCliente", p.get("Cpf", "")),
             "descricao":       p.get("Descricao", p.get("Historico", p.get("Produto", ""))),
@@ -188,68 +245,84 @@ def coletar_contas_receber():
             "valor_pago":      float(p.get("ValorPago", p.get("ValorRecebido", 0)) or 0),
             "data_vencimento": p.get("Vencimento", p.get("DataVencimento", "")),
             "data_pagamento":  p.get("Pagamento", p.get("DataPagamento", "")),
-            "status":          str(p.get("Status", p.get("Situacao", p.get("SituacaoRecebimento", "pendente")))).lower(),
+            "status":          str(p.get("Status", p.get("Situacao", "pendente"))).lower(),
             "forma_pagamento": p.get("FormaPagamento", p.get("Forma", "")),
             "num_parcela":     int(p.get("Parcela", p.get("NumeroParcela", 1)) or 1),
             "turma":           p.get("Turma", p.get("Projeto", p.get("Evento", ""))),
             "raw_data":        p,
             "updated_at":      datetime.now().isoformat()
         })
-    log.info(f"  -> {len(registros)} contas a receber")
+    log.info(f"  -> {len(registros)} parcelas a receber unicas")
     return registros
 
 
 def coletar_contas_pagar():
-    """Contas a pagar — campos em PascalCase"""
-    log.info("Coletando contas a pagar...")
-    dados = sge_get("api/emp/financeiro/contas-a-pagar", {
-        "VencimentoInicial": ha_59_dias,
-        "VencimentoFinal":   em_30_dias
-    })
-    if not dados:
-        return []
+    """
+    Contas a pagar - API parece aceitar periodos maiores.
+    Cobertura: 6 meses atras + 5 anos a frente.
+    """
+    log.info("Coletando contas a pagar (6 meses atras + 5 anos a frente)...")
+    data_ini = hoje - timedelta(days=180)
+    data_fim = hoje + timedelta(days=1825)
+    items = coletar_em_janelas(
+        "api/emp/financeiro/contas-a-pagar",
+        "VencimentoInicial", "VencimentoFinal",
+        data_ini, data_fim, 180, delay=2
+    )
+    # Se janelas nao funcionarem, tenta sem filtro de data
+    if not items:
+        log.info("  Tentando sem filtro de data...")
+        dados = sge_get("api/emp/financeiro/contas-a-pagar")
+        if dados:
+            items = lista(dados, "parcelas", "data")
     registros = []
-    for p in lista(dados, "parcelas", "data"):
-        # Chave única: IdentificadorBoleto se existir, senão hash
+    vistos = set()
+    for p in items:
         boleto = p.get("IdentificadorBoleto", p.get("Codigo", p.get("Id")))
-        codigo = str(boleto) if boleto else gerar_chave(
+        cod = str(boleto) if boleto else gerar_chave(
             p.get("FornecedorNome",""), p.get("Descricao",""),
             p.get("Parcela",""), p.get("DataVencimento", p.get("Vencimento",""))
         )
+        if cod in vistos:
+            continue
+        vistos.add(cod)
         registros.append({
-            "codigo_sge":      codigo,
-            "fornecedor":      p.get("FornecedorNome", p.get("Fornecedor", p.get("fornecedor", ""))),
-            "descricao":       p.get("Descricao", p.get("Historico", p.get("descricao", ""))),
+            "codigo_sge":      cod,
+            "fornecedor":      p.get("FornecedorNome", p.get("Fornecedor", "")),
+            "descricao":       p.get("Descricao", p.get("Historico", "")),
             "categoria":       p.get("Categoria", p.get("CentroCustos", p.get("Servico", ""))),
-            "valor":           float(p.get("Valor", p.get("ValorParcela", 0)) or 0),
+            "valor":           float(p.get("Valor", p.get("ValorParcela", p.get("ValorOriginal", 0))) or 0),
             "valor_pago":      float(p.get("ValorPago", 0) or 0),
             "data_vencimento": p.get("DataVencimento", p.get("Vencimento", "")),
             "data_pagamento":  p.get("DataPagamento", p.get("Pagamento", "")),
-            "status":          str(p.get("Status", p.get("Situacao", p.get("SituacaoPagamento", "pendente")))).lower(),
+            "status":          str(p.get("Status", p.get("Situacao", "pendente"))).lower(),
             "forma_pagamento": p.get("FormaPagamento", p.get("Forma", "")),
             "raw_data":        p,
             "updated_at":      datetime.now().isoformat()
         })
-    log.info(f"  -> {len(registros)} contas a pagar")
+    log.info(f"  -> {len(registros)} contas a pagar unicas")
     return registros
 
 
 def coletar_cobranca():
-    """Cobrança — máximo 60 dias atrás"""
-    log.info("Coletando cobranca (ultimos 58 dias)...")
+    """
+    Cobranca - API limita 60 dias atras.
+    Cobertura: 59 dias atras + 90 dias a frente.
+    """
+    log.info("Coletando cobranca (59 dias atras + 90 dias a frente)...")
     dados = sge_get("api/emp/financeiro/cobranca", {
-        "VencimentoInicial": ha_58_dias,
-        "VencimentoFinal":   em_30_dias
+        "VencimentoInicial": fmt(hoje - timedelta(days=59)),
+        "VencimentoFinal":   fmt(hoje + timedelta(days=90))
     })
     if not dados:
         return []
     registros = []
     for c in lista(dados, "parcelas", "data"):
-        codigo = str(c.get("Codigo", c.get("Id", c.get("IdentificadorBoleto",
+        cod = str(c.get("Codigo", c.get("Id", c.get("IdentificadorBoleto",
             gerar_chave(c.get("NomeCliente",""), c.get("Vencimento",""), c.get("Valor",""))
         ))))
         registros.append({
-            "codigo_sge":      codigo,
+            "codigo_sge":      cod,
             "cliente":         c.get("NomeCliente", c.get("Cliente", c.get("Aluno", ""))),
             "cpf_cliente":     c.get("CpfCliente", c.get("Cpf", "")),
             "telefone":        c.get("Telefone", c.get("Celular", "")),
@@ -258,7 +331,7 @@ def coletar_cobranca():
             "data_vencimento": c.get("Vencimento", c.get("DataVencimento", "")),
             "dias_atraso":     int(c.get("DiasAtraso", c.get("Atraso", 0)) or 0),
             "status":          str(c.get("Status", c.get("Situacao", "pendente"))).lower(),
-            "turma":           c.get("Turma", c.get("Projeto", c.get("Evento", ""))),
+            "turma":           c.get("Turma", c.get("Projeto", "")),
             "raw_data":        c,
             "updated_at":      datetime.now().isoformat()
         })
@@ -267,25 +340,33 @@ def coletar_cobranca():
 
 
 def coletar_fluxo_caixa(codigos_conta):
-    """Fluxo de caixa — requer código de conta"""
+    """
+    Fluxo de caixa por conta.
+    Cobertura: 6 meses atras + 6 meses a frente.
+    """
     if not codigos_conta:
         log.warning("  Sem contas para fluxo de caixa")
         return []
-    log.info(f"Coletando fluxo de caixa para {len(codigos_conta)} contas...")
+    log.info(f"Coletando fluxo de caixa ({len(codigos_conta)} contas, 6 meses atras/frente)...")
+    data_ini = hoje - timedelta(days=180)
+    data_fim = hoje + timedelta(days=180)
     todos = []
-    for cod in codigos_conta[:5]:  # máximo 5 contas
-        dados = sge_get("api/emp/financeiro/fluxo-de-caixa", {
-            "Conta": cod,
-            "DataInicial": ha_59_dias,
-            "DataFinal": em_30_dias
-        })
-        if not dados:
-            continue
-        items = lista(dados, "fluxo", "data")
+    vistos = set()
+    for cod in codigos_conta[:5]:
+        items = coletar_em_janelas(
+            "api/emp/financeiro/fluxo-de-caixa",
+            "DataInicial", "DataFinal",
+            data_ini, data_fim, 59,
+            delay=12  # SGE exige 10s entre chamadas para este endpoint
+        )
         for f in items:
-            data_ref = f.get("Data", f.get("Competencia", f.get("Periodo", hoje_str)))
+            data_ref = str(f.get("Data", f.get("Competencia", f.get("Periodo", fmt(hoje)))))[:10]
+            chave = gerar_chave(cod, data_ref)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
             todos.append({
-                "data":       str(data_ref)[:10] if data_ref else hoje_str,
+                "data":       data_ref,
                 "conta":      str(cod),
                 "entradas":   float(f.get("Entradas", f.get("Receitas", f.get("Creditos", 0))) or 0),
                 "saidas":     float(f.get("Saidas", f.get("Despesas", f.get("Debitos", 0))) or 0),
@@ -294,7 +375,7 @@ def coletar_fluxo_caixa(codigos_conta):
                 "raw_data":   f,
                 "updated_at": datetime.now().isoformat()
             })
-        time.sleep(11)  # SGE exige 10s entre chamadas
+        time.sleep(15)
     log.info(f"  -> {len(todos)} registros fluxo caixa")
     return todos
 
@@ -312,18 +393,19 @@ def upsert(sb, tabela, dados, chave="codigo_sge"):
         return 0
     validos = [d for d in dados if d.get(chave)]
     if not validos:
-        log.warning(f"  Sem chave '{chave}' em {tabela}")
-        if dados:
-            log.warning(f"  Campos: {list(dados[0].keys())}")
+        log.warning(f"  Sem chave '{chave}' em {tabela} | campos: {list(dados[0].keys()) if dados else '?'}")
         return 0
-    try:
-        res = sb.table(tabela).upsert(validos, on_conflict=chave).execute()
-        count = len(res.data) if res.data else 0
-        log.info(f"  OK {tabela}: {count} salvos")
-        return count
-    except Exception as e:
-        log.error(f"  ERRO {tabela}: {e}")
-        return 0
+    # Envia em lotes de 500
+    total = 0
+    for i in range(0, len(validos), 500):
+        lote = validos[i:i+500]
+        try:
+            res = sb.table(tabela).upsert(lote, on_conflict=chave).execute()
+            total += len(res.data) if res.data else 0
+        except Exception as e:
+            log.error(f"  ERRO {tabela} lote {i}: {e}")
+    log.info(f"  OK {tabela}: {total} salvos")
+    return total
 
 
 def upsert_fluxo(sb, dados):
@@ -333,14 +415,16 @@ def upsert_fluxo(sb, dados):
     validos = [d for d in dados if d.get("data")]
     if not validos:
         return 0
-    try:
-        res = sb.table("sge_fluxo_caixa").upsert(validos, on_conflict="data,conta").execute()
-        count = len(res.data) if res.data else 0
-        log.info(f"  OK sge_fluxo_caixa: {count} salvos")
-        return count
-    except Exception as e:
-        log.error(f"  ERRO sge_fluxo_caixa: {e}")
-        return 0
+    total = 0
+    for i in range(0, len(validos), 500):
+        lote = validos[i:i+500]
+        try:
+            res = sb.table("sge_fluxo_caixa").upsert(lote, on_conflict="data,conta").execute()
+            total += len(res.data) if res.data else 0
+        except Exception as e:
+            log.error(f"  ERRO sge_fluxo_caixa: {e}")
+    log.info(f"  OK sge_fluxo_caixa: {total} salvos")
+    return total
 
 
 # ══════════════════════════════════════════════════════════════
@@ -349,7 +433,7 @@ def upsert_fluxo(sb, dados):
 def main():
     inicio = time.time()
     log.info("=" * 50)
-    log.info("SGE API Collector iniciado")
+    log.info("SGE API Collector - Versao Final")
     log.info(f"Horario: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
     log.info("=" * 50)
 
@@ -363,31 +447,31 @@ def main():
     msg_final = ""
 
     try:
-        # Contas primeiro (necessário para fluxo de caixa)
+        # 1. Contas bancarias (necessario antes do fluxo)
         contas, codigos_conta = coletar_contas()
         total += upsert(sb, "sge_contas", contas)
 
-        # Vendas
+        # 2. Vendas (1 ano, janelas 89 dias)
         vendas = coletar_vendas()
         total += upsert(sb, "sge_vendas", vendas)
 
-        # Adesoes
+        # 3. Adesoes (1 ano, janelas 89 dias)
         adesoes = coletar_adesoes()
         total += upsert(sb, "sge_adesoes", adesoes)
 
-        # Contas a receber
+        # 4. Contas a receber (2 meses atras + 5 anos a frente)
         receber = coletar_contas_receber()
         total += upsert(sb, "sge_contas_receber", receber)
 
-        # Contas a pagar
+        # 5. Contas a pagar (6 meses atras + 5 anos a frente)
         pagar = coletar_contas_pagar()
         total += upsert(sb, "sge_contas_pagar", pagar)
 
-        # Cobranca
+        # 6. Cobranca (59 dias atras + 90 dias a frente)
         cobranca = coletar_cobranca()
         total += upsert(sb, "sge_cobranca", cobranca)
 
-        # Fluxo de caixa (usa codigos das contas)
+        # 7. Fluxo de caixa (6 meses atras + 6 meses a frente)
         fluxo = coletar_fluxo_caixa(codigos_conta)
         total += upsert_fluxo(sb, fluxo)
 
@@ -411,7 +495,7 @@ def main():
         except Exception:
             pass
         log.info(f"\n{'OK' if status_final == 'sucesso' else 'ERRO'} {msg_final}")
-        log.info(f"Tempo: {duracao:.1f}s")
+        log.info(f"Tempo total: {duracao:.1f}s")
 
 
 if __name__ == "__main__":
