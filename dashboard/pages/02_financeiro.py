@@ -72,8 +72,17 @@ with tab1:
         st.info("Sem dados de recebimentos.")
 
 with tab2:
-    st.subheader("Contas a Pagar")
+    st.subheader("📤 Contas a Pagar")
+
     if not df_pagar.empty:
+        kc1, kc2, kc3 = st.columns(3)
+        total_pagar = df_pagar["valor"].sum() if "valor" in df_pagar.columns else 0
+        pendente_pagar = df_pagar[df_pagar["status"] == "pendente"]["valor"].sum() if "status" in df_pagar.columns else 0
+        atrasado_pagar = df_pagar[df_pagar["status"] == "atrasado"]["valor"].sum() if "status" in df_pagar.columns else 0
+        kc1.metric("📑 Total Lançado", brl(total_pagar))
+        kc2.metric("⏳ Pendente", brl(pendente_pagar))
+        kc3.metric("⚠️ Em Atraso", brl(atrasado_pagar), delta_color="inverse")
+
         cat_op = ["Todas"] + (df_pagar["categoria"].dropna().unique().tolist() if "categoria" in df_pagar.columns else [])
         cat_sel = st.selectbox("Categoria", cat_op)
         df_f = df_pagar if cat_sel == "Todas" else df_pagar[df_pagar["categoria"] == cat_sel]
@@ -85,8 +94,14 @@ with tab2:
             fig = px.pie(df_cat, names="categoria", values="valor",
                         title="Custos por Categoria", hole=0.4,
                         color_discrete_sequence=px.colors.qualitative.Set3)
-            fig.update_layout(height=300)
+            fig.update_layout(
+                height=300,
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#E5E7EB"
+            )
             st.plotly_chart(fig, use_container_width=True)
+
+        st.caption("💡 Quer ver esses lançamentos organizados em um Demonstrativo de Resultado completo? Acesse a página **🧾 DRE** no menu lateral.")
     else:
         st.info("Sem dados de contas a pagar.")
 
@@ -100,8 +115,13 @@ with tab3:
         df_fluxo = pd.DataFrame({"Recebido": df_rec, "Previsto": df_prev}).fillna(0).tail(12)
         fig = px.line(df_fluxo, labels={"value": "R$", "variable": ""},
                      title="Recebido vs Previsto (últimos 12 meses)",
-                     color_discrete_map={"Recebido": "#10B981", "Previsto": "#6366F1"})
-        fig.update_layout(height=350, plot_bgcolor="white")
+                     color_discrete_map={"Recebido": "#34D399", "Previsto": "#818CF8"})
+        fig.update_layout(
+            height=350,
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            font_color="#E5E7EB",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02)
+        )
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sem dados de fluxo de caixa ainda.")

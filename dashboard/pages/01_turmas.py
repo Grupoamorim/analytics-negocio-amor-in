@@ -49,7 +49,7 @@ colunas = {
     "nome": "Turma", "curso": "Curso", "status": "Status",
     "total_alunos": "Alunos", "meta_vendas": "Meta",
     "total_vendido": "Faturado", "total_recebido": "Recebido",
-    "total_inadimplente": "Inadimpl.", "pct_meta": "% Meta"
+    "total_custos": "Custos", "total_inadimplente": "Inadimpl.", "pct_meta": "% Meta"
 }
 cols_disp = [c for c in colunas if c in df_show.columns]
 st.dataframe(df_show[cols_disp].rename(columns=colunas), use_container_width=True, hide_index=True)
@@ -63,7 +63,12 @@ if "total_vendido" in df_orig.columns and "meta_vendas" in df_orig.columns:
         y=["total_vendido", "meta_vendas"],
         barmode="group",
         labels={"nome": "Turma", "value": "R$", "variable": ""},
-        color_discrete_map={"total_vendido": "#6366F1", "meta_vendas": "#E5E7EB"}
+        color_discrete_map={"total_vendido": "#818CF8", "meta_vendas": "#4B5563"}
     )
-    fig.update_layout(height=350, plot_bgcolor="white")
+    fig.update_layout(
+        height=350,
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#E5E7EB",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02)
+    )
     st.plotly_chart(fig, use_container_width=True)

@@ -64,27 +64,29 @@ if PROPHET_OK:
     fig.add_trace(go.Scatter(
         x=df_agg["ds"], y=df_agg["y"],
         mode="lines+markers", name="Faturamento Real",
-        line=dict(color="#6366F1", width=3),
+        line=dict(color="#818CF8", width=3),
         marker=dict(size=8)
     ))
     prev_futuro = previsao[previsao["ds"] > df_agg["ds"].max()]
     fig.add_trace(go.Scatter(
         x=prev_futuro["ds"], y=prev_futuro["yhat"],
         mode="lines+markers", name="Projeção IA",
-        line=dict(color="#10B981", width=2, dash="dash"),
+        line=dict(color="#34D399", width=2, dash="dash"),
         marker=dict(size=8, symbol="diamond")
     ))
     fig.add_trace(go.Scatter(
         x=pd.concat([prev_futuro["ds"], prev_futuro["ds"].iloc[::-1]]),
         y=pd.concat([prev_futuro["yhat_upper"], prev_futuro["yhat_lower"].iloc[::-1]]),
-        fill="toself", fillcolor="rgba(16,185,129,0.1)",
+        fill="toself", fillcolor="rgba(52,211,153,0.15)",
         line=dict(color="rgba(255,255,255,0)"),
         name="Intervalo de Confiança"
     ))
     fig.update_layout(
         title="Projeção de Faturamento",
         xaxis_title="Mês", yaxis_title="R$",
-        height=400, plot_bgcolor="white",
+        height=400,
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#E5E7EB",
         legend=dict(orientation="h", yanchor="bottom", y=1.02)
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -112,7 +114,12 @@ else:
     datas_fut = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=meses_projetar, freq="MS")
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=df_agg["ds"], y=df_agg["y"], name="Real", marker_color="#6366F1"))
-    fig.add_trace(go.Bar(x=datas_fut, y=y_fut, name="Projeção", marker_color="#10B981", opacity=0.7))
-    fig.update_layout(height=350, plot_bgcolor="white", barmode="overlay")
+    fig.add_trace(go.Bar(x=df_agg["ds"], y=df_agg["y"], name="Real", marker_color="#818CF8"))
+    fig.add_trace(go.Bar(x=datas_fut, y=y_fut, name="Projeção", marker_color="#34D399", opacity=0.7))
+    fig.update_layout(
+        height=350,
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#E5E7EB",
+        barmode="overlay"
+    )
     st.plotly_chart(fig, use_container_width=True)
