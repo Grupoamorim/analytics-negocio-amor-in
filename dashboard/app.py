@@ -25,28 +25,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── CSS customizado ─────────────────────────────────────────
+# ── CSS customizado (modo escuro) ───────────────────────────
 st.markdown("""
 <style>
     .metric-card {
-        background: white;
+        background: #1B1F2A;
         padding: 20px;
         border-radius: 12px;
-        border-left: 4px solid #6366F1;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-left: 4px solid #818CF8;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
     }
-    .metric-value { font-size: 2rem; font-weight: 700; color: #1e1b4b; }
-    .metric-label { font-size: 0.85rem; color: #6b7280; margin-top: 4px; }
+    .metric-value { font-size: 2rem; font-weight: 700; color: #F3F4F6; }
+    .metric-label { font-size: 0.85rem; color: #9CA3AF; margin-top: 4px; }
     .metric-delta { font-size: 0.85rem; margin-top: 4px; }
-    .delta-up { color: #10B981; }
-    .delta-down { color: #EF4444; }
-    [data-testid="metric-container"] {
-        background: white;
-        border: 1px solid #e5e7eb;
+    .delta-up { color: #34D399; }
+    .delta-down { color: #F87171; }
+    [data-testid="stMetric"] {
+        background: #1B1F2A;
+        border: 1px solid #2D3142;
         border-radius: 12px;
         padding: 16px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.25);
     }
+    [data-testid="stMetricValue"] { color: #F3F4F6 !important; }
+    [data-testid="stMetricLabel"] { color: #9CA3AF !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -143,7 +145,7 @@ def carregar_metas_mes_atual() -> dict:
 # ══════════════════════════════════════════════════════════════
 # COMPONENTES VISUAIS
 # ══════════════════════════════════════════════════════════════
-def card_kpi(label: str, valor: str, delta: str = "", cor: str = "#6366F1"):
+def card_kpi(label: str, valor: str, delta: str = "", cor: str = "#818CF8"):
     """Card de KPI com delta"""
     delta_html = ""
     if delta:
@@ -168,30 +170,35 @@ def formatar_brl(valor: float) -> str:
 def gauge_meta(atual: float, meta: float, titulo: str):
     """Gráfico de velocímetro para meta"""
     pct = min((atual / meta * 100) if meta > 0 else 0, 100)
-    cor = "#10B981" if pct >= 80 else "#F59E0B" if pct >= 50 else "#EF4444"
+    cor = "#34D399" if pct >= 80 else "#FBBF24" if pct >= 50 else "#F87171"
 
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=pct,
         delta={"reference": 100, "suffix": "%"},
-        title={"text": titulo, "font": {"size": 14}},
-        number={"suffix": "%", "font": {"size": 24}},
+        title={"text": titulo, "font": {"size": 14, "color": "#E5E7EB"}},
+        number={"suffix": "%", "font": {"size": 24, "color": "#E5E7EB"}},
         gauge={
-            "axis": {"range": [0, 100]},
+            "axis": {"range": [0, 100], "tickcolor": "#9CA3AF"},
             "bar": {"color": cor},
+            "bgcolor": "rgba(0,0,0,0)",
+            "bordercolor": "#2D3142",
             "steps": [
-                {"range": [0, 50], "color": "#FEE2E2"},
-                {"range": [50, 80], "color": "#FEF3C7"},
-                {"range": [80, 100], "color": "#D1FAE5"},
+                {"range": [0, 50], "color": "#3F2A2E"},
+                {"range": [50, 80], "color": "#3F3A24"},
+                {"range": [80, 100], "color": "#1F3A30"},
             ],
             "threshold": {
-                "line": {"color": "darkgreen", "width": 3},
+                "line": {"color": "#34D399", "width": 3},
                 "thickness": 0.75,
                 "value": 100
             }
         }
     ))
-    fig.update_layout(height=200, margin=dict(l=10, r=10, t=30, b=10))
+    fig.update_layout(
+        height=200, margin=dict(l=10, r=10, t=30, b=10),
+        paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB"
+    )
     return fig
 
 
@@ -222,7 +229,7 @@ def pagina_overview():
     total_custos     = df_turmas["total_custos"].sum() if "total_custos" in df_turmas else 0
     pct_inadimlencia = (total_inadiml / total_faturado * 100) if total_faturado > 0 else 0
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         st.metric("💰 Total Faturado", formatar_brl(total_faturado),
                   delta=f"Meta: {formatar_brl(metas.get('vendas', 0))}" if metas.get('vendas') else None)
@@ -234,6 +241,9 @@ def pagina_overview():
         st.metric("⚠️ Inadimplência", formatar_brl(total_inadiml),
                   delta=f"{pct_inadimlencia:.1f}% do total",
                   delta_color="inverse")
+    with c5:
+        st.metric("📑 Contas a Pagar", formatar_brl(total_custos),
+                  help="Total de custos/despesas lançados (vw_resumo_turmas.total_custos). Veja o detalhamento completo na página Financeiro ou no DRE.")
 
     st.divider()
 
@@ -248,11 +258,12 @@ def pagina_overview():
                 df_fat.groupby("mes_fmt")["faturamento_bruto"].sum().reset_index(),
                 x="mes_fmt", y="faturamento_bruto",
                 labels={"mes_fmt": "Mês", "faturamento_bruto": "Faturamento (R$)"},
-                color_discrete_sequence=["#6366F1"]
+                color_discrete_sequence=["#818CF8"]
             )
             fig.update_layout(
                 height=300, margin=dict(l=0, r=0, t=10, b=0),
-                plot_bgcolor="white", yaxis_title="R$"
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                font_color="#E5E7EB", yaxis_title="R$"
             )
             fig.update_traces(texttemplate='R$ %{y:,.0f}', textposition='outside')
             st.plotly_chart(fig, use_container_width=True)
@@ -342,6 +353,7 @@ def main():
             st.page_link("pages/02_financeiro.py", label="💰 Financeiro", icon="💰")
             st.page_link("pages/03_crm.py", label="👥 CRM / Notion", icon="👥")
             st.page_link("pages/04_projecoes.py", label="🔮 Projeções IA", icon="🔮")
+            st.page_link("pages/05_dre.py", label="🧾 DRE", icon="🧾")
             st.divider()
             authenticator.logout("Sair", "sidebar")
 
