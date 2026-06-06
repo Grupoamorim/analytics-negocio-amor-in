@@ -2,12 +2,14 @@
 SGE Collector via API REST - Versao Final
 ==========================================
 Faz multiplas chamadas por janelas para cobrir periodos longos.
-Limites da API SGE:
-  - Vendas/Adesoes: max 90 dias por chamada
+Limites da API SGE (descobertos em producao):
+  - Vendas/Adesoes: PeriodoInicial NAO PODE ser mais que ~90 dias no passado
+    (diferente de "janela max 90 dias"). Por isso buscamos so os ultimos
+    89 dias a cada execucao - o Supabase acumula o historico ao longo do tempo.
   - Contas a receber: max 2 meses atras, janela max 2 meses
   - Contas a pagar: sem limite confirmado
-  - Cobranca: max 60 dias atras
-  - Fluxo de caixa: requer codigo de conta
+  - Cobranca: VencimentoFinal nao pode passar de ~15 dias a frente de hoje
+  - Fluxo de caixa: requer parametro com o codigo da conta em cada chamada
 """
 
 import os
@@ -60,6 +62,14 @@ def fmt(d):
     return d.strftime("%Y-%m-%d")
 
 
+def data_ou_none(valor):
+    """Converte string vazia/None em None - evita erro 'invalid input syntax for type date: \"\"' no Postgres"""
+    if valor is None:
+        return None
+    texto = str(valor).strip()
+    return texto if texto else None
+
+
 def gerar_chave(*campos):
     texto = "|".join(str(c or "") for c in campos)
     return hashlib.md5(texto.encode()).hexdigest()[:20]
@@ -74,7 +84,7 @@ def lista(dados, *chaves):
     return []
 
 
-def coletar_em_janelas(endpoint, param_ini, param_fim, data_ini, data_fim, janela_dias, delay=2):
+def coletar_em_janelas(endpoint, param_ini, param_fim, data_ini, data_fim, janela_dias, delay=2, extra_params=None):
     """Quebra periodo longo em janelas menores e acumula resultados"""
     todos = []
     atual = data_ini
@@ -82,6 +92,8 @@ def coletar_em_janelas(endpoint, param_ini, param_fim, data_ini, data_fim, janel
     while atual <= data_fim:
         fim_janela = min(atual + timedelta(days=janela_dias - 1), data_fim)
         params = {param_ini: fmt(atual), param_fim: fmt(fim_janela)}
+        if extra_params:
+            params.update(extra_params)
         dados = sge_get(endpoint, params)
         if dados:
             items = lista(dados, "data", "vendas", "adesoes", "parcelas", "itens")
@@ -134,11 +146,13 @@ def coletar_contas():
 
 def coletar_vendas():
     """
-    Vendas - API limita 90 dias por chamada.
-    Estrategia: multiplas janelas de 89 dias cobrindo 1 ano.
+    Vendas - a API rejeita PeriodoInicial com mais de ~90 dias no passado
+    (erro: "O periodo inicial nao pode exceder 90 dias a partir da data atual").
+    Estrategia: buscamos so os ultimos 89 dias a cada execucao; o Supabase
+    acumula (upsert) o historico completo ao longo das execucoes horarias.
     """
-    log.info("Coletando vendas (1 ano em janelas de 89 dias)...")
-    data_ini = hoje - timedelta(days=365)
+    log.info("Coletando vendas (ultimos 89 dias - Supabase acumula historico)...")
+    data_ini = hoje - timedelta(days=89)
     data_fim = hoje
     items = coletar_em_janelas(
         "api/emp/venda/listar-vendas-por-periodo",
@@ -156,7 +170,7 @@ def coletar_vendas():
         vistos.add(cod)
         registros.append({
             "codigo_sge":    cod,
-            "data_venda":    v.get("DataVenda", v.get("Data", v.get("data", ""))),
+            "data_venda":    data_ou_none(v.get("DataVenda", v.get("Data", v.get("data", "")))),
             "cliente":       v.get("NomeCliente", v.get("Cliente", v.get("Aluno", ""))),
             "cpf_cliente":   v.get("CpfCliente", v.get("Cpf", "")),
             "produto":       v.get("Produto", v.get("Plano", v.get("Pacote", ""))),
@@ -175,11 +189,12 @@ def coletar_vendas():
 
 def coletar_adesoes():
     """
-    Adesoes - API limita 90 dias por chamada.
-    Estrategia: multiplas janelas de 89 dias cobrindo 1 ano.
+    Adesoes - mesma restricao de vendas: PeriodoInicial nao pode ser mais
+    que ~90 dias no passado. Buscamos so os ultimos 89 dias; o Supabase
+    acumula o historico ao longo das execucoes horarias.
     """
-    log.info("Coletando adesoes (1 ano em janelas de 89 dias)...")
-    data_ini = hoje - timedelta(days=365)
+    log.info("Coletando adesoes (ultimos 89 dias - Supabase acumula historico)...")
+    data_ini = hoje - timedelta(days=89)
     data_fim = hoje
     items = coletar_em_janelas(
         "api/emp/adesao/listar-por-periodo",
@@ -197,7 +212,7 @@ def coletar_adesoes():
         vistos.add(cod)
         registros.append({
             "codigo_sge":  cod,
-            "data_adesao": a.get("Data", a.get("DataAdesao", a.get("DataCadastro", ""))),
+            "data_adesao": data_ou_none(a.get("Data", a.get("DataAdesao", a.get("DataCadastro", "")))),
             "cliente":     a.get("NomeCliente", a.get("Cliente", a.get("Aluno", ""))),
             "cpf_cliente": a.get("CpfCliente", a.get("Cpf", "")),
             "plano":       a.get("Plano", a.get("Produto", a.get("Pacote", ""))),
@@ -243,8 +258,8 @@ def coletar_contas_receber():
             "descricao":       p.get("Descricao", p.get("Historico", p.get("Produto", ""))),
             "valor":           float(p.get("Valor", p.get("ValorParcela", 0)) or 0),
             "valor_pago":      float(p.get("ValorPago", p.get("ValorRecebido", 0)) or 0),
-            "data_vencimento": p.get("Vencimento", p.get("DataVencimento", "")),
-            "data_pagamento":  p.get("Pagamento", p.get("DataPagamento", "")),
+            "data_vencimento": data_ou_none(p.get("Vencimento", p.get("DataVencimento", ""))),
+            "data_pagamento":  data_ou_none(p.get("Pagamento", p.get("DataPagamento", ""))),
             "status":          str(p.get("Status", p.get("Situacao", "pendente"))).lower(),
             "forma_pagamento": p.get("FormaPagamento", p.get("Forma", "")),
             "num_parcela":     int(p.get("Parcela", p.get("NumeroParcela", 1)) or 1),
@@ -293,8 +308,8 @@ def coletar_contas_pagar():
             "categoria":       p.get("Categoria", p.get("CentroCustos", p.get("Servico", ""))),
             "valor":           float(p.get("Valor", p.get("ValorParcela", p.get("ValorOriginal", 0))) or 0),
             "valor_pago":      float(p.get("ValorPago", 0) or 0),
-            "data_vencimento": p.get("DataVencimento", p.get("Vencimento", "")),
-            "data_pagamento":  p.get("DataPagamento", p.get("Pagamento", "")),
+            "data_vencimento": data_ou_none(p.get("DataVencimento", p.get("Vencimento", ""))),
+            "data_pagamento":  data_ou_none(p.get("DataPagamento", p.get("Pagamento", ""))),
             "status":          str(p.get("Status", p.get("Situacao", "pendente"))).lower(),
             "forma_pagamento": p.get("FormaPagamento", p.get("Forma", "")),
             "raw_data":        p,
@@ -306,13 +321,15 @@ def coletar_contas_pagar():
 
 def coletar_cobranca():
     """
-    Cobranca - API limita 60 dias atras.
-    Cobertura: 59 dias atras + 90 dias a frente.
+    Cobranca - a API rejeita VencimentoFinal com mais de ~15 dias a frente
+    (erro: "A data final da consulta nao pode maior que ... (15 dias a partir de hoje)")
+    e tambem limita o periodo inicial a ~60 dias atras.
+    Cobertura: 59 dias atras + 14 dias a frente.
     """
-    log.info("Coletando cobranca (59 dias atras + 90 dias a frente)...")
+    log.info("Coletando cobranca (59 dias atras + 14 dias a frente)...")
     dados = sge_get("api/emp/financeiro/cobranca", {
         "VencimentoInicial": fmt(hoje - timedelta(days=59)),
-        "VencimentoFinal":   fmt(hoje + timedelta(days=90))
+        "VencimentoFinal":   fmt(hoje + timedelta(days=14))
     })
     if not dados:
         return []
@@ -328,7 +345,7 @@ def coletar_cobranca():
             "telefone":        c.get("Telefone", c.get("Celular", "")),
             "email":           c.get("Email", c.get("email", "")),
             "valor":           float(c.get("Valor", c.get("ValorParcela", 0)) or 0),
-            "data_vencimento": c.get("Vencimento", c.get("DataVencimento", "")),
+            "data_vencimento": data_ou_none(c.get("Vencimento", c.get("DataVencimento", ""))),
             "dias_atraso":     int(c.get("DiasAtraso", c.get("Atraso", 0)) or 0),
             "status":          str(c.get("Status", c.get("Situacao", "pendente"))).lower(),
             "turma":           c.get("Turma", c.get("Projeto", "")),
@@ -342,6 +359,11 @@ def coletar_cobranca():
 def coletar_fluxo_caixa(codigos_conta):
     """
     Fluxo de caixa por conta.
+    A API exige o codigo da conta em cada chamada (erro "Informe ao menos
+    uma conta" quando nao enviado) - o codigo nao estava sendo repassado
+    nas chamadas anteriores. Enviamos algumas variantes de nome de parametro
+    (Conta/CodigoConta/Contas) para cobrir o nome exato esperado pela API,
+    o que e inofensivo caso a API ignore parametros desconhecidos.
     Cobertura: 6 meses atras + 6 meses a frente.
     """
     if not codigos_conta:
@@ -353,11 +375,13 @@ def coletar_fluxo_caixa(codigos_conta):
     todos = []
     vistos = set()
     for cod in codigos_conta[:5]:
+        log.info(f"  -> conta {cod}")
         items = coletar_em_janelas(
             "api/emp/financeiro/fluxo-de-caixa",
             "DataInicial", "DataFinal",
             data_ini, data_fim, 59,
-            delay=12  # SGE exige 10s entre chamadas para este endpoint
+            delay=12,  # SGE exige ~10s entre chamadas para este endpoint
+            extra_params={"Conta": cod, "CodigoConta": cod, "Contas": cod}
         )
         for f in items:
             data_ref = str(f.get("Data", f.get("Competencia", f.get("Periodo", fmt(hoje)))))[:10]
