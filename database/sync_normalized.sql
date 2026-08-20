@@ -197,7 +197,8 @@ execute function public.trg_sync_normalized();
 
 -- total_vendido agora vem de `vendas` (valor efetivamente contratado),
 -- não mais da soma das parcelas — e todas as somas excluem 'cancelado'.
-create or replace view public.vw_resumo_turmas as
+drop view if exists public.vw_resumo_turmas;
+create view public.vw_resumo_turmas as
 select
   t.id,
   t.nome,
@@ -238,7 +239,8 @@ left join (
 
 -- Faturamento mensal por competência (data de vencimento, exclui cancelado)
 -- e recebido por caixa (data de pagamento), lado a lado.
-create or replace view public.vw_faturamento_mensal as
+drop view if exists public.vw_faturamento_mensal;
+create view public.vw_faturamento_mensal as
 select
   to_char(date_trunc('month', coalesce(fat.mes_venc, rec.mes_pgto)), 'YYYY-MM') as mes,
   coalesce(fat.faturamento_bruto, 0) as faturamento_bruto,
@@ -257,12 +259,13 @@ full outer join (
 ) rec on rec.mes_pgto = fat.mes_venc
 order by 1;
 
-create or replace view public.vw_inadimplencia as
+drop view if exists public.vw_inadimplencia;
+create view public.vw_inadimplencia as
 select
   coalesce(cl.nome, 'Não identificado') as cliente,
   coalesce(t.nome, '-') as turma,
   p.data_vencimento,
-  p.valor - p.valor_pago as valor,
+  (p.valor - p.valor_pago)::numeric(12,2) as valor,
   greatest((current_date - p.data_vencimento)::int, 0) as dias_atraso
 from public.pagamentos p
 left join public.clientes cl on cl.id = p.cliente_id
