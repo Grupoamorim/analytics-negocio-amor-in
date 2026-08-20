@@ -108,6 +108,16 @@ def classificar_lancamento(categoria, descricao, fornecedor) -> str:
     return "Outras Despesas Operacionais"
 
 
+def classificar_linha(row) -> str:
+    """Usa a classificação feita pela IA (Gemini, salva em `grupo_dre` na
+    sincronização) quando existe; só cai nas palavras-chave como reserva
+    para lançamentos que a IA ainda não processou."""
+    grupo_ia = row.get("grupo_dre")
+    if isinstance(grupo_ia, str) and grupo_ia in GRUPOS_ORDEM:
+        return grupo_ia
+    return classificar_lancamento(row.get("categoria"), row.get("descricao"), row.get("fornecedor"))
+
+
 # ──────────────────────────────────────────────────────────────
 # Carrega e prepara os dados
 # ──────────────────────────────────────────────────────────────
@@ -131,14 +141,15 @@ for _df in (df_receitas, df_despesas):
 with st.expander("ℹ️ Como este DRE é montado automaticamente"):
     st.markdown(
         "Este demonstrativo é gerado a partir dos lançamentos sincronizados do SGE "
-        "(contas a receber e contas a pagar). Cada lançamento de despesa passa por um "
-        "classificador inteligente baseado em reconhecimento de palavras-chave, que analisa "
-        "a categoria, a descrição e o fornecedor para decidir em qual grupo contábil do DRE "
-        "ele se encaixa (custos diretos, despesas comerciais, administrativas, financeiras, "
-        "impostos, etc.).\n\n"
-        "Esse processo roda sozinho — conforme novas categorias chegam do SGE, elas já são "
-        "classificadas automaticamente. Você pode revisar como cada lançamento foi "
-        "classificado na seção **'Ver lançamentos e como cada um foi classificado'** mais abaixo."
+        "(contas a receber e contas a pagar). Cada lançamento de despesa é classificado por "
+        "**IA (Gemini)** uma única vez, quando chega do SGE — ela analisa a categoria, a "
+        "descrição e o fornecedor e decide em qual grupo contábil do DRE ele se encaixa "
+        "(custos diretos, despesas comerciais, administrativas, financeiras, impostos, etc.), "
+        "e o resultado fica salvo permanentemente no lançamento. Enquanto a IA não processa um "
+        "lançamento novo, ele usa temporariamente um classificador por palavras-chave como "
+        "reserva.\n\n"
+        "Você pode revisar como cada lançamento foi classificado na seção "
+        "**'Ver lançamentos e como cada um foi classificado'** mais abaixo."
     )
 
 # ── Filtro de período ──────────────────────────────────────────
@@ -187,10 +198,7 @@ receita_bruta = float(df_rec_periodo["valor"].sum()) if "valor" in df_rec_period
 totais_grupo = {}
 if not df_desp_periodo.empty:
     df_desp_periodo = df_desp_periodo.copy()
-    df_desp_periodo["grupo_dre"] = df_desp_periodo.apply(
-        lambda r: classificar_lancamento(r.get("categoria"), r.get("descricao"), r.get("fornecedor")),
-        axis=1
-    )
+    df_desp_periodo["grupo_dre"] = df_desp_periodo.apply(classificar_linha, axis=1)
     totais_grupo = df_desp_periodo.groupby("grupo_dre")["valor"].sum().to_dict()
 
 impostos_vendas  = float(totais_grupo.get("Impostos e Taxas sobre Vendas", 0))

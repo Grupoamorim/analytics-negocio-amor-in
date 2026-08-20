@@ -365,6 +365,7 @@ def main():
             st.page_link("pages/03_crm.py", label="👥 CRM / Notion", icon="👥")
             st.page_link("pages/04_projecoes.py", label="🔮 Projeções IA", icon="🔮")
             st.page_link("pages/05_dre.py", label="🧾 DRE", icon="🧾")
+            st.page_link("pages/06_pergunte_ia.py", label="🤖 Pergunte à IA", icon="🤖")
             st.divider()
             authenticator.logout("Sair", "sidebar")
 

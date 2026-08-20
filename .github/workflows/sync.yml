@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install requests supabase python-dotenv
+      - run: pip install requests supabase python-dotenv google-genai
       - name: Executar coletor SGE
         env:
           SGE_CNPJ:             ${{ secrets.SGE_CNPJ }}
@@ -49,3 +49,9 @@ jobs:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python collectors/sge_collector.py
+      - name: Classificar novas despesas por IA (Gemini)
+        env:
+          GEMINI_API_KEY:       ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python collectors/ia_classificador.py
