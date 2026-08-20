@@ -110,6 +110,13 @@ def carregar_resumo_turmas() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300)
+def carregar_totais_negocio() -> dict:
+    sb = get_supabase()
+    result = sb.table("vw_totais_negocio").select("*").execute()
+    return result.data[0] if result.data else {}
+
+
+@st.cache_data(ttl=300)
 def carregar_faturamento_mensal() -> pd.DataFrame:
     sb = get_supabase()
     result = sb.table("vw_faturamento_mensal").select("*").order("mes").execute()
@@ -210,23 +217,27 @@ def pagina_overview():
     st.caption(f"Atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
     df_turmas = carregar_resumo_turmas()
+    totais    = carregar_totais_negocio()
     df_fat    = carregar_faturamento_mensal()
     df_inadi  = carregar_inadimplencia()
     metas     = carregar_metas_mes_atual()
 
-    if df_turmas.empty:
+    if df_turmas.empty and not totais:
         st.info("🔄 Aguardando primeira sincronização de dados. Execute o coletor SGE para começar.")
         _exibir_status_sync()
         return
 
     # ── KPIs principais ────────────────────────────────────
+    # Vêm de vw_totais_negocio (soma o negócio inteiro), não de somar
+    # turma por turma — nem toda venda/despesa tem turma vinculada no
+    # SGE, então somar só por turma subestimava (ou zerava) os totais.
     st.subheader("💰 Indicadores Principais")
 
-    total_faturado   = df_turmas["total_vendido"].sum() if "total_vendido" in df_turmas else 0
-    total_recebido   = df_turmas["total_recebido"].sum() if "total_recebido" in df_turmas else 0
-    total_a_receber  = df_turmas["total_a_receber"].sum() if "total_a_receber" in df_turmas else 0
-    total_inadiml    = df_turmas["total_inadimplente"].sum() if "total_inadimplente" in df_turmas else 0
-    total_custos     = df_turmas["total_custos"].sum() if "total_custos" in df_turmas else 0
+    total_faturado   = float(totais.get("total_faturado", 0) or 0)
+    total_recebido   = float(totais.get("total_recebido", 0) or 0)
+    total_a_receber  = float(totais.get("total_a_receber", 0) or 0)
+    total_inadiml    = float(totais.get("total_inadimplente", 0) or 0)
+    total_custos     = float(totais.get("total_custos", 0) or 0)
     pct_inadimlencia = (total_inadiml / total_faturado * 100) if total_faturado > 0 else 0
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -243,7 +254,7 @@ def pagina_overview():
                   delta_color="inverse")
     with c5:
         st.metric("📑 Contas a Pagar", formatar_brl(total_custos),
-                  help="Total de custos/despesas lançados (vw_resumo_turmas.total_custos). Veja o detalhamento completo na página Financeiro ou no DRE.")
+                  help="Total de custos/despesas lançados, com ou sem turma vinculada. Veja o detalhamento completo na página Financeiro ou no DRE.")
 
     st.divider()
 
