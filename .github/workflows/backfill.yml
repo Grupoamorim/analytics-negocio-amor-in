@@ -1,0 +1,35 @@
+name: Backfill Historico SGE (manual)
+
+# Roda só quando você clicar em "Run workflow" - nunca automaticamente.
+# Busca contas a receber e contas a pagar desde a data informada até
+# hoje e arquiva no Supabase. Depois disso, a sincronização horária
+# normal (sync.yml) continua cuidando só do que é novo/futuro - o
+# histórico já importado fica guardado pra sempre (upsert nunca apaga).
+
+on:
+  workflow_dispatch:
+    inputs:
+      desde:
+        description: 'Buscar contas a receber/pagar desde esta data (AAAA-MM-DD)'
+        required: true
+        default: '2025-01-01'
+
+jobs:
+  backfill-sge:
+    name: Backfill contas a receber/pagar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install requests supabase python-dotenv
+      - name: Backfill historico SGE
+        env:
+          SGE_CNPJ:             ${{ secrets.SGE_CNPJ }}
+          SGE_TOKEN:            ${{ secrets.SGE_TOKEN }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          BACKFILL_DESDE:       ${{ github.event.inputs.desde }}
+        run: python collectors/sge_collector.py

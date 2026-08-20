@@ -112,6 +112,17 @@ def coletar_em_janelas(endpoint, param_ini, param_fim, data_ini, data_fim, janel
 hoje = date.today()
 
 
+def data_inicio_backfill():
+    """Se a variável BACKFILL_DESDE (AAAA-MM-DD) estiver definida, força
+    o início da busca de contas a receber/pagar nessa data em vez da
+    janela normal relativa a hoje - usado só na execução manual de
+    backfill histórico (ver .github/workflows/backfill.yml)."""
+    valor = os.getenv("BACKFILL_DESDE", "").strip()
+    if not valor:
+        return None
+    return datetime.strptime(valor, "%Y-%m-%d").date()
+
+
 # ══════════════════════════════════════════════════════════════
 # COLETORES
 # ══════════════════════════════════════════════════════════════
@@ -233,9 +244,9 @@ def coletar_contas_receber():
     Cobertura: 2 meses atras + 5 anos a frente em janelas de 59 dias.
     (Para historico completo, o Supabase acumula execucoes anteriores)
     """
-    log.info("Coletando contas a receber (2 meses atras + 5 anos a frente)...")
-    data_ini = hoje - timedelta(days=59)   # limite da API: 2 meses atras
+    data_ini = data_inicio_backfill() or (hoje - timedelta(days=59))
     data_fim = hoje + timedelta(days=1825) # 5 anos a frente
+    log.info(f"Coletando contas a receber ({fmt(data_ini)} -> {fmt(data_fim)})...")
     items = coletar_em_janelas(
         "api/emp/financeiro/contas-a-receber",
         "VencimentoInicial", "VencimentoFinal",
@@ -276,9 +287,9 @@ def coletar_contas_pagar():
     Contas a pagar - API parece aceitar periodos maiores.
     Cobertura: 6 meses atras + 5 anos a frente.
     """
-    log.info("Coletando contas a pagar (6 meses atras + 5 anos a frente)...")
-    data_ini = hoje - timedelta(days=180)
+    data_ini = data_inicio_backfill() or (hoje - timedelta(days=180))
     data_fim = hoje + timedelta(days=1825)
+    log.info(f"Coletando contas a pagar ({fmt(data_ini)} -> {fmt(data_fim)})...")
     items = coletar_em_janelas(
         "api/emp/financeiro/contas-a-pagar",
         "VencimentoInicial", "VencimentoFinal",
@@ -469,37 +480,54 @@ def main():
     total = 0
     status_final = "sucesso"
     msg_final = ""
+    modo_backfill = data_inicio_backfill() is not None
 
     try:
-        # 1. Contas bancarias (necessario antes do fluxo)
-        contas, codigos_conta = coletar_contas()
-        total += upsert(sb, "sge_contas", contas)
+        if modo_backfill:
+            # Execução manual de backfill histórico: só contas a receber e
+            # contas a pagar, desde BACKFILL_DESDE. O Supabase acumula pra
+            # sempre (upsert nunca apaga), então isso roda uma vez só e o
+            # histórico fica arquivado - a sincronização horária normal
+            # continua cuidando só do que é novo/futuro depois disso.
+            log.info(f"MODO BACKFILL HISTORICO desde {os.getenv('BACKFILL_DESDE')}")
 
-        # 2. Vendas (1 ano, janelas 89 dias)
-        vendas = coletar_vendas()
-        total += upsert(sb, "sge_vendas", vendas)
+            receber = coletar_contas_receber()
+            total += upsert(sb, "sge_contas_receber", receber)
 
-        # 3. Adesoes (1 ano, janelas 89 dias)
-        adesoes = coletar_adesoes()
-        total += upsert(sb, "sge_adesoes", adesoes)
+            pagar = coletar_contas_pagar()
+            total += upsert(sb, "sge_contas_pagar", pagar)
 
-        # 4. Contas a receber (2 meses atras + 5 anos a frente)
-        receber = coletar_contas_receber()
-        total += upsert(sb, "sge_contas_receber", receber)
+            msg_final = f"Backfill concluido: {total} registros (contas a receber + a pagar)"
+        else:
+            # 1. Contas bancarias (necessario antes do fluxo)
+            contas, codigos_conta = coletar_contas()
+            total += upsert(sb, "sge_contas", contas)
 
-        # 5. Contas a pagar (6 meses atras + 5 anos a frente)
-        pagar = coletar_contas_pagar()
-        total += upsert(sb, "sge_contas_pagar", pagar)
+            # 2. Vendas (1 ano, janelas 89 dias)
+            vendas = coletar_vendas()
+            total += upsert(sb, "sge_vendas", vendas)
 
-        # 6. Cobranca (59 dias atras + 90 dias a frente)
-        cobranca = coletar_cobranca()
-        total += upsert(sb, "sge_cobranca", cobranca)
+            # 3. Adesoes (1 ano, janelas 89 dias)
+            adesoes = coletar_adesoes()
+            total += upsert(sb, "sge_adesoes", adesoes)
 
-        # 7. Fluxo de caixa (6 meses atras + 6 meses a frente)
-        fluxo = coletar_fluxo_caixa(codigos_conta)
-        total += upsert_fluxo(sb, fluxo)
+            # 4. Contas a receber (2 meses atras + 5 anos a frente)
+            receber = coletar_contas_receber()
+            total += upsert(sb, "sge_contas_receber", receber)
 
-        msg_final = f"Concluido: {total} registros de 7 endpoints"
+            # 5. Contas a pagar (6 meses atras + 5 anos a frente)
+            pagar = coletar_contas_pagar()
+            total += upsert(sb, "sge_contas_pagar", pagar)
+
+            # 6. Cobranca (59 dias atras + 90 dias a frente)
+            cobranca = coletar_cobranca()
+            total += upsert(sb, "sge_cobranca", cobranca)
+
+            # 7. Fluxo de caixa (6 meses atras + 6 meses a frente)
+            fluxo = coletar_fluxo_caixa(codigos_conta)
+            total += upsert_fluxo(sb, fluxo)
+
+            msg_final = f"Concluido: {total} registros de 7 endpoints"
 
     except Exception as e:
         status_final = "erro"
