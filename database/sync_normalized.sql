@@ -276,14 +276,16 @@ order by dias_atraso desc;
 -- Totais do negócio inteiro, SEM exigir turma vinculada.
 -- vw_resumo_turmas só enxerga dinheiro ligado a uma turma (turma_id
 -- not null) — mas a vinculação de turma vinda do SGE falha pra boa
--- parte das vendas e quase todas as contas a pagar, então somar
--- vw_resumo_turmas turma a turma faz o total geral (Visão Geral)
--- ficar artificialmente baixo ou zerado. Esta view soma direto das
--- tabelas, com turma ou sem, pra representar o negócio inteiro.
+-- parte das vendas e quase todas as contas a pagar, e existem
+-- lançamentos manuais sem projeto/turma que vão direto pra contas a
+-- receber/pagar sem passar por uma "venda" formal. Por isso o total
+-- faturado soma de `pagamentos` (= contas a receber, mesma fonte do
+-- Financeiro e do DRE), não de `vendas` — só assim pega 100% dos
+-- lançamentos, com ou sem turma, formal ou manual.
 drop view if exists public.vw_totais_negocio;
 create view public.vw_totais_negocio as
 select
-  coalesce((select sum(valor_total) from public.vendas where status <> 'cancelado'), 0)::numeric(14,2) as total_faturado,
+  coalesce((select sum(valor) from public.pagamentos where status <> 'cancelado'), 0)::numeric(14,2) as total_faturado,
   coalesce((select sum(valor_pago) from public.pagamentos where status <> 'cancelado'), 0)::numeric(14,2) as total_recebido,
   coalesce((select sum(valor - valor_pago) from public.pagamentos where status in ('pendente','atrasado')), 0)::numeric(14,2) as total_a_receber,
   coalesce((select sum(valor - valor_pago) from public.pagamentos where status = 'atrasado'), 0)::numeric(14,2) as total_inadimplente,
