@@ -114,6 +114,12 @@ def classificar_lancamento(categoria, descricao, fornecedor) -> str:
 df_receitas = carregar_pagamentos()
 df_despesas = carregar_contas_pagar()
 
+# Lançamentos cancelados/estornados não entram no DRE (nem receita, nem despesa)
+if not df_receitas.empty and "status" in df_receitas.columns:
+    df_receitas = df_receitas[df_receitas["status"] != "cancelado"]
+if not df_despesas.empty and "status" in df_despesas.columns:
+    df_despesas = df_despesas[df_despesas["status"] != "cancelado"]
+
 if df_receitas.empty and df_despesas.empty:
     st.info("🔄 Aguardando sincronização de dados financeiros para montar o DRE.")
     st.stop()

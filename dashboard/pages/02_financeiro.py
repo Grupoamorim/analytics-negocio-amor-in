@@ -36,6 +36,10 @@ def brl(v): return f"R$ {float(v or 0):,.0f}".replace(",", ".")
 df_pgto = carregar_pagamentos()
 df_pagar = carregar_contas_pagar()
 
+# Lançamentos cancelados/estornados não contam em nenhum cálculo financeiro
+if not df_pgto.empty and "status" in df_pgto.columns:
+    df_pgto = df_pgto[df_pgto["status"] != "cancelado"]
+
 # KPIs
 c1, c2, c3, c4 = st.columns(4)
 if not df_pgto.empty and "status" in df_pgto.columns:
@@ -47,6 +51,7 @@ else:
 
 if not df_pagar.empty and "status" in df_pagar.columns:
     a_pagar = df_pagar[df_pagar["status"] == "pendente"]["valor"].sum()
+    df_pagar = df_pagar[df_pagar["status"] != "cancelado"]
 else:
     a_pagar = 0
 
