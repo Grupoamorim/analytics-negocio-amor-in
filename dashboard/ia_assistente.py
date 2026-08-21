@@ -200,6 +200,28 @@ div[data-testid="stPopover"] button:hover { background: #EA580C !important; }
     max-height: 70vh;
     overflow-y: auto;
 }
+
+/* ── Bolhas de mensagem do chat ──────────────────────────── */
+[data-testid="stChatMessage"] {
+    border-radius: 14px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+    background: rgba(249, 115, 22, 0.10);
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+    background: #1A1D23;
+    border: 1px solid #2C313A;
+}
+[data-testid="stChatInput"] textarea {
+    border-radius: 999px !important;
+}
+[data-testid="stChatInput"] {
+    border-radius: 999px !important;
+    border: 1px solid #2C313A !important;
+    background: #1A1D23 !important;
+}
 </style>
 """
 
