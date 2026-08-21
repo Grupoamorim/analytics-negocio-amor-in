@@ -165,7 +165,7 @@ Responda em tópicos curtos, práticos e orientados a fechamento.`,
         .join('\n')
 
       return {
-        pageName: 'Pipeline Kanban',
+        pageName: 'Funil Amor In',
         prompt: `Você é um SDR especialista em fechamento de turmas e formaturas. Analise este pipeline e sugira quais 3 turmas devo priorizar hoje e qual argumento de fechamento usar para cada uma:
 ${dealsList}
 

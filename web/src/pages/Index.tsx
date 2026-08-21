@@ -470,7 +470,7 @@ export default function Index() {
         {/* KPI 3: Pipeline Ativo */}
         <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.14] hover:-translate-y-1 transition-all duration-200 shadow-lg">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-slate-400">Pipeline Ativo</span>
+            <span className="text-xs font-medium text-slate-400">Funil Ativo</span>
             <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-400">
               <Layers className="w-5 h-5" />
             </div>

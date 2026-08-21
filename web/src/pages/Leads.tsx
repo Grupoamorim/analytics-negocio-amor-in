@@ -152,11 +152,11 @@ export default function LeadsPage() {
       if (stored === 'all') return 'all'
       if (stored) {
         const num = Number(stored)
-        if ([25, 50, 100].includes(num)) return num
+        if ([10, 20, 30, 50, 100].includes(num)) return num
       }
-      return 25
+      return 20
     } catch {
-      return 25
+      return 20
     }
   })
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -1444,7 +1444,7 @@ export default function LeadsPage() {
           <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
             <span>Mostrar:</span>
             <div className="inline-flex items-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-0.5">
-              {[25, 50, 100].map((size) => (
+              {[10, 20, 30, 50, 100].map((size) => (
                 <button
                   key={size}
                   type="button"

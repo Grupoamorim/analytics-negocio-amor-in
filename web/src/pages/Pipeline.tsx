@@ -143,7 +143,7 @@ export default function Pipeline() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-            Pipeline de Turmas
+            Funil Amor In
             <span className="text-xs px-2.5 py-1 rounded-full bg-orange-500/15 text-orange-300 font-semibold border border-orange-500/25">
               {deals.length} Turmas
             </span>

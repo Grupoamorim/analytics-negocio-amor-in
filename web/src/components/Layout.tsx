@@ -34,7 +34,15 @@ import { useCRM } from '@/context/CRMContext'
 import { TeamMember } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase/client'
 import GlobalAIFoatingButton from '@/components/AIInsightsButton'
+
+const CARGO_LABEL: Record<string, string> = {
+  admin: 'Administrador',
+  financeiro: 'Financeiro',
+  comercial: 'Comercial',
+  membro: 'Membro',
+}
 
 type NavItem = { path: string; label: string; icon: typeof LayoutDashboard }
 
@@ -49,7 +57,7 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
   {
     section: 'Comercial',
     items: [
-      { path: '/pipeline', label: 'Pipeline', icon: Kanban },
+      { path: '/pipeline', label: 'Funil Amor In', icon: Kanban },
       { path: '/leads', label: 'Turmas', icon: GraduationCap },
       { path: '/contatos', label: 'Contatos', icon: Users },
       { path: '/probabilidade', label: 'Probabilidade', icon: BrainCircuit },
@@ -79,9 +87,22 @@ const NAVIGATION_ITEMS: NavItem[] = NAVIGATION_SECTIONS.flatMap((s) => s.items)
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { leads, deals, tasks, settings, members } = useCRM()
+  const { leads, deals, tasks, settings } = useCRM()
   const { toast } = useToast()
   const { user, signOut } = useAuth()
+  const [perfil, setPerfil] = useState<{ nome: string; role: string } | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('profiles')
+      .select('nome, role')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) setPerfil(data)
+      })
+  }, [user])
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -190,11 +211,11 @@ export default function Layout() {
         ? 'bg-[#151c28]'
         : 'bg-[#111820]'
 
-  const currentUser: TeamMember = members[0] || {
-    id: 'm-default',
-    name: 'Carlos Mendes',
-    email: 'carlos.mendes@sdrcrm.com.br',
-    role: 'SDR Líder',
+  const currentUser: TeamMember = {
+    id: user?.id || 'm-default',
+    name: perfil?.nome || user?.email?.split('@')[0] || 'Usuário',
+    email: user?.email || '',
+    role: perfil ? CARGO_LABEL[perfil.role] || perfil.role : '',
     status: 'Ativo',
     avatarColor: '#F97316',
   }
