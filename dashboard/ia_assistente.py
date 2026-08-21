@@ -171,30 +171,18 @@ def _conteudo_chat():
 
 _CSS_WIDGET = """
 <style>
-div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    z-index: 9999;
-    width: auto !important;
-}
-div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] > div[data-baseweb="popover"] {
-    position: static;
-}
-div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] button {
+div[data-testid="stPopover"] button {
     border-radius: 50% !important;
-    width: 58px !important;
-    height: 58px !important;
-    font-size: 26px !important;
+    width: 46px !important;
+    height: 46px !important;
+    font-size: 20px !important;
     background: #F97316 !important;
     color: #16181D !important;
     border: none !important;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     padding: 0 !important;
 }
-div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] button:hover {
-    background: #EA580C !important;
-}
+div[data-testid="stPopover"] button:hover { background: #EA580C !important; }
 [data-testid="stPopoverBody"] {
     width: 380px !important;
     max-width: 90vw;
@@ -205,13 +193,23 @@ div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] button:hover {
 
 def render_botao_flutuante():
     """Chame no topo de cada página (depois do st.set_page_config) para
-    mostrar o botão flutuante de IA, fixo no canto inferior direito da
-    tela em todas as páginas. Clicar abre uma abinha (popover) com o
-    chat - não bloqueia o resto da página. Não faz nada se
-    GEMINI_API_KEY não estiver configurado."""
+    mostrar o botão de IA alinhado à direita, no topo da página, em
+    todas as páginas. Clicar abre uma abinha (popover) com o chat -
+    não bloqueia o resto da página, dá pra continuar mexendo no
+    dashboard com o chat aberto. Não faz nada se GEMINI_API_KEY não
+    estiver configurado.
+
+    Nota técnica: tentamos deixar o botão fixo/flutuante (visível ao
+    rolar a página) via CSS position:fixed, mas o Streamlit encapsula
+    os elementos de um jeito que prende a posição fixa dentro de um
+    contêiner interno em vez do canto real da tela - ficava no lugar
+    errado. Por isso usamos colunas do Streamlit pra empurrar o botão
+    pra direita de forma confiável, mesmo não sendo "flutuante" ao
+    rolar."""
     if not GEMINI_API_KEY:
         return
     st.markdown(_CSS_WIDGET, unsafe_allow_html=True)
-    st.markdown('<div class="ia-fab-marker"></div>', unsafe_allow_html=True)
-    with st.popover("🤖"):
-        _conteudo_chat()
+    _, col_btn = st.columns([20, 1])
+    with col_btn:
+        with st.popover("🤖"):
+            _conteudo_chat()
