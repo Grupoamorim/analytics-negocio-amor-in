@@ -65,6 +65,14 @@ h1, h2, h3 { font-weight: 800 !important; letter-spacing: -0.01em; }
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
     background: #1A1D23;
 }
+.nav-secao {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 16px 4px 4px 4px;
+}
 
 /* ── Divider mais discreto ───────────────────────────────── */
 hr { border-color: #2C313A !important; }
@@ -130,22 +138,38 @@ def aplicar_estilo(cabecalho_sidebar: bool = True):
             _cabecalho_sidebar()
 
 
-PAGINAS_NAV = [
-    ("app.py", "Visão Geral", "🏠"),
-    ("pages/01_turmas.py", "Turmas", "🎓"),
-    ("pages/02_financeiro.py", "Financeiro", "💰"),
-    ("pages/03_crm.py", "CRM / Notion", "👥"),
-    ("pages/04_projecoes.py", "Projeções IA", "🔮"),
-    ("pages/05_dre.py", "DRE", "🧾"),
+# Menu setorizado: cada seção agrupa páginas do mesmo departamento do
+# negócio. Novas páginas do CRM completo entram dentro de "Comercial",
+# sem mexer nas outras seções.
+NAVEGACAO = [
+    (None, [
+        ("app.py", "Visão Geral", "🏠"),
+    ]),
+    ("Comercial", [
+        ("pages/03_crm.py", "CRM / Leads", "👥"),
+    ]),
+    ("Operacional", [
+        ("pages/01_turmas.py", "Turmas", "🎓"),
+    ]),
+    ("Financeiro", [
+        ("pages/02_financeiro.py", "Financeiro", "💰"),
+        ("pages/05_dre.py", "DRE", "🧾"),
+    ]),
+    ("Inteligência", [
+        ("pages/04_projecoes.py", "Projeções IA", "🔮"),
+    ]),
 ]
 
 
 def render_navegacao():
-    """Lista de páginas no menu lateral. A navegação automática do
-    Streamlit fica desligada (showSidebarNavigation = false, no
-    config.toml) porque ela mostrava um item feio e duplicado
+    """Menu lateral setorizado por departamento do negócio. A navegação
+    automática do Streamlit fica desligada (showSidebarNavigation =
+    false, no config.toml) porque ela mostrava um item feio e duplicado
     ("aplicativo") com o nome cru do arquivo — esta função é o único
     menu de navegação agora, chamada em toda página."""
     with st.sidebar:
-        for caminho, label, icone in PAGINAS_NAV:
-            st.page_link(caminho, label=label, icon=icone)
+        for secao, paginas in NAVEGACAO:
+            if secao:
+                st.markdown(f'<div class="nav-secao">{secao}</div>', unsafe_allow_html=True)
+            for caminho, label, icone in paginas:
+                st.page_link(caminho, label=label, icon=icone)
