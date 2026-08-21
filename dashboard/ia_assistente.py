@@ -1,9 +1,13 @@
 """
-Widget de IA flutuante - importado e chamado no topo de TODAS as
-páginas (não é uma página separada no menu). Renderiza um ícone fixo
-no canto inferior direito da tela; clicar abre um chat modal com o
-Gemini, que consulta o banco ao vivo (só leitura) pra responder
-qualquer pergunta sobre o negócio.
+Widget de IA - importado e chamado no topo de TODAS as páginas (não é
+uma página separada no menu). Renderiza um botão flutuante no canto
+inferior direito da tela; clicar abre uma abinha (popover, não modal)
+com o chat do Gemini - a página continua interativa por trás, como um
+widget de chat do WhatsApp Web, não uma tela cheia.
+
+O Gemini tem acesso de leitura ao banco (tabelas e views) via
+`consultar_tabela`, e atua com postura de analista financeiro/de
+mercado, não só de "leitor de números".
 """
 
 import os
@@ -24,9 +28,33 @@ TABELAS_PERMITIDAS = [
     "vw_resumo_turmas", "vw_totais_negocio", "vw_inadimplencia", "vw_faturamento_mensal",
 ]
 
-SYSTEM_PROMPT = """Você é um analista financeiro assistente do dono de uma empresa de
-fotografia de formaturas (Amor In Formaturas). Você responde perguntas sobre o negócio
-consultando o banco de dados ao vivo através da ferramenta `consultar_tabela`.
+SYSTEM_PROMPT = """Você é um analista financeiro sênior e de mercado, atuando como consultor do
+dono de uma empresa de fotografia de formaturas (Amor In Formaturas, Bahia/Brasil). Seu trabalho
+não é só relatar números — é interpretá-los como um CFO/consultor faria.
+
+Seu papel tem 3 frentes:
+
+1) ANÁLISE FINANCEIRA: ao responder sobre faturamento, DRE, margens, inadimplência ou fluxo de
+   caixa, aponte tendências, riscos e oportunidades, compare períodos quando fizer sentido, e dê
+   uma leitura (bom/ruim/atenção) além do valor bruto — não apenas devolva o número.
+
+2) CONTEXTO TRIBUTÁRIO E LEGAL (Brasil): tenha em mente os regimes tributários comuns pra esse
+   porte de empresa (Simples Nacional, MEI, Lucro Presumido), os tributos que incidem sobre
+   serviços (ISS municipal, PIS, COFINS) e obrigações usuais (emissão de nota fiscal, guia DAS).
+   Alíquotas e faixas mudam com frequência e variam por município — quando o usuário precisar de
+   um número tributário exato ou de uma decisão fiscal, dê a orientação geral mas deixe claro que
+   ele deve confirmar o valor exato com o contador do negócio antes de agir. Nunca invente uma
+   alíquota específica como se fosse certeza.
+
+3) ANÁLISE DE MERCADO: quando fizer sentido, contextualize os números com boas práticas do
+   mercado de fotografia de formaturas e de vendas em geral (sazonalidade — vendas concentram em
+   certas épocas do calendário acadêmico, ticket médio por turma, taxa de conversão de leads,
+   nível de inadimplência típico do setor) pra ajudar o dono a entender se os números estão bons
+   ou ruins frente ao esperado, não só em termos absolutos.
+
+Você responde perguntas sobre o negócio consultando o banco de dados ao vivo através da
+ferramenta `consultar_tabela` — nunca invente valores financeiros, sempre consulte antes de
+responder com um número.
 
 Tabelas e views disponíveis (só leitura) e o que cada uma contém:
 - pagamentos: parcelas de contas a receber (colunas: valor, valor_pago, status
@@ -42,11 +70,11 @@ Tabelas e views disponíveis (só leitura) e o que cada uma contém:
 - vw_faturamento_mensal: faturamento e recebido agregados por mês
 
 Regras importantes:
-- SEMPRE que precisar de um número, consulte o banco com `consultar_tabela` — nunca invente
-  valores.
+- SEMPRE que precisar de um número do negócio, consulte o banco com `consultar_tabela`.
 - Lançamentos com status = 'cancelado' já deveriam ser ignorados nas suas contas de receita/despesa
   a não ser que o usuário peça especificamente por cancelados.
-- Responda sempre em português, de forma direta, com os valores em R$ formatados.
+- Responda sempre em português, de forma direta, com os valores em R$ formatados — mas não hesite
+  em dar sua opinião analítica quando perguntado "isso é bom?", "o que eu devo fazer?".
 - Se uma pergunta exigir somar/agrupar dados, você pode fazer várias chamadas a
   `consultar_tabela` e calcular o resultado você mesmo a partir dos dados retornados.
 """
@@ -117,13 +145,14 @@ def _get_chat():
     return st.session_state.chat_ia
 
 
-@st.dialog("🤖 Pergunte à IA sobre o negócio", width="large")
-def _abrir_chat():
+def _conteudo_chat():
+    st.markdown("**🤖 Pergunte à IA**")
+    st.caption("Analista financeiro com acesso ao seu banco de dados, ao vivo.")
     for autor, texto in st.session_state.get("historico_ia", []):
         with st.chat_message(autor):
             st.markdown(texto)
 
-    pergunta = st.chat_input("Ex: qual foi o faturamento de julho?")
+    pergunta = st.chat_input("Ex: o faturamento desse mês está bom?")
     if pergunta:
         chat = _get_chat()
         st.session_state.historico_ia.append(("user", pergunta))
@@ -140,16 +169,49 @@ def _abrir_chat():
         st.session_state.historico_ia.append(("assistant", texto_resposta))
 
 
+_CSS_WIDGET = """
+<style>
+div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    width: auto !important;
+}
+div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] > div[data-baseweb="popover"] {
+    position: static;
+}
+div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] button {
+    border-radius: 50% !important;
+    width: 58px !important;
+    height: 58px !important;
+    font-size: 26px !important;
+    background: #F97316 !important;
+    color: #16181D !important;
+    border: none !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    padding: 0 !important;
+}
+div:has(> div.ia-fab-marker) + div[data-testid="stPopover"] button:hover {
+    background: #EA580C !important;
+}
+[data-testid="stPopoverBody"] {
+    width: 380px !important;
+    max-width: 90vw;
+}
+</style>
+"""
+
+
 def render_botao_flutuante():
     """Chame no topo de cada página (depois do st.set_page_config) para
-    mostrar o botão de IA no menu lateral - não é um item de navegação,
-    aparece em todas as páginas sempre no mesmo lugar. Não faz nada se
-    GEMINI_API_KEY não estiver configurado, pra não quebrar as páginas
-    sem a chave."""
+    mostrar o botão flutuante de IA, fixo no canto inferior direito da
+    tela em todas as páginas. Clicar abre uma abinha (popover) com o
+    chat - não bloqueia o resto da página. Não faz nada se
+    GEMINI_API_KEY não estiver configurado."""
     if not GEMINI_API_KEY:
         return
-    with st.sidebar:
-        st.divider()
-        clicado = st.button("🤖 Pergunte à IA", key="ia_fab_button", use_container_width=True)
-    if clicado:
-        _abrir_chat()
+    st.markdown(_CSS_WIDGET, unsafe_allow_html=True)
+    st.markdown('<div class="ia-fab-marker"></div>', unsafe_allow_html=True)
+    with st.popover("🤖"):
+        _conteudo_chat()
