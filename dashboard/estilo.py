@@ -131,12 +131,12 @@ def aplicar_estilo(cabecalho_sidebar: bool = True):
 
 
 PAGINAS_NAV = [
-    ("app.py", "📊 Visão Geral", "🏠"),
-    ("pages/01_turmas.py", "🎓 Turmas", "🎓"),
-    ("pages/02_financeiro.py", "💰 Financeiro", "💰"),
-    ("pages/03_crm.py", "👥 CRM / Notion", "👥"),
-    ("pages/04_projecoes.py", "🔮 Projeções IA", "🔮"),
-    ("pages/05_dre.py", "🧾 DRE", "🧾"),
+    ("app.py", "Visão Geral", "🏠"),
+    ("pages/01_turmas.py", "Turmas", "🎓"),
+    ("pages/02_financeiro.py", "Financeiro", "💰"),
+    ("pages/03_crm.py", "CRM / Notion", "👥"),
+    ("pages/04_projecoes.py", "Projeções IA", "🔮"),
+    ("pages/05_dre.py", "DRE", "🧾"),
 ]
 
 
