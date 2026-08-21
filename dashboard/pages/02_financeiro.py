@@ -11,8 +11,11 @@ from supabase import create_client
 from datetime import date
 
 from ia_assistente import render_botao_flutuante
+from estilo import aplicar_estilo, render_navegacao
 
 st.set_page_config(page_title="Financeiro", page_icon="💰", layout="wide")
+aplicar_estilo()
+render_navegacao()
 render_botao_flutuante()
 st.title("💰 Painel Financeiro")
 
@@ -105,7 +108,7 @@ with tab2:
             fig.update_layout(
                 height=300,
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#E5E7EB"
+                font_color="#F9FAFB"
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -123,11 +126,11 @@ with tab3:
         df_fluxo = pd.DataFrame({"Recebido": df_rec, "Previsto": df_prev}).fillna(0).tail(12)
         fig = px.line(df_fluxo, labels={"value": "R$", "variable": ""},
                      title="Recebido vs Previsto (últimos 12 meses)",
-                     color_discrete_map={"Recebido": "#34D399", "Previsto": "#818CF8"})
+                     color_discrete_map={"Recebido": "#34D399", "Previsto": "#F97316"})
         fig.update_layout(
             height=350,
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#E5E7EB",
+            font_color="#F9FAFB",
             legend=dict(orientation="h", yanchor="bottom", y=1.02)
         )
         st.plotly_chart(fig, use_container_width=True)

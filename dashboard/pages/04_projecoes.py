@@ -11,8 +11,11 @@ import os
 from supabase import create_client
 
 from ia_assistente import render_botao_flutuante
+from estilo import aplicar_estilo, render_navegacao
 
 st.set_page_config(page_title="Projeções IA", page_icon="🔮", layout="wide")
+aplicar_estilo()
+render_navegacao()
 render_botao_flutuante()
 st.title("🔮 Projeções com Inteligência Artificial")
 st.caption("Previsão baseada nos seus dados históricos reais")
@@ -67,7 +70,7 @@ if PROPHET_OK:
     fig.add_trace(go.Scatter(
         x=df_agg["ds"], y=df_agg["y"],
         mode="lines+markers", name="Faturamento Real",
-        line=dict(color="#818CF8", width=3),
+        line=dict(color="#F97316", width=3),
         marker=dict(size=8)
     ))
     prev_futuro = previsao[previsao["ds"] > df_agg["ds"].max()]
@@ -89,7 +92,7 @@ if PROPHET_OK:
         xaxis_title="Mês", yaxis_title="R$",
         height=400,
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#E5E7EB",
+        font_color="#F9FAFB",
         legend=dict(orientation="h", yanchor="bottom", y=1.02)
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -117,12 +120,12 @@ else:
     datas_fut = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=meses_projetar, freq="MS")
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=df_agg["ds"], y=df_agg["y"], name="Real", marker_color="#818CF8"))
+    fig.add_trace(go.Bar(x=df_agg["ds"], y=df_agg["y"], name="Real", marker_color="#F97316"))
     fig.add_trace(go.Bar(x=datas_fut, y=y_fut, name="Projeção", marker_color="#34D399", opacity=0.7))
     fig.update_layout(
         height=350,
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#E5E7EB",
+        font_color="#F9FAFB",
         barmode="overlay"
     )
     st.plotly_chart(fig, use_container_width=True)

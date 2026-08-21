@@ -10,8 +10,11 @@ import os
 from supabase import create_client
 
 from ia_assistente import render_botao_flutuante
+from estilo import aplicar_estilo, render_navegacao
 
 st.set_page_config(page_title="CRM", page_icon="👥", layout="wide")
+aplicar_estilo()
+render_navegacao()
 render_botao_flutuante()
 st.title("👥 CRM — Leads & Oportunidades")
 st.caption("Sincronizado automaticamente do seu Notion")
@@ -80,6 +83,6 @@ if "status" in carregar_crm().columns:
     df_funil = carregar_crm()["status"].value_counts().reset_index()
     df_funil.columns = ["Status", "Quantidade"]
     fig = px.funnel(df_funil, x="Quantidade", y="Status",
-                   color_discrete_sequence=["#6366F1"])
+                   color_discrete_sequence=["#EA580C"])
     fig.update_layout(height=300)
     st.plotly_chart(fig, use_container_width=True)

@@ -16,8 +16,11 @@ from datetime import date
 from supabase import create_client
 
 from ia_assistente import render_botao_flutuante
+from estilo import aplicar_estilo, render_navegacao
 
 st.set_page_config(page_title="DRE", page_icon="🧾", layout="wide")
+aplicar_estilo()
+render_navegacao()
 render_botao_flutuante()
 st.title("🧾 DRE — Demonstrativo de Resultado do Exercício")
 st.caption("Montado automaticamente a partir dos lançamentos sincronizados, com classificação inteligente das categorias")
@@ -247,7 +250,7 @@ for rotulo, valor, nivel, destaque in linhas:
         f"""
         <div style="display:flex; justify-content:space-between; align-items:center;
                     padding:8px 14px; margin-bottom:2px; border-radius:8px; background:{fundo};">
-            <span style="font-size:{tam}; font-weight:{peso}; color:#E5E7EB;">{indent}{rotulo}</span>
+            <span style="font-size:{tam}; font-weight:{peso}; color:#F9FAFB;">{indent}{rotulo}</span>
             <span style="font-size:{tam}; font-weight:{peso}; color:{cor};">{brl(valor)}</span>
         </div>
         """,
@@ -283,7 +286,7 @@ if not df_grupos.empty:
         )
         fig_pizza.update_layout(
             height=320, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#E5E7EB", margin=dict(l=10, r=10, t=10, b=10),
+            font_color="#F9FAFB", margin=dict(l=10, r=10, t=10, b=10),
             legend=dict(orientation="h", yanchor="bottom", y=-0.3)
         )
         st.plotly_chart(fig_pizza, use_container_width=True)
@@ -377,12 +380,12 @@ if not df_turma_final.empty and "Receita Total" in df_turma_final.columns and co
     with col_t1:
         top = df_turma_final.head(12)
         fig_turma = go.Figure()
-        fig_turma.add_trace(go.Bar(x=top["Turma"], y=top["Receita Total"], name="Receita", marker_color="#818CF8"))
+        fig_turma.add_trace(go.Bar(x=top["Turma"], y=top["Receita Total"], name="Receita", marker_color="#F97316"))
         fig_turma.add_trace(go.Bar(x=top["Turma"], y=top[col_custo], name="Custo", marker_color="#F87171"))
         fig_turma.update_layout(
             barmode="group", height=380,
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#E5E7EB", yaxis_title="R$",
+            font_color="#F9FAFB", yaxis_title="R$",
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
             margin=dict(l=10, r=10, t=30, b=80)
         )

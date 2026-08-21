@@ -10,8 +10,11 @@ import os
 from supabase import create_client
 
 from ia_assistente import render_botao_flutuante
+from estilo import aplicar_estilo, render_navegacao
 
 st.set_page_config(page_title="Turmas", page_icon="🎓", layout="wide")
+aplicar_estilo()
+render_navegacao()
 render_botao_flutuante()
 st.title("🎓 Gestão de Turmas")
 
@@ -66,12 +69,12 @@ if "total_vendido" in df_orig.columns and "meta_vendas" in df_orig.columns:
         y=["total_vendido", "meta_vendas"],
         barmode="group",
         labels={"nome": "Turma", "value": "R$", "variable": ""},
-        color_discrete_map={"total_vendido": "#818CF8", "meta_vendas": "#4B5563"}
+        color_discrete_map={"total_vendido": "#F97316", "meta_vendas": "#4B5563"}
     )
     fig.update_layout(
         height=350,
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#E5E7EB",
+        font_color="#F9FAFB",
         legend=dict(orientation="h", yanchor="bottom", y=1.02)
     )
     st.plotly_chart(fig, use_container_width=True)

@@ -18,6 +18,7 @@ import yaml
 from yaml.loader import SafeLoader
 
 from ia_assistente import render_botao_flutuante
+from estilo import aplicar_estilo, render_navegacao
 
 # ── Configuração da página ──────────────────────────────────
 st.set_page_config(
@@ -26,33 +27,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# ── CSS customizado (modo escuro) ───────────────────────────
-st.markdown("""
-<style>
-    .metric-card {
-        background: #1B1F2A;
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 4px solid #818CF8;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-    }
-    .metric-value { font-size: 2rem; font-weight: 700; color: #F3F4F6; }
-    .metric-label { font-size: 0.85rem; color: #9CA3AF; margin-top: 4px; }
-    .metric-delta { font-size: 0.85rem; margin-top: 4px; }
-    .delta-up { color: #34D399; }
-    .delta-down { color: #F87171; }
-    [data-testid="stMetric"] {
-        background: #1B1F2A;
-        border: 1px solid #2D3142;
-        border-radius: 12px;
-        padding: 16px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-    }
-    [data-testid="stMetricValue"] { color: #F3F4F6 !important; }
-    [data-testid="stMetricLabel"] { color: #9CA3AF !important; }
-</style>
-""", unsafe_allow_html=True)
+aplicar_estilo()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -154,7 +129,7 @@ def carregar_metas_mes_atual() -> dict:
 # ══════════════════════════════════════════════════════════════
 # COMPONENTES VISUAIS
 # ══════════════════════════════════════════════════════════════
-def card_kpi(label: str, valor: str, delta: str = "", cor: str = "#818CF8"):
+def card_kpi(label: str, valor: str, delta: str = "", cor: str = "#F97316"):
     """Card de KPI com delta"""
     delta_html = ""
     if delta:
@@ -185,13 +160,13 @@ def gauge_meta(atual: float, meta: float, titulo: str):
         mode="gauge+number+delta",
         value=pct,
         delta={"reference": 100, "suffix": "%"},
-        title={"text": titulo, "font": {"size": 14, "color": "#E5E7EB"}},
-        number={"suffix": "%", "font": {"size": 24, "color": "#E5E7EB"}},
+        title={"text": titulo, "font": {"size": 14, "color": "#F9FAFB"}},
+        number={"suffix": "%", "font": {"size": 24, "color": "#F9FAFB"}},
         gauge={
-            "axis": {"range": [0, 100], "tickcolor": "#9CA3AF"},
+            "axis": {"range": [0, 100], "tickcolor": "#A7B1BE"},
             "bar": {"color": cor},
             "bgcolor": "rgba(0,0,0,0)",
-            "bordercolor": "#2D3142",
+            "bordercolor": "#2C313A",
             "steps": [
                 {"range": [0, 50], "color": "#3F2A2E"},
                 {"range": [50, 80], "color": "#3F3A24"},
@@ -206,7 +181,7 @@ def gauge_meta(atual: float, meta: float, titulo: str):
     ))
     fig.update_layout(
         height=200, margin=dict(l=10, r=10, t=30, b=10),
-        paper_bgcolor="rgba(0,0,0,0)", font_color="#E5E7EB"
+        paper_bgcolor="rgba(0,0,0,0)", font_color="#F9FAFB"
     )
     return fig
 
@@ -271,12 +246,12 @@ def pagina_overview():
                 df_fat.groupby("mes_fmt")["faturamento_bruto"].sum().reset_index(),
                 x="mes_fmt", y="faturamento_bruto",
                 labels={"mes_fmt": "Mês", "faturamento_bruto": "Faturamento (R$)"},
-                color_discrete_sequence=["#818CF8"]
+                color_discrete_sequence=["#F97316"]
             )
             fig.update_layout(
                 height=300, margin=dict(l=0, r=0, t=10, b=0),
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                font_color="#E5E7EB", yaxis_title="R$"
+                font_color="#F9FAFB", yaxis_title="R$"
             )
             fig.update_traces(texttemplate='R$ %{y:,.0f}', textposition='outside')
             st.plotly_chart(fig, use_container_width=True)
@@ -357,16 +332,11 @@ def main():
         st.warning("Insira seu usuário e senha")
 
     elif authentication_status:
-        # Sidebar
         with st.sidebar:
             st.markdown(f"### 👋 Olá, {name}!")
             st.divider()
-            st.page_link("app.py", label="📊 Visão Geral", icon="🏠")
-            st.page_link("pages/01_turmas.py", label="🎓 Turmas", icon="🎓")
-            st.page_link("pages/02_financeiro.py", label="💰 Financeiro", icon="💰")
-            st.page_link("pages/03_crm.py", label="👥 CRM / Notion", icon="👥")
-            st.page_link("pages/04_projecoes.py", label="🔮 Projeções IA", icon="🔮")
-            st.page_link("pages/05_dre.py", label="🧾 DRE", icon="🧾")
+        render_navegacao()
+        with st.sidebar:
             st.divider()
             authenticator.logout("Sair", "sidebar")
 
