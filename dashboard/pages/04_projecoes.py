@@ -10,7 +10,10 @@ from datetime import date
 import os
 from supabase import create_client
 
+from ia_assistente import render_botao_flutuante
+
 st.set_page_config(page_title="Projeções IA", page_icon="🔮", layout="wide")
+render_botao_flutuante()
 st.title("🔮 Projeções com Inteligência Artificial")
 st.caption("Previsão baseada nos seus dados históricos reais")
 

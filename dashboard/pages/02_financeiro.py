@@ -10,7 +10,10 @@ import os
 from supabase import create_client
 from datetime import date
 
+from ia_assistente import render_botao_flutuante
+
 st.set_page_config(page_title="Financeiro", page_icon="💰", layout="wide")
+render_botao_flutuante()
 st.title("💰 Painel Financeiro")
 
 @st.cache_resource

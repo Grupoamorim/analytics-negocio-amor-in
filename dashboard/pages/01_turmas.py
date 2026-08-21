@@ -9,7 +9,10 @@ import plotly.express as px
 import os
 from supabase import create_client
 
+from ia_assistente import render_botao_flutuante
+
 st.set_page_config(page_title="Turmas", page_icon="🎓", layout="wide")
+render_botao_flutuante()
 st.title("🎓 Gestão de Turmas")
 
 @st.cache_resource

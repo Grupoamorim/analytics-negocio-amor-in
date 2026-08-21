@@ -17,6 +17,8 @@ import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
 
+from ia_assistente import render_botao_flutuante
+
 # ── Configuração da página ──────────────────────────────────
 st.set_page_config(
     page_title="Analytics do Negócio",
@@ -355,6 +357,8 @@ def main():
         st.warning("Insira seu usuário e senha")
 
     elif authentication_status:
+        render_botao_flutuante()
+
         # Sidebar
         with st.sidebar:
             st.markdown(f"### 👋 Olá, {name}!")
@@ -365,7 +369,6 @@ def main():
             st.page_link("pages/03_crm.py", label="👥 CRM / Notion", icon="👥")
             st.page_link("pages/04_projecoes.py", label="🔮 Projeções IA", icon="🔮")
             st.page_link("pages/05_dre.py", label="🧾 DRE", icon="🧾")
-            st.page_link("pages/06_pergunte_ia.py", label="🤖 Pergunte à IA", icon="🤖")
             st.divider()
             authenticator.logout("Sair", "sidebar")
 

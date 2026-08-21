@@ -15,7 +15,10 @@ import unicodedata
 from datetime import date
 from supabase import create_client
 
+from ia_assistente import render_botao_flutuante
+
 st.set_page_config(page_title="DRE", page_icon="🧾", layout="wide")
+render_botao_flutuante()
 st.title("🧾 DRE — Demonstrativo de Resultado do Exercício")
 st.caption("Montado automaticamente a partir dos lançamentos sincronizados, com classificação inteligente das categorias")
 

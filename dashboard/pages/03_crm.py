@@ -9,7 +9,10 @@ import plotly.express as px
 import os
 from supabase import create_client
 
+from ia_assistente import render_botao_flutuante
+
 st.set_page_config(page_title="CRM", page_icon="👥", layout="wide")
+render_botao_flutuante()
 st.title("👥 CRM — Leads & Oportunidades")
 st.caption("Sincronizado automaticamente do seu Notion")
 
