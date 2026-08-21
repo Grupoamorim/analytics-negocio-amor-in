@@ -75,6 +75,13 @@ def gerar_chave(*campos):
     return hashlib.md5(texto.encode()).hexdigest()[:20]
 
 
+def sub(item, chave):
+    """Pega um sub-objeto aninhado (ex: item['Cliente']) sempre como dict,
+    nunca None - evita erro ao chamar .get() em cima de um None."""
+    valor = item.get(chave) if isinstance(item, dict) else None
+    return valor if isinstance(valor, dict) else {}
+
+
 def lista(dados, *chaves):
     if isinstance(dados, list):
         return dados
@@ -173,24 +180,31 @@ def coletar_vendas():
     registros = []
     vistos = set()
     for v in items:
-        cod = str(v.get("Codigo", v.get("Id", v.get("codigo",
-            gerar_chave(v.get("DataVenda",""), v.get("NomeCliente",""), v.get("ValorTotal",""))
-        ))))
+        # A API do SGE devolve os dados de verdade aninhados em sub-objetos
+        # "Cliente" (dados da adesao/venda) e "Projeto" (dados da turma) -
+        # nao nos campos de primeiro nivel. Sem isso, a chave de dedup
+        # ficava sempre igual (campos vazios) e cada sincronizacao horaria
+        # sobrescrevia tudo numa unica linha.
+        c = sub(v, "Cliente")
+        p = sub(v, "Projeto")
+        cod = str(v.get("Codigo", v.get("Id",
+            gerar_chave(p.get("Numero", ""), c.get("DataAssinaturaContrato", c.get("DataAdesao", c.get("DataCadastro", ""))), c.get("Valor", ""))
+        )))
         if cod in vistos:
             continue
         vistos.add(cod)
         registros.append({
             "codigo_sge":    cod,
-            "data_venda":    data_ou_none(v.get("DataVenda", v.get("Data", v.get("data", "")))),
-            "cliente":       v.get("NomeCliente", v.get("Cliente", v.get("Aluno", ""))),
-            "cpf_cliente":   v.get("CpfCliente", v.get("Cpf", "")),
-            "produto":       v.get("Produto", v.get("Plano", v.get("Pacote", ""))),
-            "valor_total":   float(v.get("ValorTotal", v.get("Valor", 0)) or 0),
-            "valor_entrada": float(v.get("ValorEntrada", v.get("Entrada", 0)) or 0),
+            "data_venda":    data_ou_none(v.get("DataVenda", c.get("DataAdesao", c.get("DataAssinaturaContrato", c.get("DataCadastro", ""))))),
+            "cliente":       v.get("NomeCliente", v.get("Cliente") if isinstance(v.get("Cliente"), str) else c.get("Nome", "")),
+            "cpf_cliente":   v.get("CpfCliente", c.get("Cpf", "")),
+            "produto":       v.get("Produto", c.get("Plano", v.get("Pacote", ""))),
+            "valor_total":   float(v.get("ValorTotal", c.get("Valor", 0)) or 0),
+            "valor_entrada": float(v.get("ValorEntrada", c.get("ValorPago", 0)) or 0),
             "num_parcelas":  int(v.get("NumeroParcelas", v.get("Parcelas", 1)) or 1),
-            "status":        str(v.get("Status", v.get("Situacao", "ativo"))).lower(),
-            "vendedor":      v.get("Vendedor", v.get("Consultor", "")),
-            "turma":         v.get("Turma", v.get("Evento", v.get("Projeto", ""))),
+            "status":        "cancelado" if c.get("Desistente") else str(v.get("Status", v.get("Situacao", "ativo"))).lower(),
+            "vendedor":      v.get("Vendedor", c.get("Vendedor", "")),
+            "turma":         p.get("Descricao", v.get("Turma", v.get("Evento", ""))),
             "raw_data":      v,
             "updated_at":    datetime.now().isoformat()
         })
@@ -215,21 +229,25 @@ def coletar_adesoes():
     registros = []
     vistos = set()
     for a in items:
-        cod = str(a.get("Codigo", a.get("Id", a.get("codigo",
-            gerar_chave(a.get("Data",""), a.get("NomeCliente",""), a.get("Plano",""))
-        ))))
+        # Mesma observacao de coletar_vendas(): os dados reais vem
+        # aninhados em "Cliente" (adesao) e "Projeto" (turma).
+        c = sub(a, "Cliente")
+        p = sub(a, "Projeto")
+        cod = str(a.get("Codigo", a.get("Id",
+            gerar_chave(p.get("Numero", ""), c.get("DataAssinaturaContrato", c.get("DataAdesao", c.get("DataCadastro", ""))), c.get("Valor", ""))
+        )))
         if cod in vistos:
             continue
         vistos.add(cod)
         registros.append({
             "codigo_sge":  cod,
-            "data_adesao": data_ou_none(a.get("Data", a.get("DataAdesao", a.get("DataCadastro", "")))),
-            "cliente":     a.get("NomeCliente", a.get("Cliente", a.get("Aluno", ""))),
-            "cpf_cliente": a.get("CpfCliente", a.get("Cpf", "")),
-            "plano":       a.get("Plano", a.get("Produto", a.get("Pacote", ""))),
-            "valor":       float(a.get("Valor", a.get("ValorTotal", 0)) or 0),
-            "status":      str(a.get("Status", a.get("Situacao", "ativo"))).lower(),
-            "turma":       a.get("Turma", a.get("Evento", a.get("Projeto", ""))),
+            "data_adesao": data_ou_none(a.get("Data", c.get("DataAdesao", c.get("DataAssinaturaContrato", c.get("DataCadastro", ""))))),
+            "cliente":     a.get("NomeCliente", a.get("Cliente") if isinstance(a.get("Cliente"), str) else c.get("Nome", "")),
+            "cpf_cliente": a.get("CpfCliente", c.get("Cpf", "")),
+            "plano":       a.get("Plano", c.get("Plano", a.get("Pacote", ""))),
+            "valor":       float(a.get("Valor", c.get("Valor", 0)) or 0),
+            "status":      "cancelado" if c.get("Desistente") else str(a.get("Status", a.get("Situacao", "ativo"))).lower(),
+            "turma":       p.get("Descricao", a.get("Turma", a.get("Evento", ""))),
             "raw_data":    a,
             "updated_at":  datetime.now().isoformat()
         })
