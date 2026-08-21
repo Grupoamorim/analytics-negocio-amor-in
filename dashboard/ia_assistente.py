@@ -140,39 +140,16 @@ def _abrir_chat():
         st.session_state.historico_ia.append(("assistant", texto_resposta))
 
 
-_CSS_BOTAO_FLUTUANTE = """
-<style>
-div:has(> div.ia-fab-marker) + div[data-testid="stButton"] {
-    position: fixed;
-    bottom: 28px;
-    right: 28px;
-    z-index: 9999;
-    width: auto;
-}
-div:has(> div.ia-fab-marker) + div[data-testid="stButton"] button {
-    border-radius: 50%;
-    width: 56px;
-    height: 56px;
-    font-size: 26px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
-    border: none;
-    background: #818CF8;
-}
-div:has(> div.ia-fab-marker) + div[data-testid="stButton"] button:hover {
-    background: #6366F1;
-}
-</style>
-"""
-
-
 def render_botao_flutuante():
     """Chame no topo de cada página (depois do st.set_page_config) para
-    mostrar o ícone flutuante de IA. Não faz nada se GEMINI_API_KEY não
-    estiver configurado, pra não quebrar as páginas sem a chave."""
+    mostrar o botão de IA no menu lateral - não é um item de navegação,
+    aparece em todas as páginas sempre no mesmo lugar. Não faz nada se
+    GEMINI_API_KEY não estiver configurado, pra não quebrar as páginas
+    sem a chave."""
     if not GEMINI_API_KEY:
         return
-    st.markdown('<div class="ia-fab-marker"></div>', unsafe_allow_html=True)
-    clicado = st.button("🤖", key="ia_fab_button", help="Pergunte à IA sobre o negócio")
-    st.markdown(_CSS_BOTAO_FLUTUANTE, unsafe_allow_html=True)
+    with st.sidebar:
+        st.divider()
+        clicado = st.button("🤖 Pergunte à IA", key="ia_fab_button", use_container_width=True)
     if clicado:
         _abrir_chat()

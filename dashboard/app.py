@@ -357,8 +357,6 @@ def main():
         st.warning("Insira seu usuário e senha")
 
     elif authentication_status:
-        render_botao_flutuante()
-
         # Sidebar
         with st.sidebar:
             st.markdown(f"### 👋 Olá, {name}!")
@@ -372,6 +370,7 @@ def main():
             st.divider()
             authenticator.logout("Sair", "sidebar")
 
+        render_botao_flutuante()
         pagina_overview()
 
 
