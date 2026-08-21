@@ -24,6 +24,7 @@ import Captacao from '@/pages/Captacao'
 import CaptacaoForm from '@/pages/CaptacaoForm'
 import Contatos from '@/pages/Contatos'
 import MapaMercado from '@/pages/MapaMercado'
+import Adesoes from '@/pages/Adesoes'
 import Financeiro from '@/pages/Financeiro'
 import DRE from '@/pages/DRE'
 import Projecoes from '@/pages/Projecoes'
@@ -96,6 +97,7 @@ const App = () => (
             <Route path="/notas" element={<Notes />} />
             <Route path="/captacao" element={<Captacao />} />
             <Route path="/mapa-mercado" element={<MapaMercado />} />
+            <Route path="/adesoes" element={<Adesoes />} />
             <Route path="/financeiro" element={<Financeiro />} />
             <Route path="/dre" element={<DRE />} />
             <Route path="/projecoes" element={<Projecoes />} />

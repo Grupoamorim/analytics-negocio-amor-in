@@ -27,6 +27,7 @@ import {
   Clock,
   Link as LinkIcon,
   ShieldCheck,
+  UserPlus,
 } from 'lucide-react'
 import { getTurmaDisplayName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { useCRM } from '@/context/CRMContext'
@@ -56,6 +57,7 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
       { path: '/notas', label: 'Notas', icon: StickyNote },
       { path: '/captacao', label: 'Captação', icon: QrCode },
       { path: '/mapa-mercado', label: 'Mapa de Mercado', icon: BarChart3 },
+      { path: '/adesoes', label: 'Adesões', icon: UserPlus },
     ],
   },
   {

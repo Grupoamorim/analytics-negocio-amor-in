@@ -257,6 +257,18 @@ e onde estão os maiores ralos de despesa no período. Seja direto e prático.`,
       }
     }
 
+    if (path.startsWith('/adesoes')) {
+      return {
+        pageName: 'Adesões',
+        prompt: `Você é um analista comercial sênior de uma empresa de fotografia de formaturas. Olhe os
+números de adesões do período mostrados na tela (quantidade, valor total, ticket médio e a variação
+percentual contra o mesmo período do ano passado) e o gráfico comparativo. Diga se o ritmo de adesões
+está acelerando ou desacelerando, se a variação anual é normal para a sazonalidade do setor (picos
+em certas épocas do calendário acadêmico), e dê 2 ações práticas para aumentar as adesões no
+próximo período.`,
+      }
+    }
+
     if (path.startsWith('/projecoes')) {
       return {
         pageName: 'Projeções',
