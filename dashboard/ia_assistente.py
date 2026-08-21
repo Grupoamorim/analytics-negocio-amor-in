@@ -129,20 +129,32 @@ def consultar_tabela(tabela: str, colunas: str = "*", filtros: str = "", ordenar
         return json.dumps({"erro": str(e)})
 
 
-def _get_chat():
-    if "chat_ia" not in st.session_state:
-        from google import genai
-        from google.genai import types
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        st.session_state.chat_ia = client.chats.create(
-            model=GEMINI_MODEL,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                tools=[consultar_tabela],
-            ),
-        )
-        st.session_state.historico_ia = []
-    return st.session_state.chat_ia
+def _perguntar_ia() -> str:
+    """Cria um cliente Gemini novo a cada pergunta, em vez de reaproveitar
+    um cliente/sessão de chat guardado entre reruns do Streamlit - um
+    objeto de chat guardado em session_state ficava com a conexão HTTP
+    fechada depois do primeiro rerun ("client has been closed"). O
+    histórico da conversa (incluindo a pergunta atual, já adicionada
+    pelo chamador) vem inteiro de historico_ia a cada chamada, então o
+    resultado é o mesmo, só sem o cliente persistido."""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    contents = []
+    for autor, texto in st.session_state.get("historico_ia", []):
+        role = "user" if autor == "user" else "model"
+        contents.append(types.Content(role=role, parts=[types.Part(text=texto)]))
+
+    resposta = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            tools=[consultar_tabela],
+        ),
+    )
+    return resposta.text or "Não consegui gerar uma resposta."
 
 
 def _conteudo_chat():
@@ -154,15 +166,14 @@ def _conteudo_chat():
 
     pergunta = st.chat_input("Ex: o faturamento desse mês está bom?")
     if pergunta:
-        chat = _get_chat()
+        st.session_state.setdefault("historico_ia", [])
         st.session_state.historico_ia.append(("user", pergunta))
         with st.chat_message("user"):
             st.markdown(pergunta)
         with st.chat_message("assistant"):
             with st.spinner("Consultando o banco de dados..."):
                 try:
-                    resposta = chat.send_message(pergunta)
-                    texto_resposta = resposta.text or "Não consegui gerar uma resposta."
+                    texto_resposta = _perguntar_ia()
                 except Exception as e:
                     texto_resposta = f"⚠️ Erro ao consultar a IA: {e}"
             st.markdown(texto_resposta)
