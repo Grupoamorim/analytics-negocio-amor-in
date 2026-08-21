@@ -15,6 +15,7 @@ Limites da API SGE (descobertos em producao):
 import os
 import base64
 import hashlib
+import json
 import time
 import logging
 import requests
@@ -80,6 +81,23 @@ def sub(item, chave):
     nunca None - evita erro ao chamar .get() em cima de um None."""
     valor = item.get(chave) if isinstance(item, dict) else None
     return valor if isinstance(valor, dict) else {}
+
+
+def chave_por_conteudo(item):
+    """Chave de dedup baseada no conteudo inteiro do registro.
+    Usada como ultimo recurso quando o item nao tem Codigo/Id no
+    primeiro nivel: como nao sabemos ao certo em qual campo aninhado a
+    API guarda os dados variaveis de cada registro (ja vimos que muda
+    dependendo do endpoint/registro), fica arriscado montar a chave com
+    2-3 campos escolhidos a dedo - se a maioria dos itens nao tiver
+    esses campos preenchidos, todos colapsam numa unica linha (foi
+    exatamente o bug original). Usar o JSON inteiro do item garante que
+    registros com qualquer diferenca de conteudo gerem chaves distintas."""
+    try:
+        texto = json.dumps(item, sort_keys=True, default=str, ensure_ascii=False)
+    except Exception:
+        texto = str(item)
+    return hashlib.md5(texto.encode()).hexdigest()[:20]
 
 
 def lista(dados, *chaves):
@@ -187,9 +205,7 @@ def coletar_vendas():
         # sobrescrevia tudo numa unica linha.
         c = sub(v, "Cliente")
         p = sub(v, "Projeto")
-        cod = str(v.get("Codigo", v.get("Id",
-            gerar_chave(p.get("Numero", ""), c.get("DataAssinaturaContrato", c.get("DataAdesao", c.get("DataCadastro", ""))), c.get("Valor", ""))
-        )))
+        cod = str(v.get("Codigo") or v.get("Id") or chave_por_conteudo(v))
         if cod in vistos:
             continue
         vistos.add(cod)
@@ -233,9 +249,7 @@ def coletar_adesoes():
         # aninhados em "Cliente" (adesao) e "Projeto" (turma).
         c = sub(a, "Cliente")
         p = sub(a, "Projeto")
-        cod = str(a.get("Codigo", a.get("Id",
-            gerar_chave(p.get("Numero", ""), c.get("DataAssinaturaContrato", c.get("DataAdesao", c.get("DataCadastro", ""))), c.get("Valor", ""))
-        )))
+        cod = str(a.get("Codigo") or a.get("Id") or chave_por_conteudo(a))
         if cod in vistos:
             continue
         vistos.add(cod)

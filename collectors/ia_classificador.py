@@ -118,9 +118,13 @@ def main():
             if str(l["id"]) in por_id
         ]
         if linhas:
-            sb.table("contas_pagar").upsert(linhas, on_conflict="id").execute()
-            total += len(linhas)
-            log.info(f"  Classificados {len(linhas)} lançamentos neste lote.")
+            try:
+                sb.table("contas_pagar").upsert(linhas, on_conflict="id").execute()
+                total += len(linhas)
+                log.info(f"  Classificados {len(linhas)} lançamentos neste lote.")
+            except Exception as e:
+                log.error(f"Erro salvando classificação no Supabase: {e}")
+                break
 
         if len(pendentes) < LOTE or not linhas:
             break
