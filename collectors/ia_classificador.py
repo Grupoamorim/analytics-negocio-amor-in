@@ -93,7 +93,11 @@ def main():
 
     total = 0
     while True:
-        pendentes = buscar_pendentes(sb)
+        try:
+            pendentes = buscar_pendentes(sb)
+        except Exception as e:
+            log.error(f"Erro buscando lançamentos pendentes (tabela/coluna ausente?): {e}")
+            return
         if not pendentes:
             break
         try:
