@@ -332,9 +332,6 @@ def main():
         st.warning("Insira seu usuário e senha")
 
     elif authentication_status:
-        with st.sidebar:
-            st.markdown(f"### 👋 Olá, {name}!")
-            st.divider()
         render_navegacao()
         with st.sidebar:
             st.divider()
