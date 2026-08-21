@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useEffect, useCallback } from 'react'
 import type {
   Lead,
   Deal,
@@ -17,8 +17,6 @@ import {
   INITIAL_SETTINGS,
   INITIAL_STAGES,
   INITIAL_TASKS,
-  INITIAL_LEADS,
-  INITIAL_DEALS,
 } from '@/data/seedData'
 import { useTurmas } from '@/hooks/useTurmas'
 import { useDeals } from '@/hooks/useDeals'
@@ -27,7 +25,6 @@ import { useTranscricoes } from '@/hooks/useTranscricoes'
 import { useNotas } from '@/hooks/useNotas'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { useAuth } from '@/hooks/useAuth'
-import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 
 interface CRMContextType {
@@ -95,8 +92,6 @@ const CRMContext = createContext<CRMContextType | undefined>(undefined)
 
 export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useAuth()
-  const { toast } = useToast()
-  const isAutoSeedingRef = useRef(false)
 
   // Hooks especializados (Supabase Primário + LocalStorage secundário)
   const {
@@ -195,210 +190,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }))
     }
   }, [config])
-
-  // Auto-seed do Supabase quando autenticado e o banco estiver vazio
-  useEffect(() => {
-    const checkAndAutoSeed = async () => {
-      if (!isAuthenticated || !user || isAutoSeedingRef.current) return
-
-      // Verificar flag no localStorage
-      const seedFlag = localStorage.getItem('crm_seed_done')
-      if (seedFlag === 'true') return
-
-      try {
-        isAutoSeedingRef.current = true
-
-        // Verificar contagem no Supabase
-        const [{ count: turmasCount, error: tErr }, { count: dealsCount, error: dErr }] =
-          await Promise.all([
-            supabase.from('turmas').select('*', { count: 'exact', head: true }),
-            supabase.from('deals').select('*', { count: 'exact', head: true }),
-          ])
-
-        if (tErr || dErr) {
-          isAutoSeedingRef.current = false
-          return
-        }
-
-        if (
-          (turmasCount === 0 || turmasCount === null) &&
-          (dealsCount === 0 || dealsCount === null)
-        ) {
-          // 1. Pegar dados do localStorage ou fallback seedData
-          let leadsToSeed: Lead[] = []
-          let dealsToSeed: Deal[] = []
-
-          try {
-            const storedLeads = localStorage.getItem('crm_leads')
-            leadsToSeed = storedLeads ? JSON.parse(storedLeads) : INITIAL_LEADS
-          } catch {
-            leadsToSeed = INITIAL_LEADS
-          }
-
-          try {
-            const storedDeals = localStorage.getItem('crm_deals')
-            dealsToSeed = storedDeals ? JSON.parse(storedDeals) : INITIAL_DEALS
-          } catch {
-            dealsToSeed = INITIAL_DEALS
-          }
-
-          if (!Array.isArray(leadsToSeed) || leadsToSeed.length === 0) leadsToSeed = INITIAL_LEADS
-          if (!Array.isArray(dealsToSeed) || dealsToSeed.length === 0) dealsToSeed = INITIAL_DEALS
-
-          // 2. Inserir turmas no Supabase
-          const turmasPayload = leadsToSeed.map((l) => {
-            const payload: any = {
-              user_id: user.id,
-              empresa: l.empresa || 'AFF',
-              curso: l.curso || '',
-              faculdade: l.faculdade || '',
-              turma: l.turma || 'Turma 0',
-              ano_formatura: l.anoFormatura || '',
-              cidade: l.cidade || '',
-              funil_status: l.status || 'Novo',
-              contato_nome: l.contatoNome || null,
-              contato_telefone: l.contatoTelefone || null,
-              sdr: l.sdr || null,
-              closer: l.closer || null,
-              observacoes: l.observacoes || l.notes || null,
-              concorrentes: l.concorrentes || null,
-              tipo_servico: l.tipoServico || null,
-              como_conheceu: l.comoConheceu || l.source || null,
-              proposta_link: l.linkProposta || null,
-              total_alunos: l.totalAlunos || 0,
-              alunos_fechados: l.alunosFechados || 0,
-              data_cadastro: l.dataCadastro || null,
-              primeiro_contato: l.primeiroContatoEm || null,
-              fechamento_contrato: l.dataFechamento || null,
-            }
-            if (
-              l.id &&
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(l.id)
-            ) {
-              payload.id = l.id
-            }
-            return payload
-          })
-
-          const { data: insertedTurmas, error: insertTurmasErr } = await supabase
-            .from('turmas')
-            .insert(turmasPayload)
-            .select('*')
-
-          if (insertTurmasErr) throw insertTurmasErr
-
-          // 3. Mapear IDs de turmas para os deals
-          // Se as turmas geraram novos UUIDs, mapeamos por índice ou id anterior
-          const leadIdToNewTurmaId = new Map<string, string>()
-          if (insertedTurmas) {
-            insertedTurmas.forEach((t, idx) => {
-              const originalLead = leadsToSeed[idx]
-              if (originalLead?.id) {
-                leadIdToNewTurmaId.set(originalLead.id, t.id)
-              }
-            })
-          }
-
-          // 4. Inserir deals vinculados
-          const dealsPayload = dealsToSeed.map((d, idx) => {
-            let matchedTurmaId: string | null = null
-            if (d.leadId && leadIdToNewTurmaId.has(d.leadId)) {
-              matchedTurmaId = leadIdToNewTurmaId.get(d.leadId)!
-            } else if (insertedTurmas && insertedTurmas[idx]) {
-              matchedTurmaId = insertedTurmas[idx].id
-            }
-
-            const payload: any = {
-              user_id: user.id,
-              turma_id: matchedTurmaId,
-              titulo: d.title || 'Turma',
-              valor_estimado: d.value || 0,
-              stage: d.stage || d.stageId || 'prospeccao',
-              probabilidade: d.probability || 50,
-              outcome: d.outcome || null,
-              data_previsao_fechamento: d.expectedCloseDate || null,
-              tipo_contrato: d.contractType || null,
-              responsavel: d.assignedTo || null,
-              prioridade: d.priority || 'Média',
-              notas: d.notes || null,
-              checklist: (d.checklist as any) || [],
-            }
-
-            if (
-              d.id &&
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id)
-            ) {
-              payload.id = d.id
-            }
-            return payload
-          })
-
-          const { data: insertedDeals, error: insertDealsErr } = await supabase
-            .from('deals')
-            .insert(dealsPayload)
-            .select('id, turma_id')
-
-          if (insertDealsErr) throw insertDealsErr
-
-          // 5. Inserir stage_transitions
-          if (insertedDeals && insertedDeals.length > 0) {
-            const transitionsToInsert: Array<{
-              deal_id: string
-              from_stage: string | null
-              to_stage: string
-              changed_at: string
-            }> = []
-
-            insertedDeals.forEach((idDeal, idx) => {
-              const originalDeal = dealsToSeed[idx]
-              const hist = originalDeal?.stageHistory || []
-              if (hist.length > 1) {
-                for (let i = 1; i < hist.length; i++) {
-                  transitionsToInsert.push({
-                    deal_id: idDeal.id,
-                    from_stage: hist[i - 1].stage,
-                    to_stage: hist[i].stage,
-                    changed_at: hist[i].enteredAt,
-                  })
-                }
-              } else if (hist.length === 1) {
-                transitionsToInsert.push({
-                  deal_id: idDeal.id,
-                  from_stage: null,
-                  to_stage: hist[0].stage,
-                  changed_at: hist[0].enteredAt,
-                })
-              }
-            })
-
-            if (transitionsToInsert.length > 0) {
-              await supabase.from('stage_transitions').insert(transitionsToInsert)
-            }
-          }
-
-          // Marcar flag no localStorage
-          localStorage.setItem('crm_seed_done', 'true')
-
-          // Atualizar estado
-          await Promise.all([refreshTurmas(), refreshDeals()])
-
-          toast({
-            title: 'CRM inicializado com dados de exemplo',
-            description: 'Turmas e negócios carregados com sucesso no Supabase.',
-          })
-        } else {
-          // Já existem dados no banco
-          localStorage.setItem('crm_seed_done', 'true')
-        }
-      } catch (err: any) {
-        console.warn('Erro durante seed automático do Supabase:', err)
-      } finally {
-        isAutoSeedingRef.current = false
-      }
-    }
-
-    checkAndAutoSeed()
-  }, [isAuthenticated, user, refreshTurmas, refreshDeals, toast])
 
   const addActivity = useCallback((activity: Omit<Activity, 'id' | 'timestamp'>) => {
     const newActivity: Activity = {

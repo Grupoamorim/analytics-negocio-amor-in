@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { type Deal, type DealStage, type StageHistoryEntry, daysBetween } from '@/types/crm'
-import { INITIAL_DEALS } from '@/data/seedData'
 import type { Database } from '@/lib/supabase/types'
 
 type DealRow = Database['public']['Tables']['deals']['Row']
@@ -30,14 +29,11 @@ const STAGE_NAME_TO_ID: Record<string, string> = {
 function getSafeLocalStorageDeals(): Deal[] {
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
-    if (!stored) return INITIAL_DEALS
+    if (!stored) return []
     const parsed = JSON.parse(stored)
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed
-    }
-    return INITIAL_DEALS
+    return Array.isArray(parsed) ? parsed : []
   } catch {
-    return INITIAL_DEALS
+    return []
   }
 }
 
@@ -174,7 +170,6 @@ export function useDeals() {
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const isMigratingRef = useRef(false)
   const dealsRef = useRef<Deal[]>([])
   dealsRef.current = deals
 
@@ -197,125 +192,9 @@ export function useDeals() {
 
       if (err) throw err
 
-      if (data && data.length > 0) {
-        const mapped = data.map(mapRowToDeal)
-        setDeals(mapped)
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
-      } else if (!isMigratingRef.current) {
-        // Se banco vazio, tenta migrar deals se existirem e se as turmas correspondentes existirem
-        isMigratingRef.current = true
-        let toMigrate: Deal[] = []
-        try {
-          const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
-          if (stored) {
-            const parsed = JSON.parse(stored)
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              toMigrate = parsed
-            } else {
-              toMigrate = INITIAL_DEALS
-            }
-          } else {
-            toMigrate = INITIAL_DEALS
-          }
-        } catch {
-          toMigrate = INITIAL_DEALS
-        }
-
-        if (!Array.isArray(toMigrate) || toMigrate.length === 0) {
-          toMigrate = INITIAL_DEALS
-        }
-
-        // Buscar turmas válidas para respeitar a foreign key turma_id
-        const { data: dbTurmas } = await supabase.from('turmas').select('id')
-        const validTurmasList = dbTurmas || []
-        const validTurmaIds = new Set(validTurmasList.map((t) => t.id))
-
-        // Mapear se os leadIds dos deals batem ou associar por índice se necessário
-        const validDeals = toMigrate
-          .map((d, idx) => {
-            if (d.leadId && validTurmaIds.has(d.leadId)) {
-              return d
-            }
-            if (validTurmasList[idx]) {
-              return { ...d, leadId: validTurmasList[idx].id }
-            }
-            return d
-          })
-          .filter((d) => d.leadId && validTurmaIds.has(d.leadId))
-
-        if (validDeals.length > 0) {
-          const toInsert: DealInsert[] = validDeals.map((d) => mapDealToInsert(d, user.id))
-          const { data: inserted, error: insertErr } = await supabase
-            .from('deals')
-            .insert(toInsert)
-            .select(
-              '*, turmas(id, faculdade, curso, turma, empresa, contato_nome, contato_telefone, como_conheceu)',
-            )
-
-          if (!insertErr && inserted && inserted.length > 0) {
-            // Cria registros em lote em stage_transitions para cada entrada de stageHistory
-            const transitionsToInsert: Array<{
-              deal_id: string
-              from_stage: string | null
-              to_stage: string
-              changed_at: string
-            }> = []
-
-            inserted.forEach((insertedDeal) => {
-              const originalDeal = validDeals.find(
-                (vd) =>
-                  vd.id === insertedDeal.id || (vd.leadId && vd.leadId === insertedDeal.turma_id),
-              )
-              const originalHistory = originalDeal?.stageHistory || []
-
-              if (originalHistory.length > 1) {
-                for (let i = 1; i < originalHistory.length; i++) {
-                  const prev = originalHistory[i - 1]
-                  const curr = originalHistory[i]
-                  transitionsToInsert.push({
-                    deal_id: insertedDeal.id,
-                    from_stage: prev.stage,
-                    to_stage: curr.stage,
-                    changed_at: curr.enteredAt,
-                  })
-                }
-              } else if (originalHistory.length === 1) {
-                const entry = originalHistory[0]
-                transitionsToInsert.push({
-                  deal_id: insertedDeal.id,
-                  from_stage: null,
-                  to_stage: entry.stage,
-                  changed_at: entry.enteredAt,
-                })
-              }
-            })
-
-            if (transitionsToInsert.length > 0) {
-              await supabase.from('stage_transitions').insert(transitionsToInsert)
-            }
-
-            // Refetch para trazer deals com os joins completos
-            const { data: refetched } = await supabase
-              .from('deals')
-              .select(
-                '*, turmas(id, faculdade, curso, turma, empresa, contato_nome, contato_telefone, como_conheceu), stage_transitions(id, from_stage, to_stage, changed_at)',
-              )
-              .order('created_at', { ascending: false })
-
-            const finalMapped = (refetched || inserted).map(mapRowToDeal)
-            setDeals(finalMapped)
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(finalMapped))
-          } else {
-            setDeals(toMigrate)
-          }
-        } else {
-          setDeals(toMigrate)
-        }
-        isMigratingRef.current = false
-      } else {
-        const fallbackDeals = getSafeLocalStorageDeals()
-        setDeals(fallbackDeals)
-      }
+      const mapped = (data || []).map(mapRowToDeal)
+      setDeals(mapped)
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
     } catch (e: any) {
       console.warn('Erro ao carregar deals do Supabase, usando cache localStorage:', e)
       setError(e.message || 'Erro ao sincronizar com Supabase')

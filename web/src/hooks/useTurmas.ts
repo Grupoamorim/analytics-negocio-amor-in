@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import type { Lead, LeadStatus, LeadSource } from '@/types/crm'
-import { INITIAL_LEADS } from '@/data/seedData'
 import type { Database } from '@/lib/supabase/types'
 
 type TurmaRow = Database['public']['Tables']['turmas']['Row']
@@ -88,18 +87,11 @@ export function useTurmas() {
   const [turmas, setTurmas] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const isMigratingRef = useRef(false)
 
   // Carregar turmas do Supabase (Fonte Primária quando autenticado)
   const fetchTurmas = useCallback(async () => {
     if (!isAuthenticated || !user) {
-      // Offline / Não autenticado: lê do localStorage ou inicial
-      try {
-        const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
-        setTurmas(stored ? JSON.parse(stored) : INITIAL_LEADS)
-      } catch {
-        setTurmas(INITIAL_LEADS)
-      }
+      setTurmas([])
       return
     }
 
@@ -113,64 +105,12 @@ export function useTurmas() {
 
       if (err) throw err
 
-      if (data && data.length > 0) {
-        const mapped = data.map(mapRowToLead)
-        setTurmas(mapped)
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
-      } else if (!isMigratingRef.current) {
-        // Banco vazio para este usuário -> migra turmas iniciais/localStorage se existirem
-        isMigratingRef.current = true
-        let toMigrate: Lead[] = []
-        try {
-          const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
-          if (stored) {
-            const parsed = JSON.parse(stored)
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              toMigrate = parsed
-            } else {
-              toMigrate = INITIAL_LEADS
-            }
-          } else {
-            toMigrate = INITIAL_LEADS
-          }
-        } catch {
-          toMigrate = INITIAL_LEADS
-        }
-
-        if (toMigrate && toMigrate.length > 0) {
-          const toInsert: TurmaInsert[] = toMigrate.map((l) => mapLeadToInsert(l, user.id))
-          const { data: inserted, error: insertErr } = await supabase
-            .from('turmas')
-            .insert(toInsert)
-            .select('*')
-
-          if (!insertErr && inserted && inserted.length > 0) {
-            const mapped = inserted.map(mapRowToLead)
-            setTurmas(mapped)
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
-          } else {
-            setTurmas(toMigrate)
-          }
-        }
-        isMigratingRef.current = false
-      } else {
-        // Fallback para estado não quebrar
-        try {
-          const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
-          setTurmas(stored ? JSON.parse(stored) : INITIAL_LEADS)
-        } catch {
-          setTurmas(INITIAL_LEADS)
-        }
-      }
+      const mapped = (data || []).map(mapRowToLead)
+      setTurmas(mapped)
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
     } catch (e: any) {
-      console.warn('Erro ao carregar turmas do Supabase, usando cache localStorage:', e)
+      console.warn('Erro ao carregar turmas do Supabase:', e)
       setError(e.message || 'Erro ao sincronizar com Supabase')
-      try {
-        const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
-        if (stored) setTurmas(JSON.parse(stored))
-      } catch {
-        // ignora
-      }
     } finally {
       setLoading(false)
     }
@@ -182,12 +122,7 @@ export function useTurmas() {
     if (isAuthenticated) {
       fetchTurmas()
     } else {
-      try {
-        const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
-        setTurmas(stored ? JSON.parse(stored) : INITIAL_LEADS)
-      } catch {
-        setTurmas(INITIAL_LEADS)
-      }
+      setTurmas([])
       setLoading(false)
     }
   }, [isAuthenticated, authLoading, fetchTurmas])
