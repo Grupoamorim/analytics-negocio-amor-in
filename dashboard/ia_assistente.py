@@ -197,6 +197,8 @@ div[data-testid="stPopover"] button:hover { background: #EA580C !important; }
 [data-testid="stPopoverBody"] {
     width: 380px !important;
     max-width: 90vw;
+    max-height: 70vh;
+    overflow-y: auto;
 }
 </style>
 """
