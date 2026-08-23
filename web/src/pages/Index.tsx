@@ -172,6 +172,34 @@ export default function Index() {
     return { hoje, mes, ano }
   }, [leads, deals])
 
+  // Distribuição por Curso: quantidade de turmas e de alunos, com % sobre o total.
+  const distribuicaoPorCurso = useMemo(() => {
+    const porCurso = new Map<string, { turmas: number; alunos: number }>()
+    let totalTurmas = 0
+    let totalAlunos = 0
+    for (const l of leads || []) {
+      const curso = (l.curso || '').trim()
+      if (!curso) continue
+      const alunos = l.totalAlunos || 0
+      if (!porCurso.has(curso)) porCurso.set(curso, { turmas: 0, alunos: 0 })
+      const entry = porCurso.get(curso)!
+      entry.turmas += 1
+      entry.alunos += alunos
+      totalTurmas += 1
+      totalAlunos += alunos
+    }
+    const linhas = Array.from(porCurso.entries())
+      .map(([curso, v]) => ({
+        curso,
+        turmas: v.turmas,
+        alunos: v.alunos,
+        pctTurmas: totalTurmas > 0 ? (v.turmas / totalTurmas) * 100 : 0,
+        pctAlunos: totalAlunos > 0 ? (v.alunos / totalAlunos) * 100 : 0,
+      }))
+      .sort((a, b) => b.turmas - a.turmas || a.curso.localeCompare(b.curso, 'pt-BR'))
+    return { linhas, totalTurmas, totalAlunos }
+  }, [leads])
+
   // 2. Dados do Gráfico de Faturamento Mensal (SVG puro)
   const monthlyRevenueData = [
     { month: 'Set', value: 340000 },
@@ -546,6 +574,53 @@ export default function Index() {
           </div>
         </div>
       </div>
+
+      {/* Distribuição por Curso (Medicina, Odontologia, Direito etc.) */}
+      {distribuicaoPorCurso.linhas.length > 0 && (
+        <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Distribuição por Curso</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Turmas e alunos por curso — % sobre o total de {distribuicaoPorCurso.totalTurmas}{' '}
+                turmas e {distribuicaoPorCurso.totalAlunos} alunos.
+              </p>
+            </div>
+          </div>
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full text-xs min-w-[560px]">
+              <thead>
+                <tr className="text-left text-slate-500 text-[10px] uppercase tracking-wider border-b border-white/[0.06]">
+                  <th className="py-2 pr-3 font-semibold">Curso</th>
+                  <th className="py-2 px-3 font-semibold text-right">Turmas</th>
+                  <th className="py-2 px-3 font-semibold text-right">% Turmas</th>
+                  <th className="py-2 px-3 font-semibold text-right">Alunos</th>
+                  <th className="py-2 pl-3 font-semibold text-right">% Alunos</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {distribuicaoPorCurso.linhas.map((l) => (
+                  <tr key={l.curso} className="hover:bg-white/[0.02]">
+                    <td className="py-2.5 pr-3 text-slate-200 font-medium whitespace-nowrap">
+                      {l.curso}
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-white font-semibold">{l.turmas}</td>
+                    <td className="py-2.5 px-3 text-right text-orange-300">
+                      {l.pctTurmas.toFixed(1)}%
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-white font-semibold">
+                      {l.alunos}
+                    </td>
+                    <td className="py-2.5 pl-3 text-right text-orange-300">
+                      {l.pctAlunos.toFixed(1)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Seção de Gráficos (Grid 2 colunas) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
