@@ -36,6 +36,7 @@ import {
 } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
 
@@ -87,6 +88,21 @@ export default function Pipeline() {
 
   const leadById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads])
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
+
+  // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
+  const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
+  const empresaOptions = useMemo(() => {
+    const set = new Set<string>()
+    leads.forEach((l) => l.empresa && set.add(l.empresa))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [leads])
+  const filteredDeals = useMemo(() => {
+    if (selectedEmpresas.length === 0) return deals
+    return deals.filter((d) => {
+      const lead = d.leadId ? leadById.get(d.leadId) : null
+      return lead && selectedEmpresas.includes(lead.empresa || 'AFF')
+    })
+  }, [deals, leadById, selectedEmpresas])
 
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.order - b.order), [stages])
 
@@ -198,7 +214,7 @@ export default function Pipeline() {
           <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
             Funil Amor In
             <span className="text-xs px-2.5 py-1 rounded-full bg-orange-500/15 text-orange-300 font-semibold border border-orange-500/25">
-              {deals.length} Turmas
+              {filteredDeals.length} Turmas
             </span>
             <AIInsightsButton context="pipeline" />
           </h1>
@@ -206,13 +222,18 @@ export default function Pipeline() {
             Arraste as turmas entre os 6 estágios do funil. Cada card representa uma turma.
           </p>
         </div>
+        <EmpresaFilterBar
+          options={empresaOptions}
+          selected={selectedEmpresas}
+          onChange={setSelectedEmpresas}
+        />
       </div>
 
       {/* Kanban */}
       <div className="overflow-x-auto pb-4 -mx-2 px-2">
         <div className="flex gap-4 min-w-max">
           {sortedStages.map((stage) => {
-            const stageDeals = deals.filter((d) => d.stageId === stage.id)
+            const stageDeals = filteredDeals.filter((d) => d.stageId === stage.id)
             const stageTotalVal = stageDeals.reduce((acc, d) => acc + (d.value || 0), 0)
             const isDragOver = dragOverStageId === stage.id
             const meta = FUNNEL_STAGE_BY_ID[stage.id]

@@ -13,6 +13,8 @@ import {
   Legend,
 } from 'recharts'
 import { supabase } from '@/lib/supabase/client'
+import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import { fetchAllRows } from '@/utils/fetchAllRows'
 
 interface Pagamento {
   id: string
@@ -20,7 +22,7 @@ interface Pagamento {
   status: string
   data_vencimento: string
   turma_id: string | null
-  turmas?: { nome: string; tipo_servico: string | null } | null
+  turmas?: { nome: string; tipo_servico: string | null; empresa: string | null } | null
 }
 
 interface ContaPagar {
@@ -33,7 +35,7 @@ interface ContaPagar {
   data_vencimento: string
   grupo_dre?: string | null
   turma_id: string | null
-  turmas?: { nome: string } | null
+  turmas?: { nome: string; empresa: string | null } | null
 }
 
 const REGRAS_DRE: [string, string[]][] = [
@@ -111,6 +113,15 @@ export default function DRE() {
   const [dtIni, setDtIni] = useState(anoInicial.ini)
   const [dtFim, setDtFim] = useState(anoInicial.fim)
 
+  // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
+  const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
+  const empresaOptions = useMemo(() => {
+    const set = new Set<string>()
+    pagamentos.forEach((p) => p.turmas?.empresa && set.add(p.turmas.empresa))
+    contasPagar.forEach((c) => c.turmas?.empresa && set.add(c.turmas.empresa))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [pagamentos, contasPagar])
+
   function selecionarPeriodo(p: Periodo) {
     setPeriodo(p)
     if (p !== 'personalizado') {
@@ -123,18 +134,22 @@ export default function DRE() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [pgtoRes, cpRes] = await Promise.all([
-        supabase
-          .from('pagamentos')
-          .select('id, valor, status, data_vencimento, turma_id, turmas(nome, tipo_servico)')
-          .neq('status', 'cancelado'),
-        supabase
-          .from('contas_pagar')
-          .select('id, descricao, fornecedor, categoria, valor, status, data_vencimento, grupo_dre, turma_id, turmas(nome)')
-          .neq('status', 'cancelado'),
+      const [pg, cp] = await Promise.all([
+        fetchAllRows<Pagamento>(() =>
+          supabase
+            .from('pagamentos')
+            .select('id, valor, status, data_vencimento, turma_id, turmas(nome, tipo_servico, empresa)')
+            .neq('status', 'cancelado')
+            .order('id'),
+        ),
+        fetchAllRows<ContaPagar>(() =>
+          supabase
+            .from('contas_pagar')
+            .select('id, descricao, fornecedor, categoria, valor, status, data_vencimento, grupo_dre, turma_id, turmas(nome, empresa)')
+            .neq('status', 'cancelado')
+            .order('id'),
+        ),
       ])
-      const pg = (pgtoRes.data || []) as Pagamento[]
-      const cp = (cpRes.data || []) as ContaPagar[]
       setPagamentos(pg)
       setContasPagar(cp)
       setLoading(false)
@@ -152,8 +167,12 @@ export default function DRE() {
     receitaPrestacaoServicos,
   } = useMemo(() => {
     const dentroPeriodo = (d: string) => (!dtIni || d >= dtIni) && (!dtFim || d <= dtFim)
+    const dentroEmpresa = (empresa: string | null | undefined) =>
+      selectedEmpresas.length === 0 || (!!empresa && selectedEmpresas.includes(empresa))
 
-    const receitasPeriodo = pagamentos.filter((p) => dentroPeriodo(p.data_vencimento))
+    const receitasPeriodo = pagamentos.filter(
+      (p) => dentroPeriodo(p.data_vencimento) && dentroEmpresa(p.turmas?.empresa),
+    )
     const receitaBruta = receitasPeriodo.reduce((acc, p) => acc + Number(p.valor || 0), 0)
 
     // Receita por tipo: Formaturas x Prestação de Serviços (ensaios, festas, eventos avulsos)
@@ -162,7 +181,9 @@ export default function DRE() {
       .reduce((acc, p) => acc + Number(p.valor || 0), 0)
     const receitaFormaturas = receitaBruta - receitaPrestacaoServicos
 
-    const despesasPeriodo = contasPagar.filter((c) => dentroPeriodo(c.data_vencimento))
+    const despesasPeriodo = contasPagar.filter(
+      (c) => dentroPeriodo(c.data_vencimento) && dentroEmpresa(c.turmas?.empresa),
+    )
     const totaisGrupo: Record<string, number> = {}
     for (const c of despesasPeriodo) {
       const g = classificar(c)
@@ -245,7 +266,7 @@ export default function DRE() {
       receitaFormaturas,
       receitaPrestacaoServicos,
     }
-  }, [pagamentos, contasPagar, dtIni, dtFim])
+  }, [pagamentos, contasPagar, dtIni, dtFim, selectedEmpresas])
 
   return (
     <div className="space-y-6">
@@ -256,7 +277,19 @@ export default function DRE() {
             Demonstrativo de Resultado — classificação automática das despesas
           </p>
         </div>
+        <EmpresaFilterBar
+          options={empresaOptions}
+          selected={selectedEmpresas}
+          onChange={setSelectedEmpresas}
+        />
       </div>
+      {selectedEmpresas.length > 0 && (
+        <p className="text-[11px] text-amber-400/80 bg-amber-500/[0.06] border border-amber-500/20 rounded-lg px-3 py-2">
+          A maioria das contas a pagar ainda não tem turma vinculada no SGE, então as despesas
+          deste DRE filtrado tendem a ficar subestimadas — a receita já reflete a empresa
+          selecionada corretamente.
+        </p>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         {(

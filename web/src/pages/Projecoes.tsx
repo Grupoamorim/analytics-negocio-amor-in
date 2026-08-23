@@ -12,6 +12,8 @@ import {
 } from 'recharts'
 import { Rocket } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
+import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import { fetchAllRows } from '@/utils/fetchAllRows'
 
 interface FaturamentoMensal {
   mes: string
@@ -19,24 +21,74 @@ interface FaturamentoMensal {
   recebido: number
 }
 
+interface PagamentoRaw {
+  valor: number
+  valor_pago: number
+  status: string
+  data_vencimento: string | null
+  data_pagamento: string | null
+  turmas?: { empresa: string | null } | null
+}
+
 function brl(v: number): string {
   return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
 export default function Projecoes() {
-  const [historico, setHistorico] = useState<FaturamentoMensal[]>([])
+  const [pagamentos, setPagamentos] = useState<PagamentoRaw[]>([])
   const [loading, setLoading] = useState(true)
   const [mesesProjetar, setMesesProjetar] = useState(3)
+
+  // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
+  const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
+  const empresaOptions = useMemo(() => {
+    const set = new Set<string>()
+    pagamentos.forEach((p) => p.turmas?.empresa && set.add(p.turmas.empresa))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [pagamentos])
 
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await supabase.from('vw_faturamento_mensal').select('*').order('mes')
-      setHistorico((data || []) as FaturamentoMensal[])
+      const data = await fetchAllRows<PagamentoRaw>(() =>
+        supabase
+          .from('pagamentos')
+          .select('valor, valor_pago, status, data_vencimento, data_pagamento, turmas(empresa), id')
+          .neq('status', 'cancelado')
+          .order('id') as any,
+      )
+      setPagamentos(data)
       setLoading(false)
     }
     load()
   }, [])
+
+  // Reconstrói o mesmo agrupamento mensal da view vw_faturamento_mensal
+  // (faturamento por mês de vencimento + recebido por mês de pagamento),
+  // já respeitando o filtro de empresa selecionado.
+  const historico = useMemo<FaturamentoMensal[]>(() => {
+    const filtrados =
+      selectedEmpresas.length === 0
+        ? pagamentos
+        : pagamentos.filter((p) => p.turmas?.empresa && selectedEmpresas.includes(p.turmas.empresa))
+
+    const porMes: Record<string, { faturamento_bruto: number; recebido: number }> = {}
+    for (const p of filtrados) {
+      if (p.data_vencimento) {
+        const mes = p.data_vencimento.slice(0, 7)
+        if (!porMes[mes]) porMes[mes] = { faturamento_bruto: 0, recebido: 0 }
+        porMes[mes].faturamento_bruto += Number(p.valor || 0)
+      }
+      if (p.status === 'pago' && p.data_pagamento) {
+        const mes = p.data_pagamento.slice(0, 7)
+        if (!porMes[mes]) porMes[mes] = { faturamento_bruto: 0, recebido: 0 }
+        porMes[mes].recebido += Number(p.valor_pago || 0)
+      }
+    }
+    return Object.entries(porMes)
+      .map(([mes, v]) => ({ mes, ...v }))
+      .sort((a, b) => a.mes.localeCompare(b.mes))
+  }, [pagamentos, selectedEmpresas])
 
   const chartData = useMemo(() => {
     // Nosso negócio fecha pacotes com anos de antecedência (a formatura pode
@@ -100,6 +152,11 @@ export default function Projecoes() {
             Projeção de faturamento por tendência linear, com base no histórico real
           </p>
         </div>
+        <EmpresaFilterBar
+          options={empresaOptions}
+          selected={selectedEmpresas}
+          onChange={setSelectedEmpresas}
+        />
       </div>
 
       <div className="flex items-center gap-3">

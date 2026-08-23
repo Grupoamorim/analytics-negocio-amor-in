@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Wallet, CheckCircle2, FileWarning, AlertTriangle, FileText } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { supabase } from '@/lib/supabase/client'
+import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import { fetchAllRows } from '@/utils/fetchAllRows'
 
 interface TotaisNegocio {
   total_faturado: number
@@ -17,6 +19,8 @@ interface Pagamento {
   valor_pago: number
   status: string
   data_vencimento: string
+  turma_id: string | null
+  empresa: string | null
 }
 
 interface ContaPagar {
@@ -27,6 +31,8 @@ interface ContaPagar {
   valor: number
   status: string
   data_vencimento: string
+  turma_id: string | null
+  empresa: string | null
 }
 
 function brl(v: number | undefined | null): string {
@@ -64,39 +70,85 @@ function KpiCard({
 }
 
 export default function Financeiro() {
-  const [totais, setTotais] = useState<TotaisNegocio | null>(null)
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([])
   const [contasPagar, setContasPagar] = useState<ContaPagar[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'receber' | 'pagar' | 'fluxo'>('receber')
 
+  // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
+  const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
+
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [totaisRes, pgtoRes, cpRes] = await Promise.all([
-        supabase.from('vw_totais_negocio').select('*').maybeSingle(),
-        supabase
-          .from('pagamentos')
-          .select('id, valor, valor_pago, status, data_vencimento')
-          .neq('status', 'cancelado')
-          .order('data_vencimento', { ascending: false }),
-        supabase
-          .from('contas_pagar')
-          .select('id, descricao, fornecedor, categoria, valor, status, data_vencimento')
-          .neq('status', 'cancelado')
-          .order('data_vencimento', { ascending: false }),
+      const [pgto, cp] = await Promise.all([
+        fetchAllRows<any>(() =>
+          supabase
+            .from('pagamentos')
+            .select('id, valor, valor_pago, status, data_vencimento, turma_id, turmas(empresa)')
+            .neq('status', 'cancelado')
+            .order('data_vencimento', { ascending: false })
+            .order('id'),
+        ),
+        fetchAllRows<any>(() =>
+          supabase
+            .from('contas_pagar')
+            .select(
+              'id, descricao, fornecedor, categoria, valor, status, data_vencimento, turma_id, turmas(empresa)',
+            )
+            .neq('status', 'cancelado')
+            .order('data_vencimento', { ascending: false })
+            .order('id'),
+        ),
       ])
-      if (totaisRes.data) setTotais(totaisRes.data as TotaisNegocio)
-      if (pgtoRes.data) setPagamentos(pgtoRes.data as Pagamento[])
-      if (cpRes.data) setContasPagar(cpRes.data as ContaPagar[])
+      setPagamentos(pgto.map((p) => ({ ...p, empresa: p.turmas?.empresa || null })))
+      setContasPagar(cp.map((c) => ({ ...c, empresa: c.turmas?.empresa || null })))
       setLoading(false)
     }
     load()
   }, [])
 
+  const empresaOptions = useMemo(() => {
+    const set = new Set<string>()
+    pagamentos.forEach((p) => p.empresa && set.add(p.empresa))
+    contasPagar.forEach((c) => c.empresa && set.add(c.empresa))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [pagamentos, contasPagar])
+
+  const pagamentosFiltrados = useMemo(() => {
+    if (selectedEmpresas.length === 0) return pagamentos
+    return pagamentos.filter((p) => p.empresa && selectedEmpresas.includes(p.empresa))
+  }, [pagamentos, selectedEmpresas])
+
+  const contasPagarFiltradas = useMemo(() => {
+    if (selectedEmpresas.length === 0) return contasPagar
+    return contasPagar.filter((c) => c.empresa && selectedEmpresas.includes(c.empresa))
+  }, [contasPagar, selectedEmpresas])
+
+  // Totais recalculados no cliente com a mesma fórmula da view vw_totais_negocio,
+  // para que o filtro por empresa reflita exatamente a mesma lógica.
+  const totais: TotaisNegocio = useMemo(() => {
+    let total_faturado = 0
+    let total_recebido = 0
+    let total_a_receber = 0
+    let total_inadimplente = 0
+    for (const p of pagamentosFiltrados) {
+      total_faturado += Number(p.valor || 0)
+      total_recebido += Number(p.valor_pago || 0)
+      if (p.status === 'pendente' || p.status === 'atrasado') {
+        total_a_receber += Number(p.valor || 0) - Number(p.valor_pago || 0)
+      }
+      if (p.status === 'atrasado') {
+        total_inadimplente += Number(p.valor || 0) - Number(p.valor_pago || 0)
+      }
+    }
+    const total_custos = contasPagarFiltradas.reduce((acc, c) => acc + Number(c.valor || 0), 0)
+    return { total_faturado, total_recebido, total_a_receber, total_inadimplente, total_custos }
+  }, [pagamentosFiltrados, contasPagarFiltradas])
+
   const fluxoCaixa = useMemo(() => {
     const porMes: Record<string, { mes: string; recebido: number; previsto: number }> = {}
-    for (const p of pagamentos) {
+    for (const p of pagamentosFiltrados) {
       if (!p.data_vencimento) continue
       const mes = p.data_vencimento.slice(0, 7)
       if (!porMes[mes]) porMes[mes] = { mes, recebido: 0, previsto: 0 }
@@ -106,18 +158,29 @@ export default function Financeiro() {
     return Object.values(porMes)
       .sort((a, b) => a.mes.localeCompare(b.mes))
       .slice(-12)
-  }, [pagamentos])
+  }, [pagamentosFiltrados])
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Financeiro</h1>
           <p className="text-sm text-slate-400 mt-1">
             Contas a pagar, a receber e inadimplência — dados ao vivo do Supabase
           </p>
         </div>
+        <EmpresaFilterBar
+          options={empresaOptions}
+          selected={selectedEmpresas}
+          onChange={setSelectedEmpresas}
+        />
       </div>
+      {selectedEmpresas.length > 0 && (
+        <p className="text-[11px] text-slate-500 -mt-3">
+          Contas a pagar sem turma vinculada não têm empresa definida e ficam de fora deste
+          filtro.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard label="Total Faturado" value={brl(totais?.total_faturado)} icon={FileText} tone="orange" />
@@ -190,7 +253,7 @@ export default function Financeiro() {
                 </tr>
               </thead>
               <tbody>
-                {pagamentos.slice(0, 50).map((p) => (
+                {pagamentosFiltrados.slice(0, 50).map((p) => (
                   <tr key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5 text-slate-300">
                       {p.data_vencimento ? new Date(p.data_vencimento).toLocaleDateString('pt-BR') : '—'}
@@ -216,7 +279,7 @@ export default function Financeiro() {
                 </tr>
               </thead>
               <tbody>
-                {contasPagar.slice(0, 50).map((c) => (
+                {contasPagarFiltradas.slice(0, 50).map((c) => (
                   <tr key={c.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5 text-slate-300">
                       {c.data_vencimento ? new Date(c.data_vencimento).toLocaleDateString('pt-BR') : '—'}

@@ -427,6 +427,20 @@ export default function LeadsPage() {
     return { total, ganhas, perdidas, abertas, linkedCount }
   }, [leads, sgeLinks])
 
+  // Market Share por Empresa: participação de cada marca (AIF, AFF, SFF, AIM...)
+  // sobre o total de turmas visíveis com os filtros atuais aplicados.
+  const shareEmpresa = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const l of filteredLeads) {
+      const emp = l.empresa || 'Sem empresa'
+      counts.set(emp, (counts.get(emp) || 0) + 1)
+    }
+    const total = filteredLeads.length
+    return Array.from(counts.entries())
+      .map(([empresa, count]) => ({ empresa, count, pct: total > 0 ? (count / total) * 100 : 0 }))
+      .sort((a, b) => b.count - a.count || a.empresa.localeCompare(b.empresa, 'pt-BR'))
+  }, [filteredLeads])
+
   // Sincronização SGE Automática com Auto-Win
   const handleSyncSGE = async () => {
     const cfg = getSGEConfig()
@@ -918,6 +932,42 @@ export default function LeadsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Market Share por Empresa */}
+      {shareEmpresa.length > 1 && (
+        <Card className="border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
+          <CardContent className="p-4">
+            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-3">
+              Market Share por Empresa{' '}
+              <span className="font-normal text-slate-400">
+                ({filteredLeads.length} turma{filteredLeads.length === 1 ? '' : 's'} nos filtros
+                atuais)
+              </span>
+            </div>
+            <div className="space-y-2">
+              {shareEmpresa.map((e) => (
+                <div key={e.empresa} className="flex items-center gap-3">
+                  <div className="w-20 shrink-0 text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
+                    {e.empresa}
+                  </div>
+                  <div className="flex-1 h-5 rounded-md bg-slate-100 dark:bg-slate-950 overflow-hidden border border-slate-200 dark:border-white/[0.06]">
+                    <div
+                      className="h-full rounded-md bg-gradient-to-r from-orange-600 to-orange-500"
+                      style={{ width: `${Math.max(e.pct, 3)}%` }}
+                    />
+                  </div>
+                  <div className="w-24 shrink-0 text-right text-xs">
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      {e.count}
+                    </span>
+                    <span className="text-slate-400 ml-1.5">({e.pct.toFixed(1)}%)</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Saved Filters Chips (if any saved) */}
       {savedFilters.length > 0 && (

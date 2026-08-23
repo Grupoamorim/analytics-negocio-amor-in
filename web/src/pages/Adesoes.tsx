@@ -11,6 +11,17 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { supabase } from '@/lib/supabase/client'
+import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+
+/** Empresas conhecidas (marcas internas). O texto da turma vindo do SGE sempre
+ * começa com esse prefixo, ex.: "AIF Medicina FASA turma 7 2027.2 Itabuna". */
+const EMPRESA_PREFIXES = ['AIF-SSA', 'AIF-V', 'AIF', 'AFF', 'SFF', 'AIM']
+
+function extractEmpresaFromTurma(turma: string | null): string | null {
+  if (!turma) return null
+  const primeiro = turma.trim().split(/\s+/)[0]
+  return EMPRESA_PREFIXES.includes(primeiro) ? primeiro : null
+}
 
 interface Adesao {
   id: number
@@ -166,6 +177,17 @@ export default function Adesoes() {
   const [dtFim, setDtFim] = useState(inicial.fim)
   const [incluirPrestacaoServico, setIncluirPrestacaoServico] = useState(false)
 
+  // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
+  const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
+  const empresaOptions = useMemo(() => {
+    const set = new Set<string>()
+    adesoes.forEach((a) => {
+      const emp = extractEmpresaFromTurma(a.turma)
+      if (emp) set.add(emp)
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [adesoes])
+
   function selecionarPeriodo(p: Periodo) {
     setPeriodo(p)
     if (p !== 'personalizado') {
@@ -192,9 +214,12 @@ export default function Adesoes() {
   const analise = useMemo(() => {
     const anoAnterior = periodoAnoAnterior(dtIni, dtFim)
     const semServico = (a: Adesao) => incluirPrestacaoServico || !isPrestacaoServico(a.turma)
+    const dentroEmpresa = (a: Adesao) =>
+      selectedEmpresas.length === 0 || selectedEmpresas.includes(extractEmpresaFromTurma(a.turma) || '')
 
     const noPeriodoTodos = adesoes.filter(
-      (a) => a.status !== 'cancelado' && a.data_adesao >= dtIni && a.data_adesao <= dtFim,
+      (a) =>
+        a.status !== 'cancelado' && a.data_adesao >= dtIni && a.data_adesao <= dtFim && dentroEmpresa(a),
     )
     const noPeriodo = noPeriodoTodos.filter(semServico)
     const noPeriodoAnterior = adesoes.filter(
@@ -202,7 +227,8 @@ export default function Adesoes() {
         a.status !== 'cancelado' &&
         a.data_adesao >= anoAnterior.ini &&
         a.data_adesao <= anoAnterior.fim &&
-        semServico(a),
+        semServico(a) &&
+        dentroEmpresa(a),
     )
 
     const prestacaoServicoNoPeriodo = noPeriodoTodos.filter((a) => isPrestacaoServico(a.turma))
@@ -226,7 +252,7 @@ export default function Adesoes() {
       ? ((totalValor - valorAnoAnterior) / valorAnoAnterior) * 100
       : null
 
-    const adesoesFiltradas = adesoes.filter(semServico)
+    const adesoesFiltradas = adesoes.filter((a) => semServico(a) && dentroEmpresa(a))
     const granularidade: 'dia' | 'mes' = periodo === 'mes' ? 'dia' : 'mes'
     const baldesAtual = agruparPorBalde(adesoesFiltradas, dtIni, dtFim, granularidade)
     const baldesAnterior = agruparPorBalde(
@@ -263,16 +289,23 @@ export default function Adesoes() {
       qtdPrestacaoServico,
       valorPrestacaoServico,
     }
-  }, [adesoes, dtIni, dtFim, periodo, incluirPrestacaoServico])
+  }, [adesoes, dtIni, dtFim, periodo, incluirPrestacaoServico, selectedEmpresas])
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Adesões</h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Quantidade de adesões por dia, mês, trimestre, semestre e ano — com comparativo automático
-          contra o mesmo período do ano passado. Dados acumulados direto do SGE.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Adesões</h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Quantidade de adesões por dia, mês, trimestre, semestre e ano — com comparativo automático
+            contra o mesmo período do ano passado. Dados acumulados direto do SGE.
+          </p>
+        </div>
+        <EmpresaFilterBar
+          options={empresaOptions}
+          selected={selectedEmpresas}
+          onChange={setSelectedEmpresas}
+        />
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
