@@ -2,9 +2,10 @@ name: Backfill Historico SGE (manual)
 
 # Roda só quando você clicar em "Run workflow" - nunca automaticamente.
 # Busca contas a receber e contas a pagar desde a data informada até
-# hoje e arquiva no Supabase. Depois disso, a sincronização horária
-# normal (sync.yml) continua cuidando só do que é novo/futuro - o
-# histórico já importado fica guardado pra sempre (upsert nunca apaga).
+# hoje e arquiva no Supabase. Depois disso, a sincronização financeira
+# normal (sync-financeiro.yml, a cada 12h) continua cuidando só do que é
+# novo/futuro - o histórico já importado fica guardado pra sempre
+# (upsert nunca apaga).
 
 on:
   workflow_dispatch:

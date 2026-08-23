@@ -1,0 +1,25 @@
+name: Deteccao Automatica de Turma Fechada (Auto-Win)
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'   # a cada 3h - substitui o botao manual "Sincronizar SGE"
+  workflow_dispatch:
+
+jobs:
+  sync-funil:
+    name: SGE Vendas -> Auto-Win no Funil
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install requests supabase
+      - name: Executar deteccao de turma fechada
+        env:
+          SGE_CNPJ:             ${{ secrets.SGE_CNPJ }}
+          SGE_TOKEN:            ${{ secrets.SGE_TOKEN }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python collectors/sge_auto_win.py

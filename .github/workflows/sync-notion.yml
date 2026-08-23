@@ -1,9 +1,9 @@
-name: Sincronizacao Automatica de Dados
+name: Sincronizacao Notion CRM
 
 on:
   schedule:
-    - cron: '0 * * * *'   # toda hora
-  workflow_dispatch:        # rodar manualmente
+    - cron: '0 * * * *'   # toda hora - dados de vendas/SDR sao inseridos manualmente o dia todo
+  workflow_dispatch:
 
 jobs:
   sync-notion:
@@ -31,27 +31,3 @@ jobs:
           SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python collectors/notion_collector.py
-
-  sync-sge:
-    name: SGE API -> Supabase
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-      - run: pip install requests supabase python-dotenv google-genai
-      - name: Executar coletor SGE
-        env:
-          SGE_CNPJ:             ${{ secrets.SGE_CNPJ }}
-          SGE_TOKEN:            ${{ secrets.SGE_TOKEN }}
-          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python collectors/sge_collector.py
-      - name: Classificar novas despesas por IA (Gemini)
-        env:
-          GEMINI_API_KEY:       ${{ secrets.GEMINI_API_KEY }}
-          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python collectors/ia_classificador.py
