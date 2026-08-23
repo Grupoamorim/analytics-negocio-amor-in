@@ -37,6 +37,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import LastEditedBy from '@/components/LastEditedBy'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
 
@@ -708,6 +709,11 @@ function DealDetailModal({
                 {lead?.cidade ? ` • ${lead.cidade}` : ''}
                 {stage ? ` • ${stage.name}` : ''}
               </p>
+              <LastEditedBy
+                email={deal.updatedByEmail}
+                updatedAt={deal.updatedAt}
+                className="mt-0.5"
+              />
             </div>
           </div>
           <button

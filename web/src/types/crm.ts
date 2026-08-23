@@ -61,6 +61,7 @@ export interface Lead {
   notes?: string
   createdAt: string
   updatedAt?: string
+  updatedByEmail?: string // e-mail de quem fez a última edição neste cadastro
   totalAlunos: number // derivado de quantos alunos na captacao_leads tem essa mesma turma
   alunosFechados?: number // número de alunos que já fecharam contrato
   customFields?: Record<string, any>
@@ -132,6 +133,7 @@ export interface Deal {
   notes?: string
   createdAt: string
   updatedAt: string
+  updatedByEmail?: string // e-mail de quem fez a última edição neste negócio
   customFields?: Record<string, any>
   proposalLink?: string // link do Canva (ou qualquer URL) da proposta
   checklist?: Record<string, boolean> | any[] // mapa checklistKey -> concluído ou lista
@@ -367,6 +369,8 @@ export interface Contact {
   email: string
   leadId: string // vinculado à Turma/Lead
   createdAt: string
+  updatedAt?: string
+  updatedByEmail?: string // e-mail de quem fez a última edição neste contato
   role?: string
   name?: string
   phone?: string

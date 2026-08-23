@@ -63,6 +63,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import LastEditedBy from '@/components/LastEditedBy'
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: string }> = {
   Novo: {
@@ -332,10 +333,10 @@ export default function LeadsPage() {
       const q = search.toLowerCase().trim()
       const matchesSearch =
         !q ||
-        lead.curso.toLowerCase().includes(q) ||
-        lead.faculdade.toLowerCase().includes(q) ||
-        lead.turma.toLowerCase().includes(q) ||
-        lead.cidade.toLowerCase().includes(q) ||
+        (lead.curso || '').toLowerCase().includes(q) ||
+        (lead.faculdade || '').toLowerCase().includes(q) ||
+        (lead.turma || '').toLowerCase().includes(q) ||
+        (lead.cidade || '').toLowerCase().includes(q) ||
         (lead.empresa && lead.empresa.toLowerCase().includes(q)) ||
         (lead.closer && lead.closer.toLowerCase().includes(q)) ||
         (lead.sdr && lead.sdr.toLowerCase().includes(q)) ||
@@ -1912,6 +1913,11 @@ export default function LeadsPage() {
                   {selectedLead.curso} • {selectedLead.faculdade}
                 </DialogTitle>
               </div>
+              <LastEditedBy
+                email={selectedLead.updatedByEmail}
+                updatedAt={selectedLead.updatedAt}
+                className="mt-1"
+              />
             </DialogHeader>
 
             <div className="space-y-4 py-2">

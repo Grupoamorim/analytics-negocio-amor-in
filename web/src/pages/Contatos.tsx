@@ -3,6 +3,7 @@ import { Plus, Search, Edit, Trash2, X, Users, Phone, Mail, GraduationCap } from
 import { useCRM } from '@/context/CRMContext'
 import { getTurmaDisplayName } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
+import LastEditedBy from '@/components/LastEditedBy'
 
 interface ContactFormData {
   nome: string
@@ -158,6 +159,7 @@ export default function Contatos() {
                 <th className="py-3 px-4 font-semibold">Turma</th>
                 <th className="py-3 px-4 font-semibold">Telefone</th>
                 <th className="py-3 px-4 font-semibold">E-mail</th>
+                <th className="py-3 px-4 font-semibold">Última edição</th>
                 <th className="py-3 px-4 font-semibold text-right">Ações</th>
               </tr>
             </thead>
@@ -188,6 +190,9 @@ export default function Contatos() {
                     </td>
                     <td className="py-3 px-4 text-slate-300">{c.telefone || '—'}</td>
                     <td className="py-3 px-4 text-slate-300">{c.email || '—'}</td>
+                    <td className="py-3 px-4">
+                      <LastEditedBy email={c.updatedByEmail} updatedAt={c.updatedAt} />
+                    </td>
                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         <button
@@ -278,6 +283,7 @@ export default function Contatos() {
                     <Mail className="w-3 h-3 text-slate-400" /> {c.email}
                   </div>
                 )}
+                <LastEditedBy email={c.updatedByEmail} updatedAt={c.updatedAt} />
               </div>
             </div>
           )

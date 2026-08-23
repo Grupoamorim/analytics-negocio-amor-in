@@ -10,7 +10,7 @@ type TurmaUpdate = Database['public']['Tables']['turmas']['Update']
 
 const LOCAL_STORAGE_KEY = 'crm_leads'
 
-function mapRowToLead(row: TurmaRow): Lead {
+function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | null } | null }): Lead {
   return {
     id: row.id,
     curso: row.curso,
@@ -45,6 +45,7 @@ function mapRowToLead(row: TurmaRow): Lead {
     alunosFechados: row.alunos_fechados || 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    updatedByEmail: row.updated_by_profile?.email || undefined,
   }
 }
 
@@ -100,7 +101,7 @@ export function useTurmas() {
     try {
       const { data, error: err } = await supabase
         .from('turmas')
-        .select('*')
+        .select('*, updated_by_profile:profiles!turmas_updated_by_fkey(email)')
         .order('created_at', { ascending: false })
 
       if (err) throw err
@@ -130,8 +131,12 @@ export function useTurmas() {
   const addTurma = async (leadData: Omit<Lead, 'id'>): Promise<Lead> => {
     if (isAuthenticated && user) {
       try {
-        const payload = mapLeadToInsert(leadData, user.id)
-        const { data, error: err } = await supabase.from('turmas').insert(payload).select().single()
+        const payload = { ...mapLeadToInsert(leadData, user.id), updated_by: user.id }
+        const { data, error: err } = await supabase
+          .from('turmas')
+          .insert(payload)
+          .select('*, updated_by_profile:profiles!turmas_updated_by_fkey(email)')
+          .single()
         if (err) throw err
         if (data) {
           const created = mapRowToLead(data)
@@ -198,6 +203,7 @@ export function useTurmas() {
         if (updates.totalAlunos !== undefined) updatePayload.total_alunos = updates.totalAlunos
         if (updates.alunosFechados !== undefined)
           updatePayload.alunos_fechados = updates.alunosFechados
+        updatePayload.updated_by = user.id
 
         const { error: err } = await supabase.from('turmas').update(updatePayload).eq('id', id)
         if (err) throw err
@@ -210,7 +216,14 @@ export function useTurmas() {
     // 2. Atualizar estado e cache local
     setTurmas((prev) => {
       const updated = prev.map((l) =>
-        l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l,
+        l.id === id
+          ? {
+              ...l,
+              ...updates,
+              updatedAt: new Date().toISOString(),
+              updatedByEmail: user?.email || l.updatedByEmail,
+            }
+          : l,
       )
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated))
       return updated

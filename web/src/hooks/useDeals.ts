@@ -88,7 +88,7 @@ function buildStageHistory(
     : [{ stage: currentStageId, enteredAt: createdAtIso, daysInStage: 0 }]
 }
 
-function mapRowToDeal(row: any): Deal {
+function mapRowToDeal(row: any & { updated_by_profile?: { email: string | null } | null }): Deal {
   const stageRaw = row.stage || 'prospeccao'
   const stageId = STAGE_NAME_TO_ID[stageRaw] || 'stage-1'
   const turma = row.turmas || {}
@@ -138,6 +138,7 @@ function mapRowToDeal(row: any): Deal {
     outcome: (row.outcome as any) || null,
     createdAt,
     updatedAt,
+    updatedByEmail: row.updated_by_profile?.email || undefined,
   }
 }
 
@@ -186,7 +187,7 @@ export function useDeals() {
       const { data, error: err } = await supabase
         .from('deals')
         .select(
-          '*, turmas(id, faculdade, curso, turma, empresa, contato_nome, contato_telefone, como_conheceu), stage_transitions(id, from_stage, to_stage, changed_at)',
+          '*, turmas(id, faculdade, curso, turma, empresa, contato_nome, contato_telefone, como_conheceu), stage_transitions(id, from_stage, to_stage, changed_at), updated_by_profile:profiles!deals_updated_by_fkey(email)',
         )
         .order('created_at', { ascending: false })
 
@@ -221,12 +222,12 @@ export function useDeals() {
   const addDeal = async (dealData: Omit<Deal, 'id'>): Promise<Deal> => {
     if (isAuthenticated && user) {
       try {
-        const payload = mapDealToInsert(dealData, user.id)
+        const payload = { ...mapDealToInsert(dealData, user.id), updated_by: user.id }
         const { data, error: err } = await supabase
           .from('deals')
           .insert(payload)
           .select(
-            '*, turmas(id, faculdade, curso, turma, empresa, contato_nome, contato_telefone, como_conheceu)',
+            '*, turmas(id, faculdade, curso, turma, empresa, contato_nome, contato_telefone, como_conheceu), updated_by_profile:profiles!deals_updated_by_fkey(email)',
           )
           .single()
         if (err) throw err
@@ -309,6 +310,7 @@ export function useDeals() {
         if (updates.priority !== undefined) updatePayload.prioridade = updates.priority
         if (updates.notes !== undefined) updatePayload.notas = updates.notes
         if (updates.checklist !== undefined) updatePayload.checklist = updates.checklist as any
+        updatePayload.updated_by = user.id
 
         const { error: err } = await supabase.from('deals').update(updatePayload).eq('id', id)
         if (err) throw err
@@ -367,6 +369,7 @@ export function useDeals() {
           stageId: nextStageId,
           stageHistory: updatedHistory,
           updatedAt: nowIso,
+          updatedByEmail: user?.email || d.updatedByEmail,
         }
       })
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated))

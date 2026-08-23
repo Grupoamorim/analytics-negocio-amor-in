@@ -10,13 +10,15 @@ type NotaInsert = Database['public']['Tables']['notas']['Insert']
 
 const LOCAL_STORAGE_KEY = 'crm_notes'
 
-function mapRowToNote(row: NotaRow): Note {
+function mapRowToNote(
+  row: NotaRow & { updated_by_profile?: { email: string | null } | null },
+): Note {
   return {
     id: row.id,
     leadId: row.turma_id || '',
     dealId: undefined,
     authorId: 'm-1',
-    author: 'Usuário',
+    author: row.updated_by_profile?.email || 'Usuário',
     content: row.conteudo,
     type: 'Outro',
     date: row.created_at || new Date().toISOString(),
@@ -61,7 +63,7 @@ export function useNotas() {
     try {
       const { data, error: err } = await supabase
         .from('notas')
-        .select('*')
+        .select('*, updated_by_profile:profiles!notas_updated_by_fkey(email)')
         .order('created_at', { ascending: false })
 
       if (err) throw err
@@ -137,8 +139,12 @@ export function useNotas() {
   const addNote = async (noteData: Omit<Note, 'id' | 'createdAt'>): Promise<Note> => {
     if (isAuthenticated && user) {
       try {
-        const payload = mapNoteToInsert(noteData)
-        const { data, error: err } = await supabase.from('notas').insert(payload).select().single()
+        const payload = { ...mapNoteToInsert(noteData), updated_by: user.id }
+        const { data, error: err } = await supabase
+          .from('notas')
+          .insert(payload)
+          .select('*, updated_by_profile:profiles!notas_updated_by_fkey(email)')
+          .single()
         if (err) throw err
         if (data) {
           const created = mapRowToNote(data)
@@ -178,6 +184,7 @@ export function useNotas() {
         if (updates.content !== undefined) updatePayload.conteudo = updates.content
         if (updates.type !== undefined) updatePayload.titulo = updates.type
         if (updates.leadId !== undefined) updatePayload.turma_id = updates.leadId
+        updatePayload.updated_by = user.id
 
         const { error: err } = await supabase.from('notas').update(updatePayload).eq('id', id)
         if (err) throw err
@@ -188,7 +195,9 @@ export function useNotas() {
     }
 
     setNotes((prev) => {
-      const updated = prev.map((n) => (n.id === id ? { ...n, ...updates } : n))
+      const updated = prev.map((n) =>
+        n.id === id ? { ...n, ...updates, author: user?.email || n.author } : n,
+      )
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated))
       return updated
     })

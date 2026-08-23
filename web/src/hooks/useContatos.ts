@@ -11,7 +11,9 @@ type ContatoUpdate = Database['public']['Tables']['contatos']['Update']
 
 const LOCAL_STORAGE_KEY = 'crm_contacts'
 
-function mapRowToContact(row: ContatoRow): Contact {
+function mapRowToContact(
+  row: ContatoRow & { updated_at?: string | null; updated_by_profile?: { email: string | null } | null },
+): Contact {
   return {
     id: row.id,
     leadId: row.turma_id || '',
@@ -24,6 +26,8 @@ function mapRowToContact(row: ContatoRow): Contact {
     isPrimary: false,
     notes: '',
     createdAt: row.created_at,
+    updatedAt: row.updated_at || undefined,
+    updatedByEmail: row.updated_by_profile?.email || undefined,
   }
 }
 
@@ -68,7 +72,7 @@ export function useContatos() {
     try {
       const { data, error: err } = await supabase
         .from('contatos')
-        .select('*')
+        .select('*, updated_by_profile:profiles!contatos_updated_by_fkey(email)')
         .order('created_at', { ascending: false })
 
       if (err) throw err
@@ -144,11 +148,11 @@ export function useContatos() {
   const addContact = async (contactData: Omit<Contact, 'id' | 'createdAt'>): Promise<Contact> => {
     if (isAuthenticated && user) {
       try {
-        const payload = mapContactToInsert(contactData)
+        const payload = { ...mapContactToInsert(contactData), updated_by: user.id }
         const { data, error: err } = await supabase
           .from('contatos')
           .insert(payload)
-          .select()
+          .select('*, updated_by_profile:profiles!contatos_updated_by_fkey(email)')
           .single()
         if (err) throw err
         if (data) {
@@ -194,6 +198,7 @@ export function useContatos() {
         if (updates.telefone !== undefined) updatePayload.telefone = updates.telefone
         else if (updates.phone !== undefined) updatePayload.telefone = updates.phone
         if (updates.email !== undefined) updatePayload.email = updates.email
+        updatePayload.updated_by = user.id
 
         const { error: err } = await supabase.from('contatos').update(updatePayload).eq('id', id)
         if (err) throw err
@@ -204,7 +209,16 @@ export function useContatos() {
     }
 
     setContacts((prev) => {
-      const updated = prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
+      const updated = prev.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              ...updates,
+              updatedAt: new Date().toISOString(),
+              updatedByEmail: user?.email || c.updatedByEmail,
+            }
+          : c,
+      )
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated))
       return updated
     })
