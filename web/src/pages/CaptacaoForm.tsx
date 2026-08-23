@@ -1,15 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Target, Send, CheckCircle2 } from 'lucide-react'
 import { addLead } from '@/utils/captacaoStorage'
+import { fetchCidadeFaculdades, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
 import { formatPhoneBR } from '@/utils/phoneMask'
-import { useToast } from '@/hooks/use-toast'
+
+const OUTRO = '__outro__'
 
 interface FormState {
   curso: string
   faculdade: string
+  faculdadeOutro: string
   turma: string
   anoFormatura: string
   cidade: string
+  cidadeOutro: string
   nome: string
   telefone: string
   email: string
@@ -18,9 +22,11 @@ interface FormState {
 const EMPTY: FormState = {
   curso: '',
   faculdade: '',
+  faculdadeOutro: '',
   turma: '',
   anoFormatura: '',
   cidade: '',
+  cidadeOutro: '',
   nome: '',
   telefone: '',
   email: '',
@@ -31,6 +37,20 @@ export default function CaptacaoForm() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [cidadeFaculdades, setCidadeFaculdades] = useState<CidadeFaculdadesMap>({})
+
+  useEffect(() => {
+    fetchCidadeFaculdades().then(setCidadeFaculdades)
+  }, [])
+
+  const cidades = useMemo(
+    () => Object.keys(cidadeFaculdades).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [cidadeFaculdades],
+  )
+  const faculdadesDaCidade = useMemo(
+    () => (form.cidade && form.cidade !== OUTRO ? cidadeFaculdades[form.cidade] || [] : []),
+    [cidadeFaculdades, form.cidade],
+  )
 
   const set = (field: keyof FormState, value: string) => {
     setForm((f) => ({ ...f, [field]: value }))
@@ -38,12 +58,18 @@ export default function CaptacaoForm() {
     if (success) setSuccess(false)
   }
 
+  const cidadeFinal = form.cidade === OUTRO ? form.cidadeOutro.trim() : form.cidade
+  const faculdadeFinal = form.faculdade === OUTRO ? form.faculdadeOutro.trim() : form.faculdade
+
   const validate = (): boolean => {
     const errs: Partial<Record<keyof FormState, string>> = {}
     if (!form.curso.trim()) errs.curso = 'Informe o curso.'
-    if (!form.faculdade.trim()) errs.faculdade = 'Informe a faculdade.'
+    if (!form.faculdade) errs.faculdade = 'Selecione a faculdade.'
+    if (form.faculdade === OUTRO && !form.faculdadeOutro.trim())
+      errs.faculdadeOutro = 'Informe o nome da faculdade.'
     if (!form.anoFormatura.trim()) errs.anoFormatura = 'Informe o ano de formatura.'
-    if (!form.cidade.trim()) errs.cidade = 'Informe a cidade.'
+    if (!form.cidade) errs.cidade = 'Selecione a cidade.'
+    if (form.cidade === OUTRO && !form.cidadeOutro.trim()) errs.cidadeOutro = 'Informe a cidade.'
     if (!form.nome.trim()) errs.nome = 'Informe seu nome completo.'
     if (!form.telefone.trim()) errs.telefone = 'Informe seu telefone.'
     else if (form.telefone.replace(/\D/g, '').length < 10) errs.telefone = 'Telefone inválido.'
@@ -54,21 +80,18 @@ export default function CaptacaoForm() {
     return Object.keys(errs).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validate()) {
-      showToast('Erro no cadastro', 'Verifique os campos destacados.', 'error')
-      return
-    }
+    if (!validate()) return
 
     try {
       setSubmitting(true)
-      addLead({
+      await addLead({
         curso: form.curso.trim(),
-        faculdade: form.faculdade.trim(),
+        faculdade: faculdadeFinal,
         turma: form.turma.trim(),
         anoFormatura: form.anoFormatura.trim(),
-        cidade: form.cidade.trim(),
+        cidade: cidadeFinal,
         nome: form.nome.trim(),
         telefone: form.telefone.trim(),
         email: form.email.trim(),
@@ -76,21 +99,12 @@ export default function CaptacaoForm() {
       setForm(EMPTY)
       setErrors({})
       setSuccess(true)
-      showToast('Cadastro enviado com sucesso!', 'Entraremos em contato em breve.', 'success')
     } catch {
-      showToast('Erro ao enviar', 'Não foi possível salvar seu cadastro. Tente novamente.', 'error')
+      setErrors((e) => ({ ...e, nome: undefined }))
+      alert('Não foi possível enviar seu cadastro agora. Tente novamente em instantes.')
     } finally {
       setSubmitting(false)
     }
-  }
-
-  // Toast visual simples dentro do layout standalone (sem o Toaster do app)
-  const showToast = (title: string, _description: string, _variant: 'success' | 'error') => {
-    // O Toaster global está montado em App.tsx, então usamos um evento custom
-    // simples: exibimos um banner interno via state `success` / error local.
-    // (Mantemos dependência do state visual abaixo.)
-    if (_variant === 'success') setSuccess(true)
-    void title
   }
 
   return (
@@ -135,15 +149,81 @@ export default function CaptacaoForm() {
               placeholder="Ex: Engenharia Civil"
             />
 
+            {/* Cidade */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Cidade <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={form.cidade}
+                onChange={(e) => {
+                  set('cidade', e.target.value)
+                  set('faculdade', '')
+                }}
+                className={`w-full bg-[#0a0f14] border rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/60 transition-colors ${
+                  errors.cidade ? 'border-red-500/60' : 'border-white/10'
+                }`}
+              >
+                <option value="">Selecione sua cidade</option>
+                {cidades.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                <option value={OUTRO}>Outra (não está na lista)</option>
+              </select>
+              {errors.cidade && <p className="text-xs text-red-400 mt-1">{errors.cidade}</p>}
+              {form.cidade === OUTRO && (
+                <div className="mt-2">
+                  <FormField
+                    label="Qual cidade?"
+                    required
+                    error={errors.cidadeOutro}
+                    value={form.cidadeOutro}
+                    onChange={(v) => set('cidadeOutro', v)}
+                    placeholder="Digite o nome da sua cidade"
+                  />
+                </div>
+              )}
+            </div>
+
             {/* Faculdade */}
-            <FormField
-              label="FACULDADE"
-              required
-              error={errors.faculdade}
-              value={form.faculdade}
-              onChange={(v) => set('faculdade', v)}
-              placeholder="Ex: USP"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Faculdade <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={form.faculdade}
+                onChange={(e) => set('faculdade', e.target.value)}
+                disabled={!form.cidade}
+                className={`w-full bg-[#0a0f14] border rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/60 transition-colors disabled:opacity-50 ${
+                  errors.faculdade ? 'border-red-500/60' : 'border-white/10'
+                }`}
+              >
+                <option value="">
+                  {form.cidade ? 'Selecione sua faculdade' : 'Selecione a cidade primeiro'}
+                </option>
+                {faculdadesDaCidade.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+                <option value={OUTRO}>Outra (não está na lista)</option>
+              </select>
+              {errors.faculdade && <p className="text-xs text-red-400 mt-1">{errors.faculdade}</p>}
+              {form.faculdade === OUTRO && (
+                <div className="mt-2">
+                  <FormField
+                    label="Qual faculdade?"
+                    required
+                    error={errors.faculdadeOutro}
+                    value={form.faculdadeOutro}
+                    onChange={(v) => set('faculdadeOutro', v)}
+                    placeholder="Digite o nome da sua faculdade"
+                  />
+                </div>
+              )}
+            </div>
 
             {/* Turma */}
             <div>
@@ -173,16 +253,6 @@ export default function CaptacaoForm() {
                 Ano em que a formatura vai acontecer. Ex: 2026.2
               </p>
             </div>
-
-            {/* Cidade */}
-            <FormField
-              label="Cidade"
-              required
-              error={errors.cidade}
-              value={form.cidade}
-              onChange={(v) => set('cidade', v)}
-              placeholder="Ex: São Paulo"
-            />
 
             {/* Nome Completo */}
             <FormField
@@ -230,7 +300,7 @@ export default function CaptacaoForm() {
               className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-orange-600 hover:from-orange-500 hover:to-orange-500 text-white text-sm font-bold shadow-lg shadow-orange-500/30 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:hover:scale-100 mt-2"
             >
               <Send className="w-4 h-4" />
-              Enviar
+              {submitting ? 'Enviando...' : 'Enviar'}
             </button>
           </form>
         </div>

@@ -67,6 +67,16 @@ function brl(v: number): string {
   return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
+/** Detecta se a "adesão" é na verdade um evento avulso/prestação de serviço
+ * (ensaio, festa, colação avulsa) e não uma adesão de formatura de verdade —
+ * mesma regra usada na sincronização das turmas. */
+function isPrestacaoServico(turma: string | null): boolean {
+  if (!turma) return false
+  return /presta[cç][aã]o de servi|eventos extras|ensaios?\s|festas?\s|administradora de fundo/i.test(
+    turma,
+  )
+}
+
 function KpiCard({
   label,
   value,
@@ -154,6 +164,7 @@ export default function Adesoes() {
   const inicial = calcularPeriodo('mes', hoje.getFullYear(), hoje.getMonth())
   const [dtIni, setDtIni] = useState(inicial.ini)
   const [dtFim, setDtFim] = useState(inicial.fim)
+  const [incluirPrestacaoServico, setIncluirPrestacaoServico] = useState(false)
 
   function selecionarPeriodo(p: Periodo) {
     setPeriodo(p)
@@ -180,14 +191,25 @@ export default function Adesoes() {
 
   const analise = useMemo(() => {
     const anoAnterior = periodoAnoAnterior(dtIni, dtFim)
-    const noPeriodo = adesoes.filter(
+    const semServico = (a: Adesao) => incluirPrestacaoServico || !isPrestacaoServico(a.turma)
+
+    const noPeriodoTodos = adesoes.filter(
       (a) => a.status !== 'cancelado' && a.data_adesao >= dtIni && a.data_adesao <= dtFim,
     )
+    const noPeriodo = noPeriodoTodos.filter(semServico)
     const noPeriodoAnterior = adesoes.filter(
       (a) =>
         a.status !== 'cancelado' &&
         a.data_adesao >= anoAnterior.ini &&
-        a.data_adesao <= anoAnterior.fim,
+        a.data_adesao <= anoAnterior.fim &&
+        semServico(a),
+    )
+
+    const prestacaoServicoNoPeriodo = noPeriodoTodos.filter((a) => isPrestacaoServico(a.turma))
+    const qtdPrestacaoServico = prestacaoServicoNoPeriodo.length
+    const valorPrestacaoServico = prestacaoServicoNoPeriodo.reduce(
+      (acc, a) => acc + Number(a.valor || 0),
+      0,
     )
 
     const totalAdesoes = noPeriodo.length
@@ -204,10 +226,11 @@ export default function Adesoes() {
       ? ((totalValor - valorAnoAnterior) / valorAnoAnterior) * 100
       : null
 
+    const adesoesFiltradas = adesoes.filter(semServico)
     const granularidade: 'dia' | 'mes' = periodo === 'mes' ? 'dia' : 'mes'
-    const baldesAtual = agruparPorBalde(adesoes, dtIni, dtFim, granularidade)
+    const baldesAtual = agruparPorBalde(adesoesFiltradas, dtIni, dtFim, granularidade)
     const baldesAnterior = agruparPorBalde(
-      adesoes,
+      adesoesFiltradas,
       anoAnterior.ini,
       anoAnterior.fim,
       granularidade,
@@ -237,8 +260,10 @@ export default function Adesoes() {
       grafico,
       noPeriodo: [...noPeriodo].sort((a, b) => b.data_adesao.localeCompare(a.data_adesao)),
       porTurma: Object.values(porTurma).sort((a, b) => b.quantidade - a.quantidade),
+      qtdPrestacaoServico,
+      valorPrestacaoServico,
     }
-  }, [adesoes, dtIni, dtFim, periodo])
+  }, [adesoes, dtIni, dtFim, periodo, incluirPrestacaoServico])
 
   return (
     <div className="space-y-6">
@@ -302,7 +327,25 @@ export default function Adesoes() {
             {new Date(`${dtFim}T00:00:00`).toLocaleDateString('pt-BR')}
           </span>
         )}
+
+        <label className="flex items-center gap-1.5 ml-auto text-xs text-slate-400 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={incluirPrestacaoServico}
+            onChange={(e) => setIncluirPrestacaoServico(e.target.checked)}
+            className="accent-orange-500"
+          />
+          Incluir Prestação de Serviços (ensaios, festas, eventos avulsos)
+        </label>
       </div>
+
+      {!loading && !incluirPrestacaoServico && analise.qtdPrestacaoServico > 0 && (
+        <div className="text-xs text-slate-400 bg-white/[0.02] border border-white/[0.06] rounded-lg px-3 py-2">
+          {analise.qtdPrestacaoServico} venda(s) de Prestação de Serviço ({brl(analise.valorPrestacaoServico)})
+          neste período não estão contadas acima — são ensaios/festas avulsas, não adesões de formatura.
+          Marque a caixa acima pra incluí-las.
+        </div>
+      )}
 
       {loading ? (
         <div className="p-8 text-center text-slate-400 text-sm">Carregando...</div>

@@ -34,6 +34,7 @@ import { useCRM } from '@/context/CRMContext'
 import { TeamMember } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/useAuth'
+import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { supabase } from '@/lib/supabase/client'
 import GlobalAIFoatingButton from '@/components/AIInsightsButton'
 
@@ -90,6 +91,7 @@ export default function Layout() {
   const { leads, deals, tasks, settings } = useCRM()
   const { toast } = useToast()
   const { user, signOut } = useAuth()
+  const { config: configuracoes } = useConfiguracoes()
   const [perfil, setPerfil] = useState<{ nome: string; role: string } | null>(null)
 
   useEffect(() => {
@@ -190,8 +192,11 @@ export default function Layout() {
     setMobileMenuOpen(false)
   }, [location.pathname])
 
-  // Ícone da marca configurado
+  // Ícone da marca configurado (usa o logo enviado em Configurações > Marca, se houver)
   const BrandIconComponent = () => {
+    if (configuracoes.logoUrl) {
+      return <img src={configuracoes.logoUrl} alt="Logo" className="w-6 h-6 object-contain" />
+    }
     switch (settings.brandIcon) {
       case 'trending':
         return <TrendingUp className="w-6 h-6 text-orange-400" />

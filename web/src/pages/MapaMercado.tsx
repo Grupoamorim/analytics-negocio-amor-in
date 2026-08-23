@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react'
 import { Map as MapIcon } from 'lucide-react'
-import { loadLeads, subscribeToLeads } from '@/utils/captacaoStorage'
+import { loadLeads } from '@/utils/captacaoStorage'
+import { CaptacaoLead } from '@/types/captacao'
 import MarketMap from '@/components/MarketMap'
 
 /**
  * Página dedicada "Mapa de Mercado".
  * Renderiza o mesmo componente MarketMap usado na aba de Captação, mas como
  * página própria (rota /mapa-mercado). Compartilha os dados de captação
- * (localStorage) e o contexto do CRM (deals/stages) para o filtro de funil.
+ * (Supabase) e o contexto do CRM (deals/stages) para o filtro de funil.
  */
 export default function MapaMercado() {
-  const [leads, setLeads] = useState(() => loadLeads())
+  const [leads, setLeads] = useState<CaptacaoLead[]>([])
 
   useEffect(() => {
-    const refresh = () => setLeads(loadLeads())
+    const refresh = () => loadLeads().then(setLeads)
     refresh()
-    return subscribeToLeads(refresh)
+    const intervalId = window.setInterval(refresh, 15000)
+    return () => window.clearInterval(intervalId)
   }, [])
 
   return (

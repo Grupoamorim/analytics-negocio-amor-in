@@ -15,6 +15,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { useAuth } from '@/hooks/useAuth'
+import { translateAuthError } from '@/lib/authErrors'
+import {
+  saveGeminiApiKey,
+  saveGeminiModel,
+  saveCustomSystemPrompt,
+  testGeminiConnection,
+  GEMINI_DEFAULT_MODEL,
+} from '@/utils/geminiApi'
+import { Textarea } from '@/components/ui/textarea'
+import { testSGEConnection } from '@/utils/sgeIntegration'
 import {
   Building,
   Brain,
@@ -27,7 +37,10 @@ import {
   RefreshCw,
   LogOut,
   LogIn,
+  Image,
+  Trash2,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase/client'
 
 export default function Settings() {
   const { toast } = useToast()
@@ -40,7 +53,8 @@ export default function Settings() {
 
   // Gemini State
   const [geminiKey, setGeminiKey] = useState('')
-  const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash')
+  const [geminiModel, setGeminiModel] = useState(GEMINI_DEFAULT_MODEL)
+  const [iaSystemPrompt, setIaSystemPrompt] = useState('')
 
   // Auth form state
   const [authEmail, setAuthEmail] = useState('')
@@ -53,12 +67,25 @@ export default function Settings() {
   const [notifyOnDealWon, setNotifyOnDealWon] = useState(true)
   const [autoSyncSGE, setAutoSyncSGE] = useState(false)
 
+  // Logo da marca
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState('')
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+
+  // Status de conexão das integrações
+  const [sgeStatus, setSgeStatus] = useState<{ ok: boolean; message: string } | null>(null)
+  const [testingSGE, setTestingSGE] = useState(false)
+  const [geminiStatus, setGeminiStatus] = useState<{ ok: boolean; message: string } | null>(null)
+  const [testingGemini, setTestingGemini] = useState(false)
+
   // Sync state from hook config
   useEffect(() => {
     if (config) {
       setSgeCnpj(config.sgeCnpj || '')
       setSgeToken(config.sgeToken || '')
       setGeminiKey(config.geminiApiKey || '')
+      if (config.geminiApiKey) saveGeminiApiKey(config.geminiApiKey)
+      if (config.logoUrl) setLogoPreview(config.logoUrl)
       if (config.preferencias) {
         if (config.preferencias.notifyOnNewLead !== undefined)
           setNotifyOnNewLead(config.preferencias.notifyOnNewLead)
@@ -67,6 +94,10 @@ export default function Settings() {
         if (config.preferencias.autoSyncSGE !== undefined)
           setAutoSyncSGE(config.preferencias.autoSyncSGE)
         if (config.preferencias.geminiModel) setGeminiModel(config.preferencias.geminiModel)
+        if (config.preferencias.iaSystemPrompt !== undefined) {
+          setIaSystemPrompt(config.preferencias.iaSystemPrompt)
+          saveCustomSystemPrompt(config.preferencias.iaSystemPrompt)
+        }
       }
     }
   }, [config])
@@ -77,6 +108,7 @@ export default function Settings() {
         sgeCnpj,
         sgeToken,
       })
+      setSgeStatus(null)
       toast({
         title: 'Configurações SGE Salvas',
         description: 'As credenciais do SGE foram sincronizadas com sucesso.',
@@ -90,6 +122,14 @@ export default function Settings() {
     }
   }
 
+  const handleTestSGE = async () => {
+    setTestingSGE(true)
+    setSgeStatus(null)
+    const result = await testSGEConnection(sgeCnpj, sgeToken)
+    setSgeStatus({ ok: result.ok, message: result.message })
+    setTestingSGE(false)
+  }
+
   const handleSaveGemini = async () => {
     try {
       await updateConfig({
@@ -97,8 +137,13 @@ export default function Settings() {
         preferencias: {
           ...config.preferencias,
           geminiModel,
+          iaSystemPrompt,
         },
       })
+      saveGeminiApiKey(geminiKey)
+      saveGeminiModel(geminiModel)
+      saveCustomSystemPrompt(iaSystemPrompt)
+      setGeminiStatus(null)
       toast({
         title: 'Configurações do Gemini Salvas',
         description: 'Chave de API configurada para análise de reuniões.',
@@ -107,6 +152,75 @@ export default function Settings() {
       toast({
         title: 'Erro ao salvar',
         description: 'Não foi possível salvar a chave do Gemini.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleTestGemini = async () => {
+    setTestingGemini(true)
+    setGeminiStatus(null)
+    const result = await testGeminiConnection(geminiKey, geminiModel)
+    setGeminiStatus({ ok: result.ok, message: result.message })
+    setTestingGemini(false)
+  }
+
+  const handleSelectLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.type !== 'image/png') {
+      toast({
+        title: 'Formato inválido',
+        description: 'Envie um arquivo PNG (idealmente sem fundo/transparente).',
+        variant: 'destructive',
+      })
+      return
+    }
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+  }
+
+  const handleUploadLogo = async () => {
+    if (!logoFile || !user) return
+    setUploadingLogo(true)
+    try {
+      const path = `${user.id}/logo.png`
+      const { error: uploadErr } = await supabase.storage
+        .from('logos')
+        .upload(path, logoFile, { upsert: true, contentType: 'image/png' })
+      if (uploadErr) throw uploadErr
+
+      const { data } = supabase.storage.from('logos').getPublicUrl(path)
+      const publicUrl = `${data.publicUrl}?v=${Date.now()}`
+
+      await updateConfig({ logoUrl: publicUrl })
+      setLogoFile(null)
+      toast({
+        title: 'Logo atualizado',
+        description: 'Seu logotipo foi enviado e já está disponível no sistema.',
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao enviar logo',
+        description: err.message || 'Não foi possível enviar a imagem.',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  const handleRemoveLogo = async () => {
+    try {
+      if (user) await supabase.storage.from('logos').remove([`${user.id}/logo.png`])
+      await updateConfig({ logoUrl: '' })
+      setLogoPreview('')
+      setLogoFile(null)
+      toast({ title: 'Logo removido' })
+    } catch {
+      toast({
+        title: 'Erro ao remover logo',
+        description: 'Tente novamente em instantes.',
         variant: 'destructive',
       })
     }
@@ -160,7 +274,7 @@ export default function Settings() {
     } catch (err: any) {
       toast({
         title: 'Falha na autenticação',
-        description: err.message || 'Verifique seus dados e tente novamente.',
+        description: translateAuthError(err.message) || 'Verifique seus dados e tente novamente.',
         variant: 'destructive',
       })
     } finally {
@@ -189,10 +303,11 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="integracoes" className="space-y-4">
-        <TabsList className="grid grid-cols-4 w-full max-w-xl">
+        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
           <TabsTrigger value="integracoes">Integrações</TabsTrigger>
           <TabsTrigger value="supabase">Banco de Dados</TabsTrigger>
           <TabsTrigger value="ia">Inteligência Artificial</TabsTrigger>
+          <TabsTrigger value="marca">Marca</TabsTrigger>
           <TabsTrigger value="preferencias">Preferências</TabsTrigger>
         </TabsList>
 
@@ -236,19 +351,46 @@ export default function Settings() {
                 </div>
               </div>
 
+              {sgeStatus && (
+                <div
+                  className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
+                    sgeStatus.ok
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                  }`}
+                >
+                  {sgeStatus.ok ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                  )}
+                  <span>{sgeStatus.ok ? 'Logado e funcionando: ' : ''}{sgeStatus.message}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-2 border-t">
                 <div className="flex items-center space-x-2 text-xs text-gray-500">
                   <ShieldCheck className="h-4 w-4 text-emerald-600" />
                   <span>Autenticação Basic Auth criptografada no Supabase.</span>
                 </div>
-                <Button
-                  onClick={handleSaveSGE}
-                  disabled={configLoading}
-                  className="bg-orange-600 hover:bg-orange-700"
-                >
-                  <Save className="h-4 w-4 mr-1.5" />
-                  Salvar Credenciais SGE
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleTestSGE}
+                    disabled={testingSGE || !sgeCnpj || !sgeToken}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-1.5 ${testingSGE ? 'animate-spin' : ''}`} />
+                    {testingSGE ? 'Testando...' : 'Testar Conexão'}
+                  </Button>
+                  <Button
+                    onClick={handleSaveSGE}
+                    disabled={configLoading}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    <Save className="h-4 w-4 mr-1.5" />
+                    Salvar Credenciais SGE
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -440,17 +582,55 @@ export default function Settings() {
                     <SelectValue placeholder="Selecione o modelo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gemini-1.5-flash">
-                      Gemini 1.5 Flash (Recomendado - Mais Rápido)
+                    <SelectItem value="gemini-2.5-flash">
+                      Gemini 2.5 Flash (Recomendado - Mais Rápido)
                     </SelectItem>
-                    <SelectItem value="gemini-1.5-pro">
-                      Gemini 1.5 Pro (Maior Raciocínio Profundo)
+                    <SelectItem value="gemini-2.5-pro">
+                      Gemini 2.5 Pro (Maior Raciocínio Profundo)
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="flex justify-end pt-2 border-t">
+              <div className="space-y-2">
+                <Label htmlFor="ia-system-prompt">Instruções personalizadas para a IA (AMOR IN IA)</Label>
+                <Textarea
+                  id="ia-system-prompt"
+                  placeholder="Ex: Sempre responda de forma direta e objetiva. Nunca invente números — se não tiver o dado, diga que não tem essa informação disponível. Trate valores em Reais (R$)."
+                  value={iaSystemPrompt}
+                  onChange={(e) => setIaSystemPrompt(e.target.value)}
+                  rows={5}
+                  className="text-xs"
+                />
+                <p className="text-xs text-gray-500">
+                  Essas instruções são enviadas em toda conversa do chat "AMOR IN IA" (o assistente que
+                  responde com base nos seus dados reais). Use para reforçar tom, formato de resposta e a
+                  regra de nunca inventar dados.
+                </p>
+              </div>
+
+              {geminiStatus && (
+                <div
+                  className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
+                    geminiStatus.ok
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                  }`}
+                >
+                  {geminiStatus.ok ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                  )}
+                  <span>{geminiStatus.ok ? 'Logado e funcionando: ' : ''}{geminiStatus.message}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={handleTestGemini} disabled={testingGemini || !geminiKey}>
+                  <RefreshCw className={`h-4 w-4 mr-1.5 ${testingGemini ? 'animate-spin' : ''}`} />
+                  {testingGemini ? 'Testando...' : 'Testar Conexão'}
+                </Button>
                 <Button
                   onClick={handleSaveGemini}
                   disabled={configLoading}
@@ -458,6 +638,71 @@ export default function Settings() {
                 >
                   <Save className="h-4 w-4 mr-1.5" />
                   Salvar Configuração Gemini
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ABA: MARCA (LOGO) */}
+        <TabsContent value="marca" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <Image className="h-5 w-5 text-orange-600" />
+                <CardTitle>Logotipo</CardTitle>
+              </div>
+              <CardDescription>
+                Envie o logo da Amor In Formaturas em PNG, de preferência sem fundo (transparente),
+                para usar nos locais de identidade visual do sistema.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isAuthenticated && (
+                <p className="text-xs text-amber-600">
+                  Faça login na aba "Banco de Dados" para poder enviar e sincronizar o logo.
+                </p>
+              )}
+
+              <div className="flex items-center gap-4">
+                <div className="w-24 h-24 rounded-xl border border-dashed border-gray-300 bg-[repeating-conic-gradient(#f3f4f6_0%_25%,white_0%_50%)] bg-[length:16px_16px] flex items-center justify-center overflow-hidden shrink-0">
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Logo atual" className="w-full h-full object-contain" />
+                  ) : (
+                    <Image className="w-8 h-8 text-gray-300" />
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Input
+                    id="logo-file"
+                    type="file"
+                    accept="image/png"
+                    onChange={handleSelectLogo}
+                    disabled={!isAuthenticated}
+                  />
+                  <p className="text-xs text-gray-500">PNG com fundo transparente. Tamanho recomendado: 512x512px.</p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                {logoPreview && (
+                  <Button
+                    variant="outline"
+                    onClick={handleRemoveLogo}
+                    disabled={!isAuthenticated || uploadingLogo}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                    Remover
+                  </Button>
+                )}
+                <Button
+                  onClick={handleUploadLogo}
+                  disabled={!isAuthenticated || !logoFile || uploadingLogo}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  <Save className="h-4 w-4 mr-1.5" />
+                  {uploadingLogo ? 'Enviando...' : 'Salvar Logo'}
                 </Button>
               </div>
             </CardContent>

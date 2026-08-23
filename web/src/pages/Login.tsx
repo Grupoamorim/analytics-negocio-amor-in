@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
+import { translateAuthError } from '@/lib/authErrors'
 
 export default function Login() {
   const { isAuthenticated, loading, signIn, signUp } = useAuth()
@@ -28,16 +29,16 @@ export default function Login() {
     try {
       if (modo === 'entrar') {
         const { error } = await signIn(email, senha)
-        if (error) setErro(error.message)
+        if (error) setErro(translateAuthError(error.message))
       } else if (modo === 'criar') {
         const { error } = await signUp(email, senha)
-        if (error) setErro(error.message)
+        if (error) setErro(translateAuthError(error.message))
         else setAviso('Conta criada! Verifique seu e-mail para confirmar o acesso, se solicitado.')
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/redefinir-senha`,
         })
-        if (error) setErro(error.message)
+        if (error) setErro(translateAuthError(error.message))
         else setAviso('Se esse e-mail tiver uma conta, enviamos um link para redefinir a senha.')
       }
     } finally {

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase/client'
+import { translateAuthError } from '@/lib/authErrors'
 
 export default function RedefinirSenha() {
   const navigate = useNavigate()
@@ -33,7 +34,7 @@ export default function RedefinirSenha() {
     const { error } = await supabase.auth.updateUser({ password: senha })
     setEnviando(false)
     if (error) {
-      setErro(error.message)
+      setErro(translateAuthError(error.message))
       return
     }
     setSucesso(true)

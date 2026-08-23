@@ -1,9 +1,11 @@
 /**
- * Cliente para integração com a API Google Gemini (gemini-1.5-flash).
- * Armazena a chave em localStorage ('gemini_api_key').
+ * Cliente para integração com a API Google Gemini.
+ * Armazena a chave e o modelo escolhido em localStorage.
  */
 
 export const GEMINI_API_KEY_STORAGE = 'gemini_api_key'
+export const GEMINI_MODEL_STORAGE = 'gemini_model'
+export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash'
 
 export function getGeminiApiKey(): string {
   try {
@@ -22,6 +24,60 @@ export function saveGeminiApiKey(key: string): void {
   }
 }
 
+export function getGeminiModel(): string {
+  try {
+    return localStorage.getItem(GEMINI_MODEL_STORAGE) || GEMINI_DEFAULT_MODEL
+  } catch {
+    return GEMINI_DEFAULT_MODEL
+  }
+}
+
+export function saveGeminiModel(model: string): void {
+  try {
+    localStorage.setItem(GEMINI_MODEL_STORAGE, model.trim() || GEMINI_DEFAULT_MODEL)
+  } catch (e) {
+    console.error('Erro ao salvar modelo Gemini:', e)
+  }
+}
+
+export const GEMINI_SYSTEM_PROMPT_STORAGE = 'gemini_system_prompt'
+
+export function getCustomSystemPrompt(): string {
+  try {
+    return localStorage.getItem(GEMINI_SYSTEM_PROMPT_STORAGE) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function saveCustomSystemPrompt(prompt: string): void {
+  try {
+    localStorage.setItem(GEMINI_SYSTEM_PROMPT_STORAGE, prompt)
+  } catch (e) {
+    console.error('Erro ao salvar instruções personalizadas:', e)
+  }
+}
+
+export interface GeminiTestResult {
+  ok: boolean
+  message: string
+}
+
+/**
+ * Faz uma chamada mínima ao Gemini só para confirmar que a chave é válida e está funcionando.
+ */
+export async function testGeminiConnection(apiKey: string, model?: string): Promise<GeminiTestResult> {
+  if (!apiKey.trim()) {
+    return { ok: false, message: 'Informe a chave de API antes de testar.' }
+  }
+  try {
+    await callGemini('Responda apenas "ok".', apiKey, model)
+    return { ok: true, message: 'Conexão com o Gemini estabelecida com sucesso!' }
+  } catch (err: any) {
+    return { ok: false, message: err.message || 'Não foi possível conectar ao Gemini.' }
+  }
+}
+
 export interface GeminiTranscriptAnalysis {
   probabilidade: number // 0-100
   sentimento: 'positivo' | 'neutro' | 'negativo'
@@ -31,16 +87,21 @@ export interface GeminiTranscriptAnalysis {
   recomendacao: string
 }
 
-/**
- * Chama o modelo gemini-1.5-flash para gerar conteúdo baseado em um prompt.
- */
-export async function callGemini(prompt: string, apiKey?: string): Promise<string> {
+interface GeminiRequestBody {
+  contents: { role?: string; parts: { text: string }[] }[]
+  systemInstruction?: { parts: { text: string }[] }
+  generationConfig: { temperature: number; maxOutputTokens: number }
+}
+
+/** Chamada de baixo nível ao endpoint generateContent do Gemini. */
+async function postGemini(body: GeminiRequestBody, apiKey?: string, model?: string): Promise<string> {
   const key = (apiKey || getGeminiApiKey()).trim()
   if (!key) {
     throw new Error('Chave API Gemini não configurada. Configure em Configurações.')
   }
+  const modelId = model || getGeminiModel()
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(
     key,
   )}`
 
@@ -49,17 +110,7 @@ export async function callGemini(prompt: string, apiKey?: string): Promise<strin
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [{ text: prompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 2048,
-      },
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!response.ok) {
@@ -85,12 +136,53 @@ export async function callGemini(prompt: string, apiKey?: string): Promise<strin
 }
 
 /**
- * Analisa transcrição de reunião usando Gemini 1.5 Flash e retorna JSON estruturado.
+ * Chama o Gemini (modelo configurável, padrão gemini-2.5-flash) para gerar conteúdo a partir de um prompt.
+ */
+export async function callGemini(prompt: string, apiKey?: string, model?: string): Promise<string> {
+  return postGemini(
+    {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+    },
+    apiKey,
+    model,
+  )
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model'
+  content: string
+}
+
+/**
+ * Chama o Gemini em modo conversa (múltiplos turnos), com uma instrução de sistema fixa
+ * que ancora as respostas nos dados fornecidos e proíbe invenção de informação.
+ */
+export async function callGeminiChat(
+  messages: ChatMessage[],
+  systemInstruction: string,
+  apiKey?: string,
+  model?: string,
+): Promise<string> {
+  return postGemini(
+    {
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      contents: messages.map((m) => ({ role: m.role, parts: [{ text: m.content }] })),
+      generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+    },
+    apiKey,
+    model,
+  )
+}
+
+/**
+ * Analisa transcrição de reunião usando o Gemini e retorna JSON estruturado.
  */
 export async function analyzeTranscriptWithGemini(
   content: string,
   turmaContext?: string,
   apiKey?: string,
+  model?: string,
 ): Promise<GeminiTranscriptAnalysis> {
   const prompt = `Você é um analista especialista em vendas de formatura e SDR educacional.
 Analise a transcrição de reunião abaixo ${turmaContext ? `referente à turma "${turmaContext}"` : ''}.
@@ -110,7 +202,7 @@ Retorne OBRIGATORIAMENTE APENAS um JSON válido (sem tags markdown de código e 
   "recomendacao": "<string com o próximo passo sugerido para o SDR/closer>"
 }`
 
-  const raw = await callGemini(prompt, apiKey)
+  const raw = await callGemini(prompt, apiKey, model)
   return parseGeminiJsonResponse(raw)
 }
 

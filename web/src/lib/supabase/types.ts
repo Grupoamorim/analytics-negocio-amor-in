@@ -9,12 +9,73 @@ export type Database = {
   }
   public: {
     Tables: {
+      captacao_leads: {
+        Row: {
+          ano_formatura: string
+          cidade: string
+          curso: string
+          data_cadastro: string
+          email: string
+          faculdade: string
+          id: string
+          nome: string
+          telefone: string
+          turma: string
+        }
+        Insert: {
+          ano_formatura?: string
+          cidade?: string
+          curso?: string
+          data_cadastro?: string
+          email?: string
+          faculdade?: string
+          id?: string
+          nome?: string
+          telefone?: string
+          turma?: string
+        }
+        Update: {
+          ano_formatura?: string
+          cidade?: string
+          curso?: string
+          data_cadastro?: string
+          email?: string
+          faculdade?: string
+          id?: string
+          nome?: string
+          telefone?: string
+          turma?: string
+        }
+        Relationships: []
+      }
+      mercado_faculdades: {
+        Row: {
+          cidade: string
+          created_at: string
+          faculdade: string
+          id: string
+        }
+        Insert: {
+          cidade: string
+          created_at?: string
+          faculdade: string
+          id?: string
+        }
+        Update: {
+          cidade?: string
+          created_at?: string
+          faculdade?: string
+          id?: string
+        }
+        Relationships: []
+      }
       configuracoes: {
         Row: {
           created_at: string
           filtros_salvos: Json
           gemini_api_key: string | null
           id: string
+          logo_url: string | null
           preferencias: Json
           sge_cnpj: string | null
           sge_token: string | null
@@ -26,6 +87,7 @@ export type Database = {
           filtros_salvos?: Json
           gemini_api_key?: string | null
           id?: string
+          logo_url?: string | null
           preferencias?: Json
           sge_cnpj?: string | null
           sge_token?: string | null
@@ -37,6 +99,7 @@ export type Database = {
           filtros_salvos?: Json
           gemini_api_key?: string | null
           id?: string
+          logo_url?: string | null
           preferencias?: Json
           sge_cnpj?: string | null
           sge_token?: string | null

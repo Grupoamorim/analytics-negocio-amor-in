@@ -13,6 +13,7 @@ export interface ConfiguracoesData {
   sgeCnpj: string
   sgeToken: string
   geminiApiKey: string
+  logoUrl: string
   filtrosSalvos: any[]
   preferencias: {
     notifyOnNewLead?: boolean
@@ -26,6 +27,7 @@ const DEFAULT_CONFIG: ConfiguracoesData = {
   sgeCnpj: '',
   sgeToken: '',
   geminiApiKey: '',
+  logoUrl: '',
   filtrosSalvos: [],
   preferencias: {
     notifyOnNewLead: true,
@@ -39,6 +41,7 @@ function mapRowToConfig(row: ConfiguracaoRow): ConfiguracoesData {
     sgeCnpj: row.sge_cnpj || '',
     sgeToken: row.sge_token || '',
     geminiApiKey: row.gemini_api_key || '',
+    logoUrl: row.logo_url || '',
     filtrosSalvos: (row.filtros_salvos as any[]) || [],
     preferencias: (row.preferencias as any) || DEFAULT_CONFIG.preferencias,
   }
@@ -99,6 +102,7 @@ export function useConfiguracoes() {
           sge_cnpj: localToMigrate.sgeCnpj || '',
           sge_token: localToMigrate.sgeToken || '',
           gemini_api_key: localToMigrate.geminiApiKey || '',
+          logo_url: localToMigrate.logoUrl || '',
           filtros_salvos: localToMigrate.filtrosSalvos || [],
           preferencias: localToMigrate.preferencias || DEFAULT_CONFIG.preferencias,
         }
@@ -157,6 +161,7 @@ export function useConfiguracoes() {
           sge_cnpj: updated.sgeCnpj,
           sge_token: updated.sgeToken,
           gemini_api_key: updated.geminiApiKey,
+          logo_url: updated.logoUrl,
           filtros_salvos: updated.filtrosSalvos,
           preferencias: updated.preferencias,
         }

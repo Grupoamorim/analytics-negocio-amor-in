@@ -16,6 +16,8 @@ import {
   Clock,
   TrendingUp,
   TrendingDown,
+  Plus,
+  Search,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import {
@@ -65,12 +67,16 @@ export default function Pipeline() {
     moveDealStage,
     updateDeal,
     toggleChecklistItem,
+    addDeal,
   } = useCRM()
   const { toast } = useToast()
 
   const [draggingDealId, setDraggingDealId] = useState<string | null>(null)
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
+  const [creatingForStageId, setCreatingForStageId] = useState<string | null>(null)
+  const [creatingSearch, setCreatingSearch] = useState('')
+  const [creatingBusy, setCreatingBusy] = useState(false)
   const [proposalLinks, setProposalLinks] = useState<Record<string, string>>(() =>
     loadProposalLinks(),
   )
@@ -83,6 +89,53 @@ export default function Pipeline() {
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
 
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.order - b.order), [stages])
+
+  // Turmas que ainda não têm nenhuma oportunidade criada no funil
+  const leadsSemFunil = useMemo(() => {
+    const usados = new Set(deals.map((d) => d.leadId).filter(Boolean))
+    return leads.filter((l) => !usados.has(l.id))
+  }, [leads, deals])
+
+  const leadsFiltradosParaCriar = useMemo(() => {
+    const q = creatingSearch.trim().toLowerCase()
+    if (!q) return leadsSemFunil
+    return leadsSemFunil.filter((l) =>
+      `${getTurmaDisplayName(l)} ${l.faculdade} ${l.curso} ${l.cidade}`.toLowerCase().includes(q),
+    )
+  }, [leadsSemFunil, creatingSearch])
+
+  const handleCreateDealFromLead = async (lead: Lead, stageId: string) => {
+    setCreatingBusy(true)
+    try {
+      await addDeal({
+        leadId: lead.id,
+        title: getTurmaDisplayName(lead),
+        company: lead.faculdade || lead.empresa || '',
+        contactName: lead.contatoNome || '',
+        contactPhone: lead.contatoTelefone || '',
+        value: lead.potentialValue || 0,
+        stageId,
+        probability: FUNNEL_STAGE_BY_ID[stageId]?.defaultProbability ?? 20,
+        ownerId: members[0]?.id || 'm-1',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      toast({
+        title: 'Turma adicionada ao funil',
+        description: `${getTurmaDisplayName(lead)} entrou em ${stages.find((s) => s.id === stageId)?.name}.`,
+      })
+      setCreatingForStageId(null)
+      setCreatingSearch('')
+    } catch {
+      toast({
+        title: 'Erro ao criar',
+        description: 'Não foi possível adicionar a turma ao funil.',
+        variant: 'destructive',
+      })
+    } finally {
+      setCreatingBusy(false)
+    }
+  }
 
   const getProposalLink = (deal: Deal): string => {
     return proposalLinks[deal.id] || deal.proposalLink || ''
@@ -231,9 +284,23 @@ export default function Pipeline() {
                       {stageDeals.length}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-semibold flex-shrink-0">
-                    R$ {(stageTotalVal / 1000).toFixed(0)}k
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      R$ {(stageTotalVal / 1000).toFixed(0)}k
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatingForStageId(stage.id)
+                        setCreatingSearch('')
+                      }}
+                      title={`Adicionar turma em ${stage.name}`}
+                      aria-label={`Adicionar turma em ${stage.name}`}
+                      className="p-1 rounded-md text-slate-400 hover:text-orange-300 hover:bg-orange-500/10 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Cards */}
@@ -252,6 +319,13 @@ export default function Pipeline() {
                     const isStagnant =
                       meta && days >= meta.stagnationAlertDays && stage.id !== 'stage-6'
                     const isHighlight = highlightDealId === deal.id
+
+                    // Urgência: quanto mais perto (ou além) do limite de dias parado no estágio,
+                    // mais quente a cor — independente da cor "comercial" da etapa.
+                    const alertDays = meta?.stagnationAlertDays ?? 999
+                    const urgencyRatio = stage.id === 'stage-6' ? 0 : alertDays > 0 ? days / alertDays : 0
+                    const urgencyColor =
+                      urgencyRatio >= 1 ? '#f87171' : urgencyRatio >= 0.6 ? '#fbbf24' : '#34d399'
 
                     // Buscar transcrição mais recente para obter a probabilidade da IA
                     const latestTranscript = deal.leadId
@@ -283,7 +357,19 @@ export default function Pipeline() {
                             ? 'border-orange-500 ring-2 ring-orange-500/40'
                             : 'border-white/[0.08]'
                         }`}
-                        style={{ borderTop: `3px solid ${stage.color}` }}
+                        style={{
+                          borderTop: `3px solid ${stage.color}`,
+                          borderLeft: `4px solid ${urgencyColor}`,
+                        }}
+                        title={
+                          stage.id === 'stage-6'
+                            ? undefined
+                            : urgencyRatio >= 1
+                              ? 'Urgente: tempo neste estágio já passou do alerta'
+                              : urgencyRatio >= 0.6
+                                ? 'Atenção: se aproximando do limite de tempo neste estágio'
+                                : 'Dentro do prazo saudável neste estágio'
+                        }
                       >
                         {/* Nome da turma + outcome badge */}
                         <div className="flex items-start justify-between gap-2 mb-2">
@@ -373,11 +459,10 @@ export default function Pipeline() {
                           )}
                         </div>
 
-                        {/* Tempo no estágio */}
+                        {/* Tempo no estágio (cor reflete urgência) */}
                         <div
-                          className={`flex items-center gap-1 text-[10px] mb-2 ${
-                            isStagnant ? 'text-amber-300' : 'text-slate-400'
-                          }`}
+                          className="flex items-center gap-1 text-[10px] mb-2 text-slate-400"
+                          style={stage.id === 'stage-6' ? undefined : { color: urgencyColor }}
                         >
                           <Clock className="w-3 h-3" />
                           <span className="font-semibold">{days} dias</span>
@@ -450,6 +535,73 @@ export default function Pipeline() {
           onUpdateDeal={(updates) => updateDeal(selectedDeal.id, updates)}
           onClose={() => setSelectedDealId(null)}
         />
+      )}
+
+      {/* Modal: adicionar turma existente ao funil numa etapa específica */}
+      {creatingForStageId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+          onClick={() => setCreatingForStageId(null)}
+        >
+          <div
+            className="w-full max-w-md bg-[#111820] border border-white/[0.08] rounded-2xl shadow-2xl p-5 space-y-4 max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white">
+                Adicionar turma em{' '}
+                <span className="text-orange-300">
+                  {stages.find((s) => s.id === creatingForStageId)?.name}
+                </span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setCreatingForStageId(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                autoFocus
+                value={creatingSearch}
+                onChange={(e) => setCreatingSearch(e.target.value)}
+                placeholder="Buscar turma, faculdade, curso ou cidade..."
+                className="w-full pl-8 pr-3 py-2 text-xs rounded-lg bg-[#0a0f14] border border-white/[0.08] text-white placeholder:text-slate-500 focus:outline-none focus:border-orange-500/50"
+              />
+            </div>
+
+            <div className="overflow-y-auto space-y-1.5 flex-1">
+              {leadsFiltradosParaCriar.length === 0 && (
+                <p className="text-xs text-slate-500 text-center py-6">
+                  Nenhuma turma disponível. Todas já estão no funil ou nenhuma corresponde à busca.
+                </p>
+              )}
+              {leadsFiltradosParaCriar.map((lead) => (
+                <button
+                  key={lead.id}
+                  type="button"
+                  disabled={creatingBusy}
+                  onClick={() => handleCreateDealFromLead(lead, creatingForStageId)}
+                  className="w-full text-left px-3 py-2 rounded-lg bg-white/[0.02] hover:bg-orange-500/10 border border-white/[0.06] hover:border-orange-500/30 transition-colors disabled:opacity-50"
+                >
+                  <div className="text-xs font-semibold text-white truncate">
+                    {getTurmaDisplayName(lead)}
+                  </div>
+                  <div className="text-[10px] text-slate-400 truncate">
+                    {lead.faculdade}
+                    {lead.curso ? ` • ${lead.curso}` : ''}
+                    {lead.cidade ? ` • ${lead.cidade}` : ''}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

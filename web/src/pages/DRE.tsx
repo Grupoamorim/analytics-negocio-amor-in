@@ -20,7 +20,7 @@ interface Pagamento {
   status: string
   data_vencimento: string
   turma_id: string | null
-  turmas?: { nome: string } | null
+  turmas?: { nome: string; tipo_servico: string | null } | null
 }
 
 interface ContaPagar {
@@ -126,7 +126,7 @@ export default function DRE() {
       const [pgtoRes, cpRes] = await Promise.all([
         supabase
           .from('pagamentos')
-          .select('id, valor, status, data_vencimento, turma_id, turmas(nome)')
+          .select('id, valor, status, data_vencimento, turma_id, turmas(nome, tipo_servico)')
           .neq('status', 'cancelado'),
         supabase
           .from('contas_pagar')
@@ -142,11 +142,25 @@ export default function DRE() {
     load()
   }, [])
 
-  const { linhas, margens, composicao, custoPorTurma, usaCustoDireto } = useMemo(() => {
+  const {
+    linhas,
+    margens,
+    composicao,
+    custoPorTurma,
+    usaCustoDireto,
+    receitaFormaturas,
+    receitaPrestacaoServicos,
+  } = useMemo(() => {
     const dentroPeriodo = (d: string) => (!dtIni || d >= dtIni) && (!dtFim || d <= dtFim)
 
     const receitasPeriodo = pagamentos.filter((p) => dentroPeriodo(p.data_vencimento))
     const receitaBruta = receitasPeriodo.reduce((acc, p) => acc + Number(p.valor || 0), 0)
+
+    // Receita por tipo: Formaturas x Prestação de Serviços (ensaios, festas, eventos avulsos)
+    const receitaPrestacaoServicos = receitasPeriodo
+      .filter((p) => p.turmas?.tipo_servico === 'Prestação de Serviço')
+      .reduce((acc, p) => acc + Number(p.valor || 0), 0)
+    const receitaFormaturas = receitaBruta - receitaPrestacaoServicos
 
     const despesasPeriodo = contasPagar.filter((c) => dentroPeriodo(c.data_vencimento))
     const totaisGrupo: Record<string, number> = {}
@@ -222,7 +236,15 @@ export default function DRE() {
       .sort((a, b) => b.receita - a.receita)
       .slice(0, 12)
 
-    return { linhas, margens, composicao, custoPorTurma, usaCustoDireto }
+    return {
+      linhas,
+      margens,
+      composicao,
+      custoPorTurma,
+      usaCustoDireto,
+      receitaFormaturas,
+      receitaPrestacaoServicos,
+    }
   }, [pagamentos, contasPagar, dtIni, dtFim])
 
   return (
@@ -327,6 +349,28 @@ export default function DRE() {
               <div className="text-2xl font-bold text-white mt-1">{margens.operacional.toFixed(1)}%</div>
             </div>
           </div>
+
+          {receitaPrestacaoServicos > 0 && (
+            <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-white mb-1">Receita por Tipo</h3>
+              <p className="text-xs text-slate-400 mb-4">
+                Formaturas (turmas) x Prestação de Serviços (ensaios, festas e eventos avulsos, sem
+                turma vinculada a um curso/faculdade).
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                  <span className="text-xs text-slate-400">Formaturas</span>
+                  <div className="text-xl font-bold text-emerald-400 mt-1">{brl(receitaFormaturas)}</div>
+                </div>
+                <div className="p-4 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                  <span className="text-xs text-slate-400">Prestação de Serviços</span>
+                  <div className="text-xl font-bold text-orange-400 mt-1">
+                    {brl(receitaPrestacaoServicos)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {composicao.length > 0 && (
             <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">

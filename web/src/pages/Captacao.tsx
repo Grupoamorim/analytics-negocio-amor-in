@@ -14,7 +14,7 @@ import {
   Map as MapIcon,
 } from 'lucide-react'
 import QRCode from 'qrcode'
-import { loadLeads, updateLead, deleteLead, subscribeToLeads } from '@/utils/captacaoStorage'
+import { loadLeads, updateLead, deleteLead } from '@/utils/captacaoStorage'
 import { CaptacaoLead, normalizeTurma, extractTurmaNumber } from '@/types/captacao'
 import { formatPhoneBR } from '@/utils/phoneMask'
 import { useToast } from '@/hooks/use-toast'
@@ -52,18 +52,17 @@ export default function Captacao() {
     return '/captacao/form'
   }, [])
 
-  // Recarrega os leads do localStorage
+  // Recarrega os leads do Supabase
   const refreshLeads = () => {
-    setLeads(loadLeads())
+    loadLeads().then(setLeads)
   }
 
-  // Carrega leads iniciais no mount e se inscreve em mudanças de leads.
-  // `subscribeToLeads` combina CustomEvent, `storage` event nativo e polling
-  // de 2s — garantindo que os dados estejam sempre atualizados em /captacao,
-  // não importa como o usuário chegou aqui (navegação SPA, outra aba, etc.).
+  // Carrega leads iniciais no mount e faz polling leve, já que os cadastros
+  // agora vêm do formulário público (outros navegadores/dispositivos).
   useEffect(() => {
     refreshLeads()
-    return subscribeToLeads(refreshLeads)
+    const intervalId = window.setInterval(refreshLeads, 15000)
+    return () => window.clearInterval(intervalId)
   }, [])
 
   // Gera QR code como data URL
@@ -156,10 +155,16 @@ export default function Captacao() {
     setModalOpen(true)
   }
 
-  const handleDelete = (lead: CaptacaoLead) => {
-    setLeads(deleteLead(lead.id))
-    setConfirmDelete(null)
-    toast({ title: 'Lead excluído', description: `${lead.nome} foi removido da lista.` })
+  const handleDelete = async (lead: CaptacaoLead) => {
+    try {
+      await deleteLead(lead.id)
+      refreshLeads()
+      toast({ title: 'Lead excluído', description: `${lead.nome} foi removido da lista.` })
+    } catch {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' })
+    } finally {
+      setConfirmDelete(null)
+    }
   }
 
   const exportCsv = () => {
@@ -509,12 +514,16 @@ export default function Captacao() {
           lead={editingLead}
           onClose={() => setModalOpen(false)}
           onSave={(patch) => {
-            setLeads(updateLead(editingLead.id, patch))
-            setModalOpen(false)
-            toast({
-              title: 'Lead atualizado',
-              description: `${patch.nome || editingLead.nome} salvo com sucesso.`,
-            })
+            updateLead(editingLead.id, patch)
+              .then(() => {
+                refreshLeads()
+                setModalOpen(false)
+                toast({
+                  title: 'Lead atualizado',
+                  description: `${patch.nome || editingLead.nome} salvo com sucesso.`,
+                })
+              })
+              .catch(() => toast({ title: 'Erro ao salvar', variant: 'destructive' }))
           }}
         />
       )}

@@ -217,6 +217,15 @@
     }
   }
 
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
   @keyframes float {
     0%,
     100% {
@@ -260,6 +269,10 @@
 
   .animate-fade-in-down {
     animation: fade-in-down 0.6s ease-out;
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 0.25s ease-out;
   }
 
   .animate-fade-out-up {
