@@ -1,5 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
+import { supabase } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/utils/fetchAllRows'
+import {
   DollarSign,
   Percent,
   Layers,
@@ -67,13 +78,52 @@ export default function Index() {
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState<'Alta' | 'Média' | 'Baixa'>('Média')
 
-  // Tooltip state para gráfico de área SVG
-  const [hoveredPoint, setHoveredPoint] = useState<{
-    x: number
-    y: number
-    month: string
-    value: number
-  } | null>(null)
+  // Faturamento mensal real (últimos 6 meses), vindo de `pagamentos`
+  const [faturamentoMensal, setFaturamentoMensal] = useState<{ mes: string; valor: number }[]>([])
+  const [loadingFaturamento, setLoadingFaturamento] = useState(true)
+
+  useEffect(() => {
+    async function loadFaturamentoMensal() {
+      setLoadingFaturamento(true)
+      try {
+        const inicioJanela = new Date()
+        inicioJanela.setDate(1)
+        inicioJanela.setMonth(inicioJanela.getMonth() - 5)
+        const desde = inicioJanela.toISOString().split('T')[0]
+
+        const rows = await fetchAllRows<{ valor: number; data_vencimento: string | null }>(() =>
+          supabase
+            .from('pagamentos')
+            .select('valor, data_vencimento, id')
+            .neq('status', 'cancelado')
+            .gte('data_vencimento', desde)
+            .order('id') as any,
+        )
+
+        const porMes = new Map<string, number>()
+        for (const r of rows) {
+          if (!r.data_vencimento) continue
+          const chave = r.data_vencimento.slice(0, 7)
+          porMes.set(chave, (porMes.get(chave) || 0) + Number(r.valor || 0))
+        }
+
+        const nomesMes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+        const cursor = new Date(inicioJanela)
+        const meses: { mes: string; valor: number }[] = []
+        for (let i = 0; i < 6; i++) {
+          const chave = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+          meses.push({ mes: nomesMes[cursor.getMonth()], valor: porMes.get(chave) || 0 })
+          cursor.setMonth(cursor.getMonth() + 1)
+        }
+        setFaturamentoMensal(meses)
+      } catch (e) {
+        console.warn('Erro ao carregar faturamento mensal:', e)
+      } finally {
+        setLoadingFaturamento(false)
+      }
+    }
+    loadFaturamentoMensal()
+  }, [])
 
   // 1. Cálculos de KPIs
   const totalPipeline = (deals || [])
@@ -199,34 +249,6 @@ export default function Index() {
       .sort((a, b) => b.turmas - a.turmas || a.curso.localeCompare(b.curso, 'pt-BR'))
     return { linhas, totalTurmas, totalAlunos }
   }, [leads])
-
-  // 2. Dados do Gráfico de Faturamento Mensal (SVG puro)
-  const monthlyRevenueData = [
-    { month: 'Set', value: 340000 },
-    { month: 'Out', value: 520000 },
-    { month: 'Nov', value: 680000 },
-    { month: 'Dez', value: 890000 },
-    { month: 'Jan', value: 1050000 },
-    { month: 'Fev', value: 1284500 },
-  ]
-
-  // Dimensões do SVG
-  const svgWidth = 500
-  const svgHeight = 220
-  const paddingX = 40
-  const paddingY = 30
-  const maxRevenue = 1500000
-  const minRevenue = 0
-
-  const getSvgCoordinates = (index: number, val: number) => {
-    const x = paddingX + (index / (monthlyRevenueData.length - 1)) * (svgWidth - paddingX * 2)
-    const y = svgHeight - paddingY - (val / maxRevenue) * (svgHeight - paddingY * 2)
-    return { x, y }
-  }
-
-  const points = monthlyRevenueData.map((d, i) => getSvgCoordinates(i, d.value))
-  const linePathD = points.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`, '')
-  const areaPathD = `${linePathD} L ${points[points.length - 1].x} ${svgHeight - paddingY} L ${points[0].x} ${svgHeight - paddingY} Z`
 
   // 3. Funil de Conversão
   const stageStats = (stages || []).map((stage) => {
@@ -624,6 +646,66 @@ export default function Index() {
 
       {/* Seção de Gráficos (Grid 2 colunas) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Gráfico 0: Faturamento Mensal (dados reais de `pagamentos`) */}
+        {settings.dashboardWidgets.revenueChart && (
+          <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg lg:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-semibold text-white">Faturamento Mensal</h3>
+                <p className="text-xs text-slate-400">
+                  Faturamento bruto por mês de vencimento — últimos 6 meses
+                </p>
+              </div>
+              <AIInsightsButton context="dashboard-revenue" />
+            </div>
+
+            {loadingFaturamento ? (
+              <div className="h-56 flex items-center justify-center text-xs text-slate-500">
+                Carregando...
+              </div>
+            ) : faturamentoMensal.every((m) => m.valor === 0) ? (
+              <div className="h-56 flex items-center justify-center text-xs text-slate-500">
+                Sem faturamento registrado no período.
+              </div>
+            ) : (
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={faturamentoMensal} margin={{ left: 8, right: 8 }}>
+                    <defs>
+                      <linearGradient id="faturamentoGradiente" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#F97316" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#F97316" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="mes" stroke="#64748b" fontSize={12} />
+                    <YAxis
+                      stroke="#64748b"
+                      fontSize={12}
+                      width={70}
+                      tickFormatter={(v) => `R$ ${(Number(v) / 1000).toFixed(0)}k`}
+                    />
+                    <Tooltip
+                      formatter={(v: number) =>
+                        `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`
+                      }
+                      contentStyle={{ background: '#0a0f14', border: '1px solid rgba(255,255,255,0.1)' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="valor"
+                      name="Faturamento"
+                      stroke="#F97316"
+                      strokeWidth={2}
+                      fill="url(#faturamentoGradiente)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Gráfico 1: Funil de Conversão */}
         {settings.dashboardWidgets.funnelChart && (
           <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg flex flex-col justify-between">
