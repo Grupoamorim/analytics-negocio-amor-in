@@ -29,7 +29,6 @@ import {
   getSGELinkForLead,
   linkTurmaToSGE,
   unlinkTurmaFromSGE,
-  getSGEConfig,
   saveSGELinks,
   fetchSGEVendas,
   extractTurmaNameFromVenda,
@@ -37,6 +36,7 @@ import {
   normalizeNameForComparison,
   SGELink,
 } from '@/utils/sgeIntegration'
+import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { Button } from '@/components/ui/button'
 import ImportCsvModal from '@/components/ImportCsvModal'
 import { ColumnHeaderWithFilter, ColumnFilterKey } from '@/components/ColumnHeaderWithFilter'
@@ -118,6 +118,9 @@ const PAGE_SIZE_KEY = 'turmas_page_size'
 
 export default function LeadsPage() {
   const { leads, deals, members, addLead, updateLead, deleteLead, updateDeal } = useCRM()
+  // Credenciais do SGE vêm sempre do Supabase (mesma fonte usada em Configurações),
+  // nunca do localStorage — assim, cadastrar uma vez funciona em qualquer dispositivo.
+  const { config: sgeAppConfig } = useConfiguracoes()
   const { toast } = useToast()
 
   // General Filter State
@@ -443,7 +446,7 @@ export default function LeadsPage() {
 
   // Sincronização SGE Automática com Auto-Win
   const handleSyncSGE = async () => {
-    const cfg = getSGEConfig()
+    const cfg = { cnpj: sgeAppConfig.sgeCnpj, token: sgeAppConfig.sgeToken }
     if (!cfg.cnpj?.trim() || !cfg.token?.trim()) {
       toast({
         title: 'Credenciais do SGE não configuradas',

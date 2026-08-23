@@ -126,8 +126,24 @@ export default function Settings() {
     setTestingSGE(true)
     setSgeStatus(null)
     const result = await testSGEConnection(sgeCnpj, sgeToken)
-    setSgeStatus({ ok: result.ok, message: result.message })
     setTestingSGE(false)
+
+    // Uma conexão testada com sucesso já fica salva na hora — o usuário não
+    // deve precisar clicar em "Testar" e depois em "Salvar" separadamente
+    // para as credenciais valerem em todo o site.
+    if (result.ok) {
+      try {
+        await updateConfig({ sgeCnpj, sgeToken })
+        setSgeStatus({ ok: true, message: `${result.message} Credenciais salvas.` })
+      } catch {
+        setSgeStatus({
+          ok: false,
+          message: 'A conexão funcionou, mas não foi possível salvar as credenciais. Tente novamente.',
+        })
+      }
+    } else {
+      setSgeStatus({ ok: result.ok, message: result.message })
+    }
   }
 
   const handleSaveGemini = async () => {
@@ -161,8 +177,28 @@ export default function Settings() {
     setTestingGemini(true)
     setGeminiStatus(null)
     const result = await testGeminiConnection(geminiKey, geminiModel)
-    setGeminiStatus({ ok: result.ok, message: result.message })
     setTestingGemini(false)
+
+    // Mesma lógica do SGE: um teste bem-sucedido já fica salvo na hora.
+    if (result.ok) {
+      try {
+        await updateConfig({
+          geminiApiKey: geminiKey,
+          preferencias: { ...config.preferencias, geminiModel, iaSystemPrompt },
+        })
+        saveGeminiApiKey(geminiKey)
+        saveGeminiModel(geminiModel)
+        saveCustomSystemPrompt(iaSystemPrompt)
+        setGeminiStatus({ ok: true, message: `${result.message} Credenciais salvas.` })
+      } catch {
+        setGeminiStatus({
+          ok: false,
+          message: 'A conexão funcionou, mas não foi possível salvar a chave. Tente novamente.',
+        })
+      }
+    } else {
+      setGeminiStatus({ ok: result.ok, message: result.message })
+    }
   }
 
   const handleSelectLogo = (e: React.ChangeEvent<HTMLInputElement>) => {

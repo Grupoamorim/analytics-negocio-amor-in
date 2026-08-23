@@ -1,8 +1,3 @@
-export interface SGEConfig {
-  cnpj: string
-  token: string
-}
-
 export interface SGELink {
   leadId: string
   sgeProjectCode: string
@@ -28,28 +23,7 @@ export interface SGEVendaItem {
   [key: string]: any
 }
 
-const STORAGE_KEY_SGE_CONFIG = 'sge_config'
 const STORAGE_KEY_SGE_LINKS = 'sge_links'
-
-export function getSGEConfig(): SGEConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_SGE_CONFIG)
-    if (raw) {
-      return JSON.parse(raw)
-    }
-  } catch (err) {
-    console.error('Erro ao ler sge_config:', err)
-  }
-  return { cnpj: '', token: '' }
-}
-
-export function saveSGEConfig(config: SGEConfig): void {
-  try {
-    localStorage.setItem(STORAGE_KEY_SGE_CONFIG, JSON.stringify(config))
-  } catch (err) {
-    console.error('Erro ao salvar sge_config:', err)
-  }
-}
 
 export function getSGELinks(): SGELink[] {
   try {
