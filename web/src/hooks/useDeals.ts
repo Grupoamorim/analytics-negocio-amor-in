@@ -26,6 +26,28 @@ const STAGE_NAME_TO_ID: Record<string, string> = {
   'stage-6': 'stage-6',
 }
 
+/**
+ * O checklist do deal é sempre um mapa { itemId: completed }. Dados antigos
+ * (de antes da correção do bug de "clique não reflete") podem ter ficado
+ * salvos como array de objetos {id, text, completed} — normaliza os dois
+ * formatos pro mesmo mapa, pra não perder o progresso já marcado.
+ */
+function normalizeChecklist(raw: unknown): Record<string, boolean> {
+  if (!raw) return {}
+  if (Array.isArray(raw)) {
+    const map: Record<string, boolean> = {}
+    for (const item of raw) {
+      if (typeof item === 'string') map[item] = true
+      else if (item && typeof item === 'object' && 'id' in (item as any)) {
+        map[(item as any).id] = !!(item as any).completed
+      }
+    }
+    return map
+  }
+  if (typeof raw === 'object') return raw as Record<string, boolean>
+  return {}
+}
+
 function getSafeLocalStorageDeals(): Deal[] {
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
@@ -133,7 +155,7 @@ function mapRowToDeal(row: any & { updated_by_profile?: { email: string | null }
     assignedTo: row.responsavel || '',
     priority: (row.prioridade as any) || 'Média',
     notes: row.notas || '',
-    checklist: (row.checklist as any) || [],
+    checklist: normalizeChecklist(row.checklist),
     stageHistory,
     outcome: (row.outcome as any) || null,
     createdAt,
@@ -156,7 +178,7 @@ function mapDealToInsert(deal: Partial<Deal>, userId: string): DealInsert {
     responsavel: deal.assignedTo || null,
     prioridade: deal.priority || 'Média',
     notas: deal.notes || null,
-    checklist: (deal.checklist as any) || [],
+    checklist: normalizeChecklist(deal.checklist),
   }
 
   if (deal.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(deal.id)) {

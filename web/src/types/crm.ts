@@ -148,7 +148,7 @@ export interface Deal {
   updatedByEmail?: string // e-mail de quem fez a última edição neste negócio
   customFields?: Record<string, any>
   proposalLink?: string // link do Canva (ou qualquer URL) da proposta
-  checklist?: Record<string, boolean> | any[] // mapa checklistKey -> concluído ou lista
+  checklist?: Record<string, boolean> // mapa checklistKey -> concluído
   /** Histórico de estágios por onde a turma passou (ordenado por enteredAt). */
   stageHistory?: StageHistoryEntry[]
   /** Resultado final quando a turma está no estágio "Fechou ou Perdeu". */

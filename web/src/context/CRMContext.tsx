@@ -337,28 +337,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetDeal = deals.find((d) => d.id === dealId)
     if (!targetDeal) return
 
-    let currentChecklist: any = targetDeal.checklist || []
-    if (Array.isArray(currentChecklist)) {
-      const idx = currentChecklist.findIndex((item: any) =>
-        typeof item === 'string'
-          ? item === checklistKey
-          : item?.id === checklistKey || item?.text === checklistKey,
-      )
-      if (idx >= 0) {
-        if (typeof currentChecklist[idx] === 'object') {
-          currentChecklist[idx] = { ...currentChecklist[idx], completed: checked }
-        } else {
-          // If strings list, toggle presence
-          if (!checked) {
-            currentChecklist = currentChecklist.filter((k: string) => k !== checklistKey)
-          }
-        }
-      } else if (checked) {
-        currentChecklist.push({ id: checklistKey, text: checklistKey, completed: true })
-      }
-    }
+    // O checklist é sempre um mapa { itemId: completed }. A leitura em
+    // Pipeline.tsx (deal.checklist?.[it.id]) já assumia esse formato, mas
+    // aqui era escrito como array — os cliques nunca refletiam na tela
+    // porque a leitura por chave numa array sempre retornava undefined.
+    const current: Record<string, boolean> =
+      targetDeal.checklist && !Array.isArray(targetDeal.checklist)
+        ? (targetDeal.checklist as Record<string, boolean>)
+        : {}
 
-    await updateDeal(dealId, { checklist: currentChecklist })
+    await updateDeal(dealId, { checklist: { ...current, [checklistKey]: checked } })
   }
 
   // Importação CSV em Lote
@@ -427,7 +415,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               responsavel: d.assignedTo || null,
               prioridade: d.priority || 'Média',
               notas: d.notes || null,
-              checklist: (d.checklist as any) || [],
+              checklist: (d.checklist as any) || {},
             }))
 
             const { data: insertedDeals, error: dErr } = await supabase
