@@ -26,6 +26,7 @@ export type Database = {
           faculdade: string
           id: string
           nome: string
+          sdr: string | null
           telefone: string
           turma: string
         }
@@ -38,6 +39,7 @@ export type Database = {
           faculdade?: string
           id?: string
           nome?: string
+          sdr?: string | null
           telefone?: string
           turma?: string
         }
@@ -50,6 +52,7 @@ export type Database = {
           faculdade?: string
           id?: string
           nome?: string
+          sdr?: string | null
           telefone?: string
           turma?: string
         }
@@ -1621,6 +1624,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vendedores: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: []
       }
     }
     Views: {

@@ -25,6 +25,13 @@ import {
   GEMINI_DEFAULT_MODEL,
 } from '@/utils/geminiApi'
 import { testSGEConnection } from '@/utils/sgeIntegration'
+import {
+  Vendedor,
+  listarVendedores,
+  adicionarVendedor,
+  atualizarVendedor,
+  removerVendedor,
+} from '@/utils/vendedores'
 import { supabase } from '@/lib/supabase/client'
 import {
   ShieldCheck,
@@ -67,6 +74,12 @@ export default function Admin() {
   const [perfis, setPerfis] = useState<Perfil[]>([])
   const [carregandoPerfis, setCarregandoPerfis] = useState(true)
   const [salvandoId, setSalvandoId] = useState<string | null>(null)
+
+  // Vendedores / SDR
+  const [vendedores, setVendedores] = useState<Vendedor[]>([])
+  const [carregandoVendedores, setCarregandoVendedores] = useState(true)
+  const [novoVendedorNome, setNovoVendedorNome] = useState('')
+  const [salvandoVendedor, setSalvandoVendedor] = useState(false)
 
   // SGE State
   const [sgeCnpj, setSgeCnpj] = useState('')
@@ -114,6 +127,47 @@ export default function Admin() {
     await supabase.from('profiles').update({ role }).eq('id', id)
     setPerfis((prev) => prev.map((p) => (p.id === id ? { ...p, role } : p)))
     setSalvandoId(null)
+  }
+
+  useEffect(() => {
+    async function carregar() {
+      setCarregandoVendedores(true)
+      setVendedores(await listarVendedores())
+      setCarregandoVendedores(false)
+    }
+    carregar()
+  }, [])
+
+  async function handleAdicionarVendedor(e: React.FormEvent) {
+    e.preventDefault()
+    const nome = novoVendedorNome.trim()
+    if (!nome) return
+    setSalvandoVendedor(true)
+    try {
+      await adicionarVendedor(nome)
+      setVendedores(await listarVendedores())
+      setNovoVendedorNome('')
+      toast({ title: 'Vendedor/SDR adicionado', description: `${nome} já aparece no formulário público.` })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao adicionar',
+        description: err.message || 'Não foi possível salvar. Talvez esse nome já exista.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSalvandoVendedor(false)
+    }
+  }
+
+  async function handleToggleAtivoVendedor(v: Vendedor) {
+    await atualizarVendedor(v.id, { ativo: !v.ativo })
+    setVendedores((prev) => prev.map((x) => (x.id === v.id ? { ...x, ativo: !x.ativo } : x)))
+  }
+
+  async function handleRemoverVendedor(v: Vendedor) {
+    if (!confirm(`Remover "${v.nome}" da lista de vendedores/SDR?`)) return
+    await removerVendedor(v.id)
+    setVendedores((prev) => prev.filter((x) => x.id !== v.id))
   }
 
   // Sync state from hook config
@@ -361,8 +415,9 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="usuarios" className="space-y-4">
-        <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full max-w-3xl bg-[#111820] border border-white/[0.06]">
+        <TabsList className="grid grid-cols-3 sm:grid-cols-7 w-full max-w-4xl bg-[#111820] border border-white/[0.06]">
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+          <TabsTrigger value="vendedores">Vendedores/SDR</TabsTrigger>
           <TabsTrigger value="integracoes">Integrações</TabsTrigger>
           <TabsTrigger value="supabase">Banco de Dados</TabsTrigger>
           <TabsTrigger value="ia">IA</TabsTrigger>
@@ -407,6 +462,83 @@ export default function Admin() {
                             </option>
                           ))}
                         </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ABA: VENDEDORES / SDR */}
+        <TabsContent value="vendedores" className="space-y-4">
+          <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+              <Users className="w-4 h-4 text-orange-400" /> Vendedores / SDR
+            </h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Essa lista aparece no formulário público de Captação — o cliente escolhe ali quem é o
+              vendedor/SDR dele. Desative em vez de remover se só quiser tirar da lista sem perder o
+              histórico dos leads já cadastrados com esse nome.
+            </p>
+
+            <form onSubmit={handleAdicionarVendedor} className="flex items-center gap-2 mb-4">
+              <input
+                type="text"
+                placeholder="Nome do vendedor/SDR"
+                value={novoVendedorNome}
+                onChange={(e) => setNovoVendedorNome(e.target.value)}
+                className="flex-1 bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <Button
+                type="submit"
+                disabled={!novoVendedorNome.trim() || salvandoVendedor}
+                className="bg-orange-500 hover:bg-orange-600 text-white text-xs"
+              >
+                Adicionar
+              </Button>
+            </form>
+
+            {carregandoVendedores ? (
+              <div className="text-sm text-slate-400">Carregando...</div>
+            ) : vendedores.length === 0 ? (
+              <div className="text-sm text-slate-500">Nenhum vendedor/SDR cadastrado ainda.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 text-xs uppercase border-b border-white/[0.06]">
+                    <th className="py-2">Nome</th>
+                    <th className="py-2">Status</th>
+                    <th className="py-2 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendedores.map((v) => (
+                    <tr key={v.id} className="border-b border-white/[0.04]">
+                      <td className="py-2.5 text-slate-200">{v.nome}</td>
+                      <td className="py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAtivoVendedor(v)}
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                            v.ativo
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                          }`}
+                        >
+                          {v.ativo ? 'Ativo' : 'Inativo'}
+                        </button>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverVendedor(v)}
+                          className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05]"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}

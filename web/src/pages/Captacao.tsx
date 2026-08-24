@@ -17,6 +17,7 @@ import QRCode from 'qrcode'
 import { loadLeads, updateLead, deleteLead } from '@/utils/captacaoStorage'
 import { CaptacaoLead, normalizeTurma, extractTurmaNumber } from '@/types/captacao'
 import { formatPhoneBR } from '@/utils/phoneMask'
+import { fetchVendedoresAtivos } from '@/utils/vendedores'
 import { useToast } from '@/hooks/use-toast'
 import MarketMap from '@/components/MarketMap'
 import AIInsightsButton from '@/components/AIInsightsButton'
@@ -177,6 +178,7 @@ export default function Captacao() {
       'Nome Completo',
       'Telefone',
       'Email',
+      'Vendedor/SDR',
       'Data de Cadastro',
     ]
     const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`
@@ -190,6 +192,7 @@ export default function Captacao() {
         l.nome,
         l.telefone,
         l.email,
+        l.sdr,
         new Date(l.dataCadastro).toLocaleString('pt-BR'),
       ]
         .map(escape)
@@ -362,6 +365,7 @@ export default function Captacao() {
                         ['nome', 'Nome Completo'],
                         ['telefone', 'Telefone'],
                         ['email', 'Email'],
+                        ['sdr', 'Vendedor/SDR'],
                       ] as [SortField, string][]
                     ).map(([field, label]) => (
                       <th
@@ -402,6 +406,15 @@ export default function Captacao() {
                         {lead.telefone}
                       </td>
                       <td className="py-3 px-4 text-slate-300">{lead.email}</td>
+                      <td className="py-3 px-4">
+                        {lead.sdr ? (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-300 border border-slate-500/20 text-[11px] whitespace-nowrap">
+                            {lead.sdr}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-[11px]">—</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <button
@@ -474,6 +487,10 @@ export default function Captacao() {
                   <div className="col-span-2">
                     <span className="text-slate-500">Telefone:</span>{' '}
                     <span className="text-slate-200">{lead.telefone}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-slate-500">Vendedor/SDR:</span>{' '}
+                    <span className="text-slate-200">{lead.sdr || '—'}</span>
                   </div>
                 </div>
                 <div
@@ -592,8 +609,14 @@ function EditLeadModal({ lead, onClose, onSave }: EditModalProps) {
     nome: lead.nome,
     telefone: lead.telefone,
     email: lead.email,
+    sdr: lead.sdr || '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [vendedoresOpcoes, setVendedoresOpcoes] = useState<string[]>([])
+
+  useEffect(() => {
+    fetchVendedoresAtivos().then(setVendedoresOpcoes)
+  }, [])
 
   const set = (field: keyof typeof form, value: string) => {
     setForm((f) => ({ ...f, [field]: value }))
@@ -626,6 +649,7 @@ function EditLeadModal({ lead, onClose, onSave }: EditModalProps) {
       nome: form.nome.trim(),
       telefone: form.telefone.trim(),
       email: form.email.trim(),
+      sdr: form.sdr,
     })
   }
 
@@ -732,6 +756,22 @@ function EditLeadModal({ lead, onClose, onSave }: EditModalProps) {
               onChange={(v) => set('email', v)}
               placeholder="Ex: joao@email.com"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Vendedor/SDR</label>
+            <select
+              value={form.sdr}
+              onChange={(e) => set('sdr', e.target.value)}
+              className="w-full bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+            >
+              <option value="">Não informado</option>
+              {vendedoresOpcoes.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/[0.08]">

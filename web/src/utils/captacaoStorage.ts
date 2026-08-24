@@ -20,6 +20,7 @@ function mapRowToLead(row: CaptacaoLeadRow): CaptacaoLead {
     nome: row.nome || '',
     telefone: row.telefone || '',
     email: row.email || '',
+    sdr: row.sdr || '',
     dataCadastro: row.data_cadastro || new Date().toISOString(),
   }
 }
@@ -34,6 +35,7 @@ function mapLeadToRow(input: Partial<CaptacaoLead>): CaptacaoLeadWrite {
   if (input.nome !== undefined) row.nome = input.nome
   if (input.telefone !== undefined) row.telefone = input.telefone
   if (input.email !== undefined) row.email = input.email
+  if (input.sdr !== undefined) row.sdr = input.sdr
   return row
 }
 

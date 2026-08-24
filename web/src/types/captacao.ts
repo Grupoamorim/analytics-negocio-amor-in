@@ -10,6 +10,7 @@ export interface CaptacaoLead {
   nome: string
   telefone: string
   email: string
+  sdr: string // vendedor/SDR escolhido pelo cliente no formulário público
   dataCadastro: string // ISO string
 }
 

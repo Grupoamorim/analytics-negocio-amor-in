@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Target, Send, CheckCircle2 } from 'lucide-react'
 import { addLead } from '@/utils/captacaoStorage'
 import { fetchCidadeFaculdades, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
+import { fetchVendedoresAtivos } from '@/utils/vendedores'
 import { formatPhoneBR } from '@/utils/phoneMask'
 
 const OUTRO = '__outro__'
@@ -17,6 +18,7 @@ interface FormState {
   nome: string
   telefone: string
   email: string
+  sdr: string
 }
 
 const EMPTY: FormState = {
@@ -30,6 +32,7 @@ const EMPTY: FormState = {
   nome: '',
   telefone: '',
   email: '',
+  sdr: '',
 }
 
 export default function CaptacaoForm() {
@@ -38,9 +41,11 @@ export default function CaptacaoForm() {
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [cidadeFaculdades, setCidadeFaculdades] = useState<CidadeFaculdadesMap>({})
+  const [vendedores, setVendedores] = useState<string[]>([])
 
   useEffect(() => {
     fetchCidadeFaculdades().then(setCidadeFaculdades)
+    fetchVendedoresAtivos().then(setVendedores)
   }, [])
 
   const cidades = useMemo(
@@ -75,6 +80,7 @@ export default function CaptacaoForm() {
     else if (form.telefone.replace(/\D/g, '').length < 10) errs.telefone = 'Telefone inválido.'
     if (!form.email.trim()) errs.email = 'Informe seu email.'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Email inválido.'
+    if (!form.sdr) errs.sdr = 'Selecione quem é seu vendedor/SDR.'
 
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -95,6 +101,7 @@ export default function CaptacaoForm() {
         nome: form.nome.trim(),
         telefone: form.telefone.trim(),
         email: form.email.trim(),
+        sdr: form.sdr,
       })
       setForm(EMPTY)
       setErrors({})
@@ -252,6 +259,28 @@ export default function CaptacaoForm() {
               <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
                 Ano em que a formatura vai acontecer. Ex: 2026.2
               </p>
+            </div>
+
+            {/* Vendedor / SDR */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Quem é seu vendedor/SDR? <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={form.sdr}
+                onChange={(e) => set('sdr', e.target.value)}
+                className={`w-full bg-[#0a0f14] border rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/60 transition-colors ${
+                  errors.sdr ? 'border-red-500/60' : 'border-white/10'
+                }`}
+              >
+                <option value="">Selecione quem te atendeu</option>
+                {vendedores.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+              {errors.sdr && <p className="text-xs text-red-400 mt-1">{errors.sdr}</p>}
             </div>
 
             {/* Nome Completo */}
