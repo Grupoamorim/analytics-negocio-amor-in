@@ -19,6 +19,7 @@ interface Pagamento {
   valor_pago: number
   status: string
   data_vencimento: string
+  data_pagamento: string | null
   turma_id: string | null
   empresa: string | null
 }
@@ -85,7 +86,7 @@ export default function Financeiro() {
         fetchAllRows<any>(() =>
           supabase
             .from('pagamentos')
-            .select('id, valor, valor_pago, status, data_vencimento, turma_id, turmas(empresa)')
+            .select('id, valor, valor_pago, status, data_vencimento, data_pagamento, turma_id, turmas(empresa)')
             .neq('status', 'cancelado')
             .order('data_vencimento', { ascending: false })
             .order('id'),
@@ -146,14 +147,24 @@ export default function Financeiro() {
     return { total_faturado, total_recebido, total_a_receber, total_inadimplente, total_custos }
   }, [pagamentosFiltrados, contasPagarFiltradas])
 
+  // "Recebido" conta pelo mês em que o dinheiro realmente entrou (data de
+  // pagamento) — não pelo mês de vencimento original da parcela, senão uma
+  // parcela atrasada paga meses depois aparece no mês errado do gráfico.
+  // "Previsto" continua por vencimento, já que é o que está agendado pra
+  // cada mês, pago ou não.
   const fluxoCaixa = useMemo(() => {
     const porMes: Record<string, { mes: string; recebido: number; previsto: number }> = {}
     for (const p of pagamentosFiltrados) {
-      if (!p.data_vencimento) continue
-      const mes = p.data_vencimento.slice(0, 7)
-      if (!porMes[mes]) porMes[mes] = { mes, recebido: 0, previsto: 0 }
-      if (p.status === 'pago') porMes[mes].recebido += Number(p.valor_pago || 0)
-      porMes[mes].previsto += Number(p.valor || 0)
+      if (p.data_vencimento) {
+        const mesVenc = p.data_vencimento.slice(0, 7)
+        if (!porMes[mesVenc]) porMes[mesVenc] = { mes: mesVenc, recebido: 0, previsto: 0 }
+        porMes[mesVenc].previsto += Number(p.valor || 0)
+      }
+      if (p.status === 'pago' && p.data_pagamento) {
+        const mesPgto = p.data_pagamento.slice(0, 7)
+        if (!porMes[mesPgto]) porMes[mesPgto] = { mes: mesPgto, recebido: 0, previsto: 0 }
+        porMes[mesPgto].recebido += Number(p.valor_pago || 0)
+      }
     }
     return Object.values(porMes)
       .sort((a, b) => a.mes.localeCompare(b.mes))
