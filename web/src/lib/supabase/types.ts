@@ -924,6 +924,45 @@ export type Database = {
           },
         ]
       }
+      parametros_custo_turma: {
+        Row: {
+          ano: number
+          cidade: string | null
+          created_at: string
+          custo_direto_aluno: number
+          formandos_max: number
+          formandos_min: number
+          id: string
+          observacoes: string | null
+          updated_at: string
+          venda_prevista_aluno: number
+        }
+        Insert: {
+          ano: number
+          cidade?: string | null
+          created_at?: string
+          custo_direto_aluno?: number
+          formandos_max: number
+          formandos_min: number
+          id?: string
+          observacoes?: string | null
+          updated_at?: string
+          venda_prevista_aluno?: number
+        }
+        Update: {
+          ano?: number
+          cidade?: string | null
+          created_at?: string
+          custo_direto_aluno?: number
+          formandos_max?: number
+          formandos_min?: number
+          id?: string
+          observacoes?: string | null
+          updated_at?: string
+          venda_prevista_aluno?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
