@@ -17,6 +17,16 @@ import { supabase } from '@/lib/supabase/client'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import { fetchAllRows } from '@/utils/fetchAllRows'
 
+interface TurmaResumo {
+  nome: string
+  empresa: string | null
+  curso: string | null
+  faculdade: string | null
+  turma: string | null
+  ano_formatura: string | null
+  cidade: string | null
+}
+
 interface Pagamento {
   id: string
   valor: number
@@ -24,7 +34,7 @@ interface Pagamento {
   data_vencimento: string
   data_pagamento: string | null
   turma_id: string | null
-  turmas?: { nome: string; tipo_servico: string | null; empresa: string | null } | null
+  turmas?: (TurmaResumo & { tipo_servico: string | null }) | null
 }
 
 interface ContaPagar {
@@ -38,7 +48,16 @@ interface ContaPagar {
   data_pagamento: string | null
   grupo_dre?: string | null
   turma_id: string | null
-  turmas?: { nome: string; empresa: string | null } | null
+  turmas?: TurmaResumo | null
+}
+
+/** Nome completo da turma pro detalhamento do DRE — diferente do nome curto
+ * usado em badges/tabelas, aqui o Lucas quer ver tudo (empresa, curso,
+ * faculdade, turma, ano/fase e cidade), sem truncar nada. */
+function nomeCompletoTurma(t: TurmaResumo | null | undefined): string {
+  if (!t) return 'Sem turma vinculada'
+  const partes = [t.empresa, t.curso, t.faculdade, t.turma, t.ano_formatura, t.cidade].filter(Boolean)
+  return partes.length > 0 ? partes.join(' ') : t.nome || 'Sem turma vinculada'
 }
 
 const REGRAS_DRE: [string, string[]][] = [
@@ -91,7 +110,7 @@ function brl(v: number): string {
 
 const CHART_COLORS = ['#F97316', '#EA580C', '#FB923C', '#FDBA74', '#10B981', '#64748B']
 
-type Periodo = 'mes' | 'trimestre' | 'semestre' | 'ano' | 'personalizado'
+type Periodo = 'mes' | 'trimestre' | 'semestre' | 'ano' | 'ate_hoje' | 'personalizado'
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -127,6 +146,14 @@ function calcularPeriodo(
     const inicioSem = semestre === 1 ? 0 : 6
     return { ini: toISO(new Date(ano, inicioSem, 1)), fim: toISO(new Date(ano, inicioSem + 6, 0)) }
   }
+  if (periodo === 'ate_hoje') {
+    // Do dia 1º de janeiro do ano escolhido até hoje — nunca inclui meses
+    // futuros que ainda não aconteceram (diferente de "Ano", que vai até 31/12).
+    const hoje = new Date()
+    const fimAno = new Date(ano, 11, 31)
+    const fim = fimAno < hoje ? fimAno : hoje
+    return { ini: toISO(new Date(ano, 0, 1)), fim: toISO(fim) }
+  }
   // 'ano'
   return { ini: toISO(new Date(ano, 0, 1)), fim: toISO(new Date(ano, 11, 31)) }
 }
@@ -149,9 +176,22 @@ export default function DRE() {
   const [dtIni, setDtIni] = useState(anoInicial.ini)
   const [dtFim, setDtFim] = useState(anoInicial.fim)
 
+  // No modo Personalizado as datas digitadas ficam num rascunho separado —
+  // só valem de verdade (recalculam o DRE) quando o usuário clica em
+  // "Filtrar", pra ficar claro que o filtro foi aplicado.
+  const [dtIniInput, setDtIniInput] = useState(anoInicial.ini)
+  const [dtFimInput, setDtFimInput] = useState(anoInicial.fim)
+  const [filtroAplicado, setFiltroAplicado] = useState(false)
+
+  function aplicarFiltroPersonalizado() {
+    setDtIni(dtIniInput)
+    setDtFim(dtFimInput)
+    setFiltroAplicado(true)
+  }
+
   // Recalcula De/Até sempre que o período (ou o ano/trimestre/semestre/mês de
   // referência) muda — exceto no modo Personalizado, onde o usuário edita as
-  // datas diretamente.
+  // datas e confirma com o botão Filtrar.
   useEffect(() => {
     if (periodo === 'personalizado') return
     const { ini, fim } = calcularPeriodo(periodo, anoRef, trimestreRef, semestreRef, mesRef)
@@ -176,6 +216,12 @@ export default function DRE() {
 
   function selecionarPeriodo(p: Periodo) {
     setPeriodo(p)
+    if (p === 'personalizado') {
+      // Começa o rascunho com o período atualmente aplicado.
+      setDtIniInput(dtIni)
+      setDtFimInput(dtFim)
+      setFiltroAplicado(false)
+    }
   }
 
   // Linha do DRE expandida no momento (mostra o detalhamento por turma/fornecedor).
@@ -188,14 +234,14 @@ export default function DRE() {
         fetchAllRows<Pagamento>(() =>
           supabase
             .from('pagamentos')
-            .select('id, valor, status, data_vencimento, data_pagamento, turma_id, turmas(nome, tipo_servico, empresa)')
+            .select('id, valor, status, data_vencimento, data_pagamento, turma_id, turmas(nome, tipo_servico, empresa, curso, faculdade, turma, ano_formatura, cidade)')
             .neq('status', 'cancelado')
             .order('id'),
         ),
         fetchAllRows<ContaPagar>(() =>
           supabase
             .from('contas_pagar')
-            .select('id, descricao, fornecedor, categoria, valor, status, data_vencimento, data_pagamento, grupo_dre, turma_id, turmas(nome, empresa)')
+            .select('id, descricao, fornecedor, categoria, valor, status, data_vencimento, data_pagamento, grupo_dre, turma_id, turmas(nome, empresa, curso, faculdade, turma, ano_formatura, cidade)')
             .neq('status', 'cancelado')
             .order('id'),
         ),
@@ -264,7 +310,7 @@ export default function DRE() {
     const detalhesPorLinha: Record<string, { porTurma: Detalhe; porFornecedor: Detalhe }> = {
       receita: {
         porTurma: agrupar(
-          receitasPeriodo.map((p) => ({ valor: Number(p.valor || 0), nome: p.turmas?.nome || 'Sem turma' })),
+          receitasPeriodo.map((p) => ({ valor: Number(p.valor || 0), nome: nomeCompletoTurma(p.turmas) })),
         ),
         porFornecedor: [],
       },
@@ -275,7 +321,7 @@ export default function DRE() {
         porTurma: agrupar(
           itensGrupo.map((c) => ({
             valor: Number(c.valor || 0),
-            nome: c.turmas?.nome || 'Sem turma vinculada',
+            nome: nomeCompletoTurma(c.turmas),
           })),
         ),
         porFornecedor: agrupar(
@@ -326,7 +372,7 @@ export default function DRE() {
     const receitaPorTurma: Record<string, { nome: string; receita: number }> = {}
     for (const p of receitasPeriodo) {
       if (!p.turma_id) continue
-      const nome = p.turmas?.nome || p.turma_id
+      const nome = nomeCompletoTurma(p.turmas)
       if (!receitaPorTurma[p.turma_id]) receitaPorTurma[p.turma_id] = { nome, receita: 0 }
       receitaPorTurma[p.turma_id].receita += Number(p.valor || 0)
     }
@@ -398,6 +444,7 @@ export default function DRE() {
               ['trimestre', 'Trimestre'],
               ['semestre', 'Semestre'],
               ['ano', 'Ano'],
+              ['ate_hoje', 'Até Hoje'],
               ['personalizado', 'Personalizado'],
             ] as [Periodo, string][]
           ).map(([p, label]) => (
@@ -496,8 +543,11 @@ export default function DRE() {
               De{' '}
               <input
                 type="date"
-                value={dtIni}
-                onChange={(e) => setDtIni(e.target.value)}
+                value={dtIniInput}
+                onChange={(e) => {
+                  setDtIniInput(e.target.value)
+                  setFiltroAplicado(false)
+                }}
                 className="ml-1 bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-sm"
               />
             </label>
@@ -505,11 +555,26 @@ export default function DRE() {
               Até{' '}
               <input
                 type="date"
-                value={dtFim}
-                onChange={(e) => setDtFim(e.target.value)}
+                value={dtFimInput}
+                onChange={(e) => {
+                  setDtFimInput(e.target.value)
+                  setFiltroAplicado(false)
+                }}
                 className="ml-1 bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-sm"
               />
             </label>
+            <button
+              onClick={aplicarFiltroPersonalizado}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+            >
+              Filtrar
+            </button>
+            {filtroAplicado && (
+              <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                ✓ Filtro aplicado — {new Date(`${dtIni}T00:00:00`).toLocaleDateString('pt-BR')} até{' '}
+                {new Date(`${dtFim}T00:00:00`).toLocaleDateString('pt-BR')}
+              </span>
+            )}
           </div>
         )}
       </div>
