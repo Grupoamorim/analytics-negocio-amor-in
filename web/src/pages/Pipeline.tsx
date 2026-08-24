@@ -27,6 +27,7 @@ import {
   Target,
   LinkIcon,
   Package,
+  Presentation,
   Sparkles,
   ClipboardCopy,
   Check,
@@ -60,6 +61,7 @@ import {
   removerPacote,
   gerarMensagemPacotes,
 } from '@/utils/pacotesTurma'
+import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
 
@@ -869,6 +871,7 @@ function DealDetailModal({
   const [mensagemGerada, setMensagemGerada] = useState<string | null>(null)
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
+  const [mostrarApresentacao, setMostrarApresentacao] = useState(false)
 
   useEffect(() => {
     if (!lead) return
@@ -877,6 +880,17 @@ function DealDetailModal({
       setLoadingPacotes(false)
     })
   }, [lead?.id])
+
+  // Ticket médio = média do valor dos pacotes cadastrados; Valor Esperado =
+  // Ticket Médio x Meta de Contratos. Sempre calculado, nunca digitado — e o
+  // resultado já vira o Valor do negócio automaticamente.
+  const ticketMedio = pacotes.length > 0 ? pacotes.reduce((acc, p) => acc + p.valor, 0) / pacotes.length : 0
+  const valorEsperado = ticketMedio * (lead?.metaContratos || 0)
+  useEffect(() => {
+    if (!lead?.metaContratos || pacotes.length === 0) return
+    if (Math.round(valorEsperado) === Math.round(deal.value || 0)) return
+    onUpdateDeal({ value: Math.round(valorEsperado) })
+  }, [valorEsperado, lead?.metaContratos, pacotes.length])
 
   const handleAdicionarPacote = async () => {
     if (!lead || !novoPacote.nome.trim() || !novoPacote.valor.trim()) return
@@ -1216,9 +1230,43 @@ function DealDetailModal({
           {/* Pacotes de Fotografia + Mensagem de WhatsApp */}
           {lead && (
             <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-3">
-              <div className="flex items-center gap-2 font-semibold text-slate-200">
-                <Package className="w-3.5 h-3.5 text-orange-400" /> Pacotes da Turma
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-semibold text-slate-200">
+                  <Package className="w-3.5 h-3.5 text-orange-400" /> Pacotes da Turma
+                </div>
+                {pacotes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setMostrarApresentacao(true)}
+                    className="text-[10px] font-semibold text-orange-400 hover:text-orange-300 inline-flex items-center gap-1"
+                  >
+                    <Presentation className="w-3 h-3" /> Ver Apresentação
+                  </button>
+                )}
               </div>
+
+              {pacotes.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 rounded-lg bg-[#111820] border border-white/[0.06]">
+                    <span className="text-[9px] text-slate-500 block uppercase tracking-wide">
+                      Ticket Médio (automático)
+                    </span>
+                    <span className="text-xs font-semibold text-slate-200">
+                      R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#111820] border border-white/[0.06]">
+                    <span className="text-[9px] text-slate-500 block uppercase tracking-wide">
+                      Valor Esperado (TM × Meta) → vira o Valor
+                    </span>
+                    <span className="text-xs font-semibold text-orange-400">
+                      {lead.metaContratos
+                        ? `R$ ${valorEsperado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        : 'defina a Meta de Contratos'}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {loadingPacotes ? (
                 <p className="text-slate-500">Carregando pacotes...</p>
@@ -1610,6 +1658,15 @@ function DealDetailModal({
           </div>
         </div>
       </div>
+
+      {mostrarApresentacao && lead && (
+        <ApresentacaoPacotesModal
+          lead={lead}
+          pacotes={pacotes}
+          sgeLink={sgeLink}
+          onClose={() => setMostrarApresentacao(false)}
+        />
+      )}
     </div>
   )
 }

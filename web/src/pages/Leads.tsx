@@ -22,6 +22,11 @@ import {
   Users,
   Copy,
   GripVertical,
+  Package,
+  Sparkles,
+  ClipboardCopy,
+  Check,
+  Presentation,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import { Lead, LeadStatus, LeadSource, getTurmaDisplayName, getFullTurmaName } from '@/types/crm'
@@ -68,6 +73,14 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import LastEditedBy from '@/components/LastEditedBy'
+import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
+import {
+  PacoteTurma,
+  listarPacotes,
+  adicionarPacote,
+  removerPacote,
+  gerarMensagemPacotes,
+} from '@/utils/pacotesTurma'
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: string }> = {
   Novo: {
@@ -102,7 +115,7 @@ const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: stri
   },
 }
 
-const EMPRESAS = ['AFF', 'AIF', 'AIM']
+const EMPRESAS = ['AFF', 'AIF', 'AIF-SSA', 'AIF-V', 'AIM', 'SFF']
 const SERVICOS = ['Formatura', 'Ensaio', 'Baile de Gala', 'Colação', 'Outro']
 const CANAIS = ['Passiva', 'Ativa', 'Time comercial', 'Indicação', 'Instagram', 'Outro']
 
@@ -2261,169 +2274,21 @@ export default function LeadsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Drawer / Modal de Detalhes da Turma Selecionada */}
+      {/* Drawer / Modal de Detalhes da Turma Selecionada — tudo editável direto, sem passo extra de "Editar" */}
       {selectedLead && (
-        <Dialog open={!!selectedLead} onOpenChange={(open) => !open && setSelectedLead(null)}>
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <div className="flex items-center gap-2">
-                <Badge className="bg-orange-600 text-white font-bold">
-                  {selectedLead.empresa || 'AFF'}
-                </Badge>
-                <DialogTitle className="text-xl">
-                  {selectedLead.curso} • {selectedLead.faculdade}
-                </DialogTitle>
-              </div>
-              <LastEditedBy
-                email={selectedLead.updatedByEmail}
-                updatedAt={selectedLead.updatedAt}
-                className="mt-1"
-              />
-            </DialogHeader>
-
-            <div className="space-y-4 py-2">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
-                <div>
-                  <span className="text-slate-500 block">Turma</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {selectedLead.turma}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Ano/Fase</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {selectedLead.anoFormatura}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Cidade</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {selectedLead.cidade}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Tipo Serviço</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {selectedLead.tipoServico || 'Formatura'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Como Conheceu</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {selectedLead.comoConheceu || '—'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Status</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {STATUS_CONFIG[selectedLead.status]?.label || selectedLead.status}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Código SGE</span>
-                  <span className="font-semibold text-emerald-600 font-mono">
-                    {getSGELinkForLead(selectedLead.id)?.sgeProjectCode || 'Não vinculado'}
-                  </span>
-                </div>
-                {selectedLead.dataFechamento && (
-                  <div>
-                    <span className="text-slate-500 block">Data Fechamento</span>
-                    <span className="font-semibold text-emerald-600">
-                      {selectedLead.dataFechamento}
-                    </span>
-                  </div>
-                )}
-                {selectedLead.closer && (
-                  <div>
-                    <span className="text-slate-500 block">Closer</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {selectedLead.closer}
-                    </span>
-                  </div>
-                )}
-                {selectedLead.sdr && (
-                  <div>
-                    <span className="text-slate-500 block">SDR</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {selectedLead.sdr}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Contato Principal */}
-              {(selectedLead.contatoNome || selectedLead.contatoTelefone) && (
-                <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    Contato Principal
-                  </h4>
-                  <div className="flex items-center gap-4 text-sm">
-                    {selectedLead.contatoNome && (
-                      <div className="flex items-center gap-1.5 font-medium">
-                        <User className="h-4 w-4 text-slate-400" />
-                        {selectedLead.contatoNome}
-                      </div>
-                    )}
-                    {selectedLead.contatoTelefone && (
-                      <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                        <Phone className="h-4 w-4 text-slate-400" />
-                        {selectedLead.contatoTelefone}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Link da proposta */}
-              {selectedLead.linkProposta && (
-                <div className="p-3 rounded-lg border border-orange-100 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20">
-                  <a
-                    href={selectedLead.linkProposta}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-medium text-orange-600 dark:text-orange-400 flex items-center gap-1.5 hover:underline"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Abrir Link da Proposta
-                  </a>
-                </div>
-              )}
-
-              {/* Observações */}
-              <div>
-                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Observações
-                </h4>
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 min-h-[60px] whitespace-pre-wrap">
-                  {selectedLead.observacoes ||
-                    selectedLead.notes ||
-                    'Nenhuma observação registrada.'}
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter className="gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  handleOpenEdit(selectedLead)
-                  setSelectedLead(null)
-                }}
-              >
-                <Edit2 className="h-3.5 w-3.5 mr-1.5" />
-                Editar
-              </Button>
-              <Button
-                size="sm"
-                className="bg-orange-600 hover:bg-orange-700 text-white"
-                onClick={() => setSelectedLead(null)}
-              >
-                Fechar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <SelectedLeadDetail
+          key={selectedLead.id}
+          lead={selectedLead}
+          onClose={() => setSelectedLead(null)}
+          onPatch={(patch) => {
+            updateLead(selectedLead.id, patch)
+            setSelectedLead((prev) => (prev ? { ...prev, ...patch } : prev))
+          }}
+          onOpenFullForm={() => {
+            handleOpenEdit(selectedLead)
+            setSelectedLead(null)
+          }}
+        />
       )}
 
       {/* Modal de Importação de CSV */}
@@ -2451,6 +2316,501 @@ export default function LeadsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Detalhe da turma selecionada — tudo editável direto (clicou, já edita),
+// mais Pacotes da Turma + geração de mensagem de WhatsApp e Apresentação.
+// ---------------------------------------------------------------------------
+function SelectedLeadDetail({
+  lead,
+  onClose,
+  onPatch,
+  onOpenFullForm,
+}: {
+  lead: Lead
+  onClose: () => void
+  onPatch: (patch: Partial<Lead>) => void
+  onOpenFullForm: () => void
+}) {
+  const { toast } = useToast()
+  const sgeLink = getSGELinkForLead(lead.id)
+
+  // Pacotes + mensagem
+  const [pacotes, setPacotes] = useState<PacoteTurma[]>([])
+  const [loadingPacotes, setLoadingPacotes] = useState(true)
+  const [novoPacote, setNovoPacote] = useState({ nome: '', valor: '', parcelas: '', itens: '' })
+  const [salvandoPacote, setSalvandoPacote] = useState(false)
+  const [mensagemGerada, setMensagemGerada] = useState<string | null>(null)
+  const [gerandoMensagem, setGerandoMensagem] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+  const [mostrarApresentacao, setMostrarApresentacao] = useState(false)
+
+  // Ticket médio = média do valor dos pacotes cadastrados; Valor Esperado =
+  // Ticket Médio x Meta de Contratos da turma. Sempre calculado, nunca digitado.
+  const ticketMedio = pacotes.length > 0 ? pacotes.reduce((acc, p) => acc + p.valor, 0) / pacotes.length : 0
+  const valorEsperado = ticketMedio * (lead.metaContratos || 0)
+
+  useEffect(() => {
+    listarPacotes(lead.id).then((p) => {
+      setPacotes(p)
+      setLoadingPacotes(false)
+    })
+  }, [lead.id])
+
+  const handleAdicionarPacote = async () => {
+    if (!novoPacote.nome.trim() || !novoPacote.valor.trim()) return
+    setSalvandoPacote(true)
+    try {
+      const criado = await adicionarPacote(lead.id, {
+        nome: novoPacote.nome.trim(),
+        valor: Number(novoPacote.valor.replace(',', '.')) || 0,
+        parcelas: Number(novoPacote.parcelas) || 1,
+        itens: novoPacote.itens
+          .split('\n')
+          .map((i) => i.trim())
+          .filter(Boolean),
+        ordem: pacotes.length,
+      })
+      setPacotes((prev) => [...prev, criado])
+      setNovoPacote({ nome: '', valor: '', parcelas: '', itens: '' })
+      setMensagemGerada(null)
+    } finally {
+      setSalvandoPacote(false)
+    }
+  }
+
+  const handleRemoverPacote = async (id: string) => {
+    await removerPacote(id)
+    setPacotes((prev) => prev.filter((p) => p.id !== id))
+    setMensagemGerada(null)
+  }
+
+  const handleGerarMensagem = async () => {
+    if (pacotes.length === 0) return
+    setGerandoMensagem(true)
+    try {
+      const texto = await gerarMensagemPacotes(lead, pacotes, sgeLink)
+      setMensagemGerada(texto)
+    } finally {
+      setGerandoMensagem(false)
+    }
+  }
+
+  const handleCopiarMensagem = () => {
+    if (!mensagemGerada) return
+    navigator.clipboard.writeText(mensagemGerada)
+    setCopiado(true)
+    toast({ title: 'Mensagem copiada' })
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
+  return (
+    <>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="max-w-xl max-h-[90vh] overflow-y-auto"
+        onPointerDownOutside={(e) => mostrarApresentacao && e.preventDefault()}
+        onInteractOutside={(e) => mostrarApresentacao && e.preventDefault()}
+        onEscapeKeyDown={(e) => mostrarApresentacao && e.preventDefault()}
+      >
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <select
+              value={lead.empresa || 'AFF'}
+              onChange={(e) => onPatch({ empresa: e.target.value })}
+              className="bg-orange-600 text-white font-bold text-xs rounded-md px-2 py-1 border-none focus:outline-none focus:ring-1 focus:ring-orange-400"
+            >
+              {EMPRESAS.map((e) => (
+                <option key={e} value={e}>
+                  {e}
+                </option>
+              ))}
+            </select>
+            <DialogTitle className="text-xl sr-only">{getTurmaDisplayName(lead)}</DialogTitle>
+          </div>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <input
+              defaultValue={lead.curso}
+              onBlur={(e) => e.target.value !== lead.curso && onPatch({ curso: e.target.value })}
+              placeholder="Curso"
+              className="bg-transparent text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-transparent hover:border-slate-300 focus:border-orange-500 focus:outline-none px-0.5"
+            />
+            <input
+              defaultValue={lead.faculdade}
+              onBlur={(e) => e.target.value !== lead.faculdade && onPatch({ faculdade: e.target.value })}
+              placeholder="Faculdade"
+              className="bg-transparent text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-transparent hover:border-slate-300 focus:border-orange-500 focus:outline-none px-0.5"
+            />
+          </div>
+          <LastEditedBy email={lead.updatedByEmail} updatedAt={lead.updatedAt} className="mt-1" />
+        </DialogHeader>
+
+        <div className="space-y-4 py-2 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+            <InlineField label="Turma" defaultValue={lead.turma} onSave={(v) => onPatch({ turma: v })} />
+            <InlineField
+              label="Ano/Fase"
+              defaultValue={lead.anoFormatura}
+              onSave={(v) => onPatch({ anoFormatura: v })}
+            />
+            <InlineField label="Cidade" defaultValue={lead.cidade} onSave={(v) => onPatch({ cidade: v })} />
+            <div>
+              <span className="text-slate-500 block mb-0.5">Tipo Serviço</span>
+              <select
+                value={lead.tipoServico || 'Formatura'}
+                onChange={(e) => onPatch({ tipoServico: e.target.value })}
+                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-1 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              >
+                {SERVICOS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span className="text-slate-500 block mb-0.5">Como Conheceu</span>
+              <select
+                value={lead.comoConheceu || 'Passiva'}
+                onChange={(e) => onPatch({ comoConheceu: e.target.value })}
+                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-1 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              >
+                {CANAIS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span className="text-slate-500 block mb-0.5">Status</span>
+              <select
+                value={lead.status}
+                onChange={(e) => onPatch({ status: e.target.value as LeadStatus })}
+                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-1 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              >
+                {Object.keys(STATUS_CONFIG).map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_CONFIG[s as LeadStatus].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Código SGE</span>
+              <span className="font-semibold text-emerald-600 font-mono">
+                {sgeLink?.sgeProjectCode || 'Não vinculado'}
+              </span>
+            </div>
+            <InlineField
+              label="Data Fechamento"
+              defaultValue={lead.dataFechamento || ''}
+              onSave={(v) => onPatch({ dataFechamento: v })}
+            />
+            <InlineField label="Closer" defaultValue={lead.closer || ''} onSave={(v) => onPatch({ closer: v })} />
+            <InlineField label="SDR" defaultValue={lead.sdr || ''} onSave={(v) => onPatch({ sdr: v })} />
+            <InlineField
+              label="Qtd. Comissão"
+              type="number"
+              defaultValue={lead.quantidadeComissao != null ? String(lead.quantidadeComissao) : ''}
+              onSave={(v) => onPatch({ quantidadeComissao: v ? Number(v) : undefined })}
+            />
+            <InlineField
+              label="Meta de Contratos"
+              type="number"
+              defaultValue={lead.metaContratos != null ? String(lead.metaContratos) : ''}
+              onSave={(v) => onPatch({ metaContratos: v ? Number(v) : undefined })}
+            />
+            <InlineField
+              label="Alunos Fechados"
+              type="number"
+              defaultValue={String(lead.alunosFechados || 0)}
+              onSave={(v) => onPatch({ alunosFechados: Number(v) || 0 })}
+            />
+          </div>
+
+          {/* Contato Principal */}
+          <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Contato Principal
+            </h4>
+            <div className="grid grid-cols-2 gap-3">
+              <InlineField
+                label="Nome"
+                defaultValue={lead.contatoNome || ''}
+                onSave={(v) => onPatch({ contatoNome: v })}
+              />
+              <InlineField
+                label="Telefone"
+                defaultValue={lead.contatoTelefone || ''}
+                onSave={(v) => onPatch({ contatoTelefone: v })}
+              />
+            </div>
+          </div>
+
+          {/* Link da proposta */}
+          <div className="p-3 rounded-lg border border-orange-100 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20">
+            <InlineField
+              label="Link da Proposta"
+              defaultValue={lead.linkProposta || ''}
+              onSave={(v) => onPatch({ linkProposta: v })}
+              placeholder="Cole o link do Canva ou qualquer URL..."
+            />
+            {lead.linkProposta && (
+              <a
+                href={lead.linkProposta}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-medium text-orange-600 dark:text-orange-400 flex items-center gap-1.5 hover:underline mt-1.5"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Abrir Link da Proposta
+              </a>
+            )}
+          </div>
+
+          {/* Observações */}
+          <div>
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              Observações
+            </h4>
+            <textarea
+              defaultValue={lead.observacoes || lead.notes || ''}
+              onBlur={(e) => onPatch({ observacoes: e.target.value, notes: e.target.value })}
+              rows={3}
+              placeholder="Nenhuma observação registrada."
+              className="w-full p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-500 resize-none"
+            />
+          </div>
+
+          {/* Pacotes da Turma + Mensagem de WhatsApp */}
+          <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+                <Package className="w-3.5 h-3.5 text-orange-500" /> Pacotes da Turma
+              </div>
+              {pacotes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarApresentacao(true)}
+                  className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 hover:underline inline-flex items-center gap-1"
+                >
+                  <Presentation className="w-3 h-3" /> Ver Apresentação
+                </button>
+              )}
+            </div>
+
+            {pacotes.length > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                  <span className="text-slate-500 block">Ticket Médio (automático)</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                  <span className="text-slate-500 block">Valor Esperado (TM × Meta)</span>
+                  <span className="font-semibold text-orange-600 dark:text-orange-400">
+                    {lead.metaContratos
+                      ? `R$ ${valorEsperado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                      : 'defina a Meta de Contratos'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {loadingPacotes ? (
+              <p className="text-slate-500">Carregando pacotes...</p>
+            ) : (
+              <div className="space-y-2">
+                {pacotes.length === 0 && (
+                  <p className="text-slate-500">Nenhum pacote cadastrado ainda para essa turma.</p>
+                )}
+                {pacotes.map((p) => (
+                  <div
+                    key={p.id}
+                    className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {p.nome} — R$ {p.valor.toLocaleString('pt-BR')} em {p.parcelas}x
+                      </div>
+                      {p.itens.length > 0 && (
+                        <ul className="text-[11px] text-slate-500 mt-1 space-y-0.5">
+                          {p.itens.map((item, i) => (
+                            <li key={i}>• {item}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoverPacote(p.id)}
+                      className="text-slate-400 hover:text-red-500 flex-shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-dashed border-slate-300 dark:border-slate-700 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <InlineField
+                  label="Nome do pacote"
+                  defaultValue={novoPacote.nome}
+                  onSave={(v) => setNovoPacote((d) => ({ ...d, nome: v }))}
+                  liveOnChange
+                />
+                <InlineField
+                  label="Valor (R$)"
+                  defaultValue={novoPacote.valor}
+                  onSave={(v) => setNovoPacote((d) => ({ ...d, valor: v }))}
+                  liveOnChange
+                />
+              </div>
+              <InlineField
+                label="Parcelas"
+                type="number"
+                defaultValue={novoPacote.parcelas}
+                onSave={(v) => setNovoPacote((d) => ({ ...d, parcelas: v }))}
+                liveOnChange
+              />
+              <div>
+                <label className="block text-slate-500 mb-0.5">Itens do pacote (um por linha)</label>
+                <textarea
+                  rows={3}
+                  value={novoPacote.itens}
+                  onChange={(e) => setNovoPacote((d) => ({ ...d, itens: e.target.value }))}
+                  placeholder={'Amor In Two\nEnsaio de 50%\nConvite + Mkt'}
+                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAdicionarPacote}
+                disabled={salvandoPacote || !novoPacote.nome.trim() || !novoPacote.valor.trim()}
+                className="text-[10px] font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded px-2.5 py-1.5 inline-flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Adicionar Pacote
+              </button>
+            </div>
+
+            {pacotes.length > 0 && (
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleGerarMensagem}
+                  disabled={gerandoMensagem}
+                  className="text-[11px] font-semibold text-white bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-60 rounded-lg px-3 py-2 inline-flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {gerandoMensagem ? 'Gerando...' : 'Gerar Mensagem de WhatsApp'}
+                </button>
+                {!sgeLink && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400/80">
+                    Essa turma ainda não está vinculada ao SGE — a mensagem sai sem o link de
+                    assinatura do contrato.
+                  </p>
+                )}
+                {mensagemGerada && (
+                  <div className="space-y-1.5">
+                    <textarea
+                      readOnly
+                      rows={10}
+                      value={mensagemGerada}
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopiarMensagem}
+                      className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 hover:underline inline-flex items-center gap-1"
+                    >
+                      {copiado ? (
+                        <>
+                          <Check className="w-3 h-3" /> Copiado!
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardCopy className="w-3 h-3" /> Copiar mensagem
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={onOpenFullForm}>
+            <Edit2 className="h-3.5 w-3.5 mr-1.5" />
+            Formulário Completo
+          </Button>
+          <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white" onClick={onClose}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {mostrarApresentacao && (
+      <ApresentacaoPacotesModal
+        lead={lead}
+        pacotes={pacotes}
+        sgeLink={sgeLink}
+        onClose={() => setMostrarApresentacao(false)}
+      />
+    )}
+    </>
+  )
+}
+
+/** Campo de texto que edita inline: clica, digita, sai do campo e já salva. */
+function InlineField({
+  label,
+  defaultValue,
+  onSave,
+  type = 'text',
+  placeholder,
+  liveOnChange,
+}: {
+  label: string
+  defaultValue: string
+  onSave: (value: string) => void
+  type?: string
+  placeholder?: string
+  liveOnChange?: boolean
+}) {
+  if (liveOnChange) {
+    return (
+      <div>
+        <label className="block text-slate-500 mb-0.5">{label}</label>
+        <input
+          type={type}
+          value={defaultValue}
+          onChange={(e) => onSave(e.target.value)}
+          placeholder={placeholder}
+          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-1 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500"
+        />
+      </div>
+    )
+  }
+  return (
+    <div>
+      <label className="block text-slate-500 mb-0.5">{label}</label>
+      <input
+        type={type}
+        defaultValue={defaultValue}
+        onBlur={(e) => e.target.value !== defaultValue && onSave(e.target.value)}
+        placeholder={placeholder}
+        className="w-full bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-orange-500 font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none px-0.5"
+      />
     </div>
   )
 }
