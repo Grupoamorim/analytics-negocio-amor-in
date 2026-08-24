@@ -3,6 +3,8 @@ import { Wallet, CheckCircle2, FileWarning, AlertTriangle, FileText } from 'luci
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { supabase } from '@/lib/supabase/client'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
+import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
 import { fetchAllRows } from '@/utils/fetchAllRows'
 
 interface TotaisNegocio {
@@ -76,6 +78,12 @@ export default function Financeiro() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'receber' | 'pagar' | 'fluxo'>('receber')
 
+  // Período (Mês/Trimestre/Semestre/Ano/Até Hoje/Personalizado) — sem isso as
+  // Contas a Pagar somavam tudo até 2031 (financiamentos e recorrências
+  // agendadas anos à frente), um número gigante e sem uso prático no dia a dia.
+  const periodoFiltro = usePeriodoFiltro('ano')
+  const { dtIni, dtFim } = periodoFiltro
+
   // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
 
@@ -116,26 +124,43 @@ export default function Financeiro() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [pagamentos, contasPagar])
 
-  const pagamentosFiltrados = useMemo(() => {
+  const dentroPeriodo = (d: string | null) => !!d && (!dtIni || d >= dtIni) && (!dtFim || d <= dtFim)
+
+  // Só o filtro de empresa (sem período) — usado no gráfico de Fluxo de Caixa,
+  // que já tem sua própria janela fixa dos últimos 12 meses e não deve ficar
+  // preso ao período escolhido acima pros KPIs/tabelas.
+  const pagamentosEmpresaFiltrados = useMemo(() => {
     if (selectedEmpresas.length === 0) return pagamentos
     return pagamentos.filter((p) => p.empresa && selectedEmpresas.includes(p.empresa))
   }, [pagamentos, selectedEmpresas])
 
-  const contasPagarFiltradas = useMemo(() => {
-    if (selectedEmpresas.length === 0) return contasPagar
-    return contasPagar.filter((c) => c.empresa && selectedEmpresas.includes(c.empresa))
-  }, [contasPagar, selectedEmpresas])
+  const pagamentosFiltrados = useMemo(() => {
+    return pagamentos.filter(
+      (p) =>
+        dentroPeriodo(p.data_vencimento) &&
+        (selectedEmpresas.length === 0 || (!!p.empresa && selectedEmpresas.includes(p.empresa))),
+    )
+  }, [pagamentos, selectedEmpresas, dtIni, dtFim])
 
-  // Totais recalculados no cliente com a mesma fórmula da view vw_totais_negocio,
-  // para que o filtro por empresa reflita exatamente a mesma lógica.
+  const contasPagarFiltradas = useMemo(() => {
+    return contasPagar.filter(
+      (c) =>
+        dentroPeriodo(c.data_vencimento) &&
+        (selectedEmpresas.length === 0 || (!!c.empresa && selectedEmpresas.includes(c.empresa))),
+    )
+  }, [contasPagar, selectedEmpresas, dtIni, dtFim])
+
+  // Totais recalculados no cliente, já dentro do período selecionado acima —
+  // "Recebido" conta o que entrou de caixa (data de pagamento) dentro do
+  // período, independente de quando a parcela venceu originalmente; os
+  // demais contam pelo vencimento (o que estava agendado/vencido nesse
+  // período, pago ou não).
   const totais: TotaisNegocio = useMemo(() => {
     let total_faturado = 0
-    let total_recebido = 0
     let total_a_receber = 0
     let total_inadimplente = 0
     for (const p of pagamentosFiltrados) {
       total_faturado += Number(p.valor || 0)
-      total_recebido += Number(p.valor_pago || 0)
       if (p.status === 'pendente' || p.status === 'atrasado') {
         total_a_receber += Number(p.valor || 0) - Number(p.valor_pago || 0)
       }
@@ -143,9 +168,15 @@ export default function Financeiro() {
         total_inadimplente += Number(p.valor || 0) - Number(p.valor_pago || 0)
       }
     }
+    let total_recebido = 0
+    for (const p of pagamentos) {
+      if (p.status !== 'pago' || !dentroPeriodo(p.data_pagamento)) continue
+      if (selectedEmpresas.length > 0 && !(p.empresa && selectedEmpresas.includes(p.empresa))) continue
+      total_recebido += Number(p.valor_pago || 0)
+    }
     const total_custos = contasPagarFiltradas.reduce((acc, c) => acc + Number(c.valor || 0), 0)
     return { total_faturado, total_recebido, total_a_receber, total_inadimplente, total_custos }
-  }, [pagamentosFiltrados, contasPagarFiltradas])
+  }, [pagamentos, pagamentosFiltrados, contasPagarFiltradas, selectedEmpresas, dtIni, dtFim])
 
   // "Recebido" conta pelo mês em que o dinheiro realmente entrou (data de
   // pagamento) — não pelo mês de vencimento original da parcela, senão uma
@@ -154,7 +185,7 @@ export default function Financeiro() {
   // cada mês, pago ou não.
   const fluxoCaixa = useMemo(() => {
     const porMes: Record<string, { mes: string; recebido: number; previsto: number }> = {}
-    for (const p of pagamentosFiltrados) {
+    for (const p of pagamentosEmpresaFiltrados) {
       if (p.data_vencimento) {
         const mesVenc = p.data_vencimento.slice(0, 7)
         if (!porMes[mesVenc]) porMes[mesVenc] = { mes: mesVenc, recebido: 0, previsto: 0 }
@@ -169,7 +200,7 @@ export default function Financeiro() {
     return Object.values(porMes)
       .sort((a, b) => a.mes.localeCompare(b.mes))
       .slice(-12)
-  }, [pagamentosFiltrados])
+  }, [pagamentosEmpresaFiltrados])
 
   return (
     <div className="space-y-6">
@@ -192,6 +223,12 @@ export default function Financeiro() {
           filtro.
         </p>
       )}
+
+      <PeriodoFiltroBar {...periodoFiltro} />
+      <p className="text-[11px] text-slate-500 -mt-3">
+        Total Faturado, A Receber, Inadimplência e Contas a Pagar contam pelo vencimento dentro
+        do período acima. Recebido conta pela data em que o dinheiro realmente entrou.
+      </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard label="Total Faturado" value={brl(totais?.total_faturado)} icon={FileText} tone="orange" />

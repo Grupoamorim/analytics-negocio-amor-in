@@ -15,6 +15,8 @@ import {
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
+import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
 import { fetchAllRows } from '@/utils/fetchAllRows'
 
 interface TurmaResumo {
@@ -110,100 +112,13 @@ function brl(v: number): string {
 
 const CHART_COLORS = ['#F97316', '#EA580C', '#FB923C', '#FDBA74', '#10B981', '#64748B']
 
-type Periodo = 'mes' | 'trimestre' | 'semestre' | 'ano' | 'ate_hoje' | 'personalizado'
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0')
-}
-
-function toISO(d: Date): string {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-}
-
-const NOMES_MES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-]
-
-/** Calcula De/Até para um período pré-definido, com ano/trimestre/semestre/mês
- * escolhidos explicitamente pelo usuário (não fica preso ao período atual —
- * dá pra navegar entre trimestres/semestres/anos passados). */
-function calcularPeriodo(
-  periodo: Periodo,
-  ano: number,
-  trimestre: 1 | 2 | 3 | 4,
-  semestre: 1 | 2,
-  mes: number,
-): { ini: string; fim: string } {
-  if (periodo === 'mes') {
-    return { ini: toISO(new Date(ano, mes - 1, 1)), fim: toISO(new Date(ano, mes, 0)) }
-  }
-  if (periodo === 'trimestre') {
-    const inicioTri = (trimestre - 1) * 3
-    return { ini: toISO(new Date(ano, inicioTri, 1)), fim: toISO(new Date(ano, inicioTri + 3, 0)) }
-  }
-  if (periodo === 'semestre') {
-    const inicioSem = semestre === 1 ? 0 : 6
-    return { ini: toISO(new Date(ano, inicioSem, 1)), fim: toISO(new Date(ano, inicioSem + 6, 0)) }
-  }
-  if (periodo === 'ate_hoje') {
-    // Do dia 1º de janeiro do ano escolhido até hoje — nunca inclui meses
-    // futuros que ainda não aconteceram (diferente de "Ano", que vai até 31/12).
-    const hoje = new Date()
-    const fimAno = new Date(ano, 11, 31)
-    const fim = fimAno < hoje ? fimAno : hoje
-    return { ini: toISO(new Date(ano, 0, 1)), fim: toISO(fim) }
-  }
-  // 'ano'
-  return { ini: toISO(new Date(ano, 0, 1)), fim: toISO(new Date(ano, 11, 31)) }
-}
-
 export default function DRE() {
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([])
   const [contasPagar, setContasPagar] = useState<ContaPagar[]>([])
   const [loading, setLoading] = useState(true)
-  const hoje = new Date()
-  const anoAtual = hoje.getFullYear()
-  const [periodo, setPeriodo] = useState<Periodo>('ano')
-  const [anoRef, setAnoRef] = useState(anoAtual)
-  const [trimestreRef, setTrimestreRef] = useState<1 | 2 | 3 | 4>(
-    ((Math.floor(hoje.getMonth() / 3) + 1) as 1 | 2 | 3 | 4),
-  )
-  const [semestreRef, setSemestreRef] = useState<1 | 2>(hoje.getMonth() < 6 ? 1 : 2)
-  const [mesRef, setMesRef] = useState(hoje.getMonth() + 1)
 
-  const anoInicial = calcularPeriodo('ano', anoAtual, 1, 1, 1)
-  const [dtIni, setDtIni] = useState(anoInicial.ini)
-  const [dtFim, setDtFim] = useState(anoInicial.fim)
-
-  // No modo Personalizado as datas digitadas ficam num rascunho separado —
-  // só valem de verdade (recalculam o DRE) quando o usuário clica em
-  // "Filtrar", pra ficar claro que o filtro foi aplicado.
-  const [dtIniInput, setDtIniInput] = useState(anoInicial.ini)
-  const [dtFimInput, setDtFimInput] = useState(anoInicial.fim)
-  const [filtroAplicado, setFiltroAplicado] = useState(false)
-
-  function aplicarFiltroPersonalizado() {
-    setDtIni(dtIniInput)
-    setDtFim(dtFimInput)
-    setFiltroAplicado(true)
-  }
-
-  // Recalcula De/Até sempre que o período (ou o ano/trimestre/semestre/mês de
-  // referência) muda — exceto no modo Personalizado, onde o usuário edita as
-  // datas e confirma com o botão Filtrar.
-  useEffect(() => {
-    if (periodo === 'personalizado') return
-    const { ini, fim } = calcularPeriodo(periodo, anoRef, trimestreRef, semestreRef, mesRef)
-    setDtIni(ini)
-    setDtFim(fim)
-  }, [periodo, anoRef, trimestreRef, semestreRef, mesRef])
-
-  const anosDisponiveis = useMemo(() => {
-    const lista: number[] = []
-    for (let a = anoAtual + 1; a >= anoAtual - 5; a--) lista.push(a)
-    return lista
-  }, [anoAtual])
+  const periodoFiltro = usePeriodoFiltro('ano')
+  const { dtIni, dtFim } = periodoFiltro
 
   // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
@@ -213,16 +128,6 @@ export default function DRE() {
     contasPagar.forEach((c) => c.turmas?.empresa && set.add(c.turmas.empresa))
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [pagamentos, contasPagar])
-
-  function selecionarPeriodo(p: Periodo) {
-    setPeriodo(p)
-    if (p === 'personalizado') {
-      // Começa o rascunho com o período atualmente aplicado.
-      setDtIniInput(dtIni)
-      setDtFimInput(dtFim)
-      setFiltroAplicado(false)
-    }
-  }
 
   // Linha do DRE expandida no momento (mostra o detalhamento por turma/fornecedor).
   const [linhaAberta, setLinhaAberta] = useState<string | null>(null)
@@ -435,149 +340,7 @@ export default function DRE() {
         </p>
       )}
 
-      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-4 space-y-3">
-        {/* Linha 1: tipo de período */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {(
-            [
-              ['mes', 'Mês'],
-              ['trimestre', 'Trimestre'],
-              ['semestre', 'Semestre'],
-              ['ano', 'Ano'],
-              ['ate_hoje', 'Até Hoje'],
-              ['personalizado', 'Personalizado'],
-            ] as [Periodo, string][]
-          ).map(([p, label]) => (
-            <button
-              key={p}
-              onClick={() => selecionarPeriodo(p)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
-                periodo === p
-                  ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
-                  : 'text-slate-400 border-white/[0.08] hover:text-white hover:bg-white/[0.05]'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Linha 2: seletor de ano + sub-período (trimestre/semestre/mês específico) */}
-        {periodo !== 'personalizado' && (
-          <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-white/[0.06]">
-            <label className="text-xs text-slate-500 flex items-center gap-1.5">
-              Ano
-              <select
-                value={anoRef}
-                onChange={(e) => setAnoRef(Number(e.target.value))}
-                className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-xs font-medium"
-              >
-                {anosDisponiveis.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {periodo === 'trimestre' && (
-              <div className="inline-flex rounded-lg bg-white/[0.03] p-1 border border-white/[0.06]">
-                {([1, 2, 3, 4] as const).map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => setTrimestreRef(q)}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                      trimestreRef === q
-                        ? 'bg-orange-500 text-white'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Q{q}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {periodo === 'semestre' && (
-              <div className="inline-flex rounded-lg bg-white/[0.03] p-1 border border-white/[0.06]">
-                {([1, 2] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSemestreRef(s)}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                      semestreRef === s
-                        ? 'bg-orange-500 text-white'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {s}º Semestre
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {periodo === 'mes' && (
-              <select
-                value={mesRef}
-                onChange={(e) => setMesRef(Number(e.target.value))}
-                className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-xs font-medium"
-              >
-                {NOMES_MES.map((nome, idx) => (
-                  <option key={nome} value={idx + 1}>
-                    {nome}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <span className="text-xs text-slate-500 ml-auto">
-              {new Date(`${dtIni}T00:00:00`).toLocaleDateString('pt-BR')} até{' '}
-              {new Date(`${dtFim}T00:00:00`).toLocaleDateString('pt-BR')}
-            </span>
-          </div>
-        )}
-
-        {periodo === 'personalizado' && (
-          <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-white/[0.06]">
-            <label className="text-xs text-slate-400">
-              De{' '}
-              <input
-                type="date"
-                value={dtIniInput}
-                onChange={(e) => {
-                  setDtIniInput(e.target.value)
-                  setFiltroAplicado(false)
-                }}
-                className="ml-1 bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-sm"
-              />
-            </label>
-            <label className="text-xs text-slate-400">
-              Até{' '}
-              <input
-                type="date"
-                value={dtFimInput}
-                onChange={(e) => {
-                  setDtFimInput(e.target.value)
-                  setFiltroAplicado(false)
-                }}
-                className="ml-1 bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-sm"
-              />
-            </label>
-            <button
-              onClick={aplicarFiltroPersonalizado}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white hover:bg-orange-600 transition-colors"
-            >
-              Filtrar
-            </button>
-            {filtroAplicado && (
-              <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                ✓ Filtro aplicado — {new Date(`${dtIni}T00:00:00`).toLocaleDateString('pt-BR')} até{' '}
-                {new Date(`${dtFim}T00:00:00`).toLocaleDateString('pt-BR')}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      <PeriodoFiltroBar {...periodoFiltro} />
 
       {loading ? (
         <div className="p-8 text-center text-slate-400 text-sm">Carregando...</div>
