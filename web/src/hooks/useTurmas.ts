@@ -50,8 +50,18 @@ function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | n
 }
 
 function mapLeadToInsert(lead: Partial<Lead>, userId: string): TurmaInsert {
+  // `codigo` e `nome` são colunas legadas (NOT NULL + `codigo` UNIQUE) que já
+  // não são lidas de volta em mapRowToLead, mas sem preenchê-las todo INSERT
+  // falha por violação de constraint e a turma cai silenciosamente no
+  // fallback local (nunca é salva de verdade no Supabase).
+  const nomeCompleto =
+    [lead.curso, lead.faculdade, lead.turma].filter(Boolean).join(' ').trim() || 'Turma sem nome'
+  const codigoUnico = `turma-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
   const payload: TurmaInsert = {
     user_id: userId,
+    codigo: codigoUnico,
+    nome: nomeCompleto,
     empresa: lead.empresa || 'AFF',
     curso: lead.curso || '',
     faculdade: lead.faculdade || '',

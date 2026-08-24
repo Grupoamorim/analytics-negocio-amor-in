@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
   Search,
   Plus,
@@ -20,6 +20,8 @@ import {
   Phone,
   CheckCircle2,
   Users,
+  Copy,
+  GripVertical,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import { Lead, LeadStatus, LeadSource, getTurmaDisplayName, getFullTurmaName } from '@/types/crm'
@@ -43,6 +45,7 @@ import ImportCsvModal from '@/components/ImportCsvModal'
 import { ColumnHeaderWithFilter, ColumnFilterKey } from '@/components/ColumnHeaderWithFilter'
 import { downloadTemplateCsv } from '@/utils/csvImporter'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -103,6 +106,19 @@ const EMPRESAS = ['AFF', 'AIF', 'AIM']
 const SERVICOS = ['Formatura', 'Ensaio', 'Baile de Gala', 'Colação', 'Outro']
 const CANAIS = ['Passiva', 'Ativa', 'Time comercial', 'Indicação', 'Instagram', 'Outro']
 
+// Cor por empresa/marca — antes todas ficavam no mesmo cinza neutro e o nome
+// praticamente sumia na tabela. Cada marca ganha uma cor própria e consistente.
+const EMPRESA_CORES: Record<string, string> = {
+  AIF: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30',
+  AFF: 'bg-amber-400/15 text-amber-600 dark:text-amber-400 border-amber-400/30',
+  'AIF-SSA': 'bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/30',
+  'AIF-V': 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/30',
+  AIM: 'bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/30',
+  SFF: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+}
+const EMPRESA_COR_PADRAO =
+  'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+
 export interface SavedFilter {
   id: string
   name: string
@@ -117,6 +133,12 @@ export interface SavedFilter {
 
 const SAVED_FILTERS_KEY = 'turmas_saved_filters'
 const PAGE_SIZE_KEY = 'turmas_page_size'
+const TURMA_COL_WIDTH_KEY = 'turmas_col_width_curso'
+// Soma fixa das larguras das outras 12 colunas da tabela de turmas
+// (checkbox 40 + empresa 90 + faculdade 140 + cidade 110 + ano 100 +
+// serviço 110 + origem 110 + funil 110 + sge 90 + alunos 80 + obs 160 + ações 90).
+const OTHER_COLS_WIDTH_SUM = 40 + 90 + 140 + 110 + 100 + 110 + 110 + 110 + 90 + 80 + 160 + 90
+const MANUAL_ORDER_KEY = 'turmas_manual_order'
 
 export default function LeadsPage() {
   const { leads, deals, members, addLead, updateLead, deleteLead, updateDeal } = useCRM()
@@ -137,6 +159,54 @@ export default function LeadsPage() {
   // Ordenação
   const [sortField, setSortField] = useState<string>('faculdade')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+
+  // Largura ajustável da coluna "Turma / Curso" — arraste a borda direita do
+  // cabeçalho pra ver o nome completo sem quebra, ou encolher pra compactar.
+  const [turmaColWidth, setTurmaColWidth] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(TURMA_COL_WIDTH_KEY)
+      const n = stored ? Number(stored) : NaN
+      return !isNaN(n) && n >= 140 && n <= 640 ? n : 260
+    } catch {
+      return 260
+    }
+  })
+  // Ref sincronizada de forma síncrona a cada movimento (não via useEffect)
+  // porque handleResizeEnd precisa do valor mais recente no exato momento do
+  // mouseup, sem depender do React ter tido chance de rodar o efeito antes.
+  const turmaColWidthRef = useRef(turmaColWidth)
+  const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  const handleResizeMove = (e: MouseEvent) => {
+    if (!resizeStateRef.current) return
+    const delta = e.clientX - resizeStateRef.current.startX
+    const next = Math.min(640, Math.max(140, resizeStateRef.current.startWidth + delta))
+    turmaColWidthRef.current = next
+    setTurmaColWidth(next)
+  }
+  const handleResizeEnd = () => {
+    resizeStateRef.current = null
+    window.removeEventListener('mousemove', handleResizeMove)
+    window.removeEventListener('mouseup', handleResizeEnd)
+    try {
+      localStorage.setItem(TURMA_COL_WIDTH_KEY, String(turmaColWidthRef.current))
+    } catch {
+      // ignora
+    }
+  }
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    resizeStateRef.current = { startX: e.clientX, startWidth: turmaColWidth }
+    window.addEventListener('mousemove', handleResizeMove)
+    window.addEventListener('mouseup', handleResizeEnd)
+  }
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('mousemove', handleResizeMove)
+      window.removeEventListener('mouseup', handleResizeEnd)
+    }
+  }, [])
 
   // Column Filters State (Excel / Notion style)
   const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnFilterKey, string[]>>>({})
@@ -397,6 +467,7 @@ export default function LeadsPage() {
 
   // Opções de ordenação disponíveis para a tabela de turmas
   const SORT_OPTIONS = [
+    { value: 'manual', label: 'Manual (arrastar) ✋' },
     { value: 'curso', label: 'Curso (A-Z)' },
     { value: 'empresa', label: 'Empresa' },
     { value: 'faculdade', label: 'Faculdade + Ano Formatura' },
@@ -408,8 +479,32 @@ export default function LeadsPage() {
     { value: 'potentialValue', label: 'Valor Potencial' },
   ]
 
+  // Ordem manual (arrastar e soltar) — guarda a sequência de IDs escolhida
+  // pelo Lucas, persistida no navegador. Turmas ainda não posicionadas
+  // manualmente ficam no fim, na ordem natural.
+  const [manualOrder, setManualOrder] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(MANUAL_ORDER_KEY)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(manualOrder))
+    } catch {
+      // ignora
+    }
+  }, [manualOrder])
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+
   const extractSortValue = (lead: Lead, field: string): unknown => {
     switch (field) {
+      case 'manual': {
+        const idx = manualOrder.indexOf(lead.id)
+        return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
+      }
       case 'alunosFechados':
         return lead.alunosFechados || 0
       case 'potentialValue':
@@ -426,8 +521,101 @@ export default function LeadsPage() {
   // Sorted list (aplicada sobre os resultados já filtrados)
   const sortedLeads = useMemo(
     () => sortByField(filteredLeads, sortField, sortDirection, extractSortValue),
-    [filteredLeads, sortField, sortDirection],
+    [filteredLeads, sortField, sortDirection, manualOrder],
   )
+
+  // Ao entrar no modo manual pela primeira vez, congela a ordem atualmente
+  // exibida como ponto de partida pra arrastar.
+  const handleSortFieldChange = (field: string) => {
+    if (field === 'manual' && manualOrder.length === 0) {
+      setManualOrder(sortedLeads.map((l) => l.id))
+    }
+    setSortField(field)
+  }
+
+  const handleDragStartRow = (id: string) => setDraggedId(id)
+  const handleDropOnRow = (targetId: string) => {
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null)
+      return
+    }
+    setManualOrder((prev) => {
+      const base = prev.length > 0 ? prev : sortedLeads.map((l) => l.id)
+      const next = base.filter((id) => id !== draggedId)
+      const targetIdx = next.indexOf(targetId)
+      next.splice(targetIdx === -1 ? next.length : targetIdx, 0, draggedId)
+      return next
+    })
+    setDraggedId(null)
+  }
+
+  // Seleção de turmas (checkboxes) — usada para duplicar em lote
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const toggleSelectAllVisible = () => {
+    setSelectedIds((prev) => {
+      const allSelected = paginatedLeads.length > 0 && paginatedLeads.every((l) => prev.has(l.id))
+      const next = new Set(prev)
+      paginatedLeads.forEach((l) => (allSelected ? next.delete(l.id) : next.add(l.id)))
+      return next
+    })
+  }
+
+  function proximaTurmaPara(base: Lead): string {
+    const nums = leads
+      .filter((l) => l.curso === base.curso && l.faculdade === base.faculdade && l.cidade === base.cidade)
+      .map((l) => parseInt((l.turma || '').replace(/\D/g, ''), 10))
+      .filter((n) => !isNaN(n))
+    const max = nums.length ? Math.max(...nums) : 0
+    return `Turma ${max + 1}`
+  }
+
+  const handleDuplicateSelected = async () => {
+    const toDuplicate = leads.filter((l) => selectedIds.has(l.id))
+    if (toDuplicate.length === 0) return
+    for (const l of toDuplicate) {
+      await addLead({
+        curso: l.curso,
+        faculdade: l.faculdade,
+        turma: proximaTurmaPara(l),
+        anoFormatura: l.anoFormatura,
+        cidade: l.cidade,
+        status: 'Novo',
+        source: l.source,
+        potentialValue: l.potentialValue,
+        ownerId: l.ownerId || members[0]?.id || '',
+        empresa: l.empresa,
+        tipoServico: l.tipoServico,
+        comoConheceu: l.comoConheceu,
+        closer: '',
+        concorrentes: '',
+        observacoes: '',
+        notes: '',
+        sdr: '',
+        primeiroContatoEm: '',
+        dataCadastro: '',
+        dataFechamento: '',
+        linkProposta: '',
+        contatoNome: '',
+        contatoTelefone: '',
+        alunosFechados: 0,
+        createdAt: new Date().toISOString(),
+        totalAlunos: 0,
+      })
+    }
+    toast({
+      title: `${toDuplicate.length} turma(s) duplicada(s)`,
+      description: 'As cópias entraram como "Novo" — edite o que precisar em cada uma.',
+    })
+    setSelectedIds(new Set())
+  }
 
   // Reset page when filters change
   useEffect(() => {
@@ -888,6 +1076,17 @@ export default function LeadsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleDuplicateSelected}
+              className="gap-2 border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/50"
+            >
+              <Copy className="h-4 w-4" />
+              Duplicar {selectedIds.size} Selecionada{selectedIds.size > 1 ? 's' : ''}
+            </Button>
+          )}
+
           {/* Botão Sincronizar SGE */}
           <Button
             variant="outline"
@@ -1069,7 +1268,7 @@ export default function LeadsPage() {
                 options={SORT_OPTIONS}
                 field={sortField}
                 direction={sortDirection}
-                onFieldChange={setSortField}
+                onFieldChange={handleSortFieldChange}
                 onDirectionToggle={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
               />
 
@@ -1255,6 +1454,22 @@ export default function LeadsPage() {
                   {activeColFiltersCount} filtro(s) de coluna ativo(s)
                 </Badge>
               )}
+              {sortField === 'manual' && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 gap-1"
+                >
+                  <GripVertical className="h-3 w-3" /> Arraste as linhas pra reordenar
+                </Badge>
+              )}
+              {selectedIds.size > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] bg-orange-50 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800"
+                >
+                  {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+                </Badge>
+              )}
             </span>
             {hasAnyActiveFilter && (
               <Button
@@ -1273,10 +1488,35 @@ export default function LeadsPage() {
       {/* Tabela de Turmas */}
       <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table
+            className="text-left text-sm"
+            style={{ tableLayout: 'fixed', width: OTHER_COLS_WIDTH_SUM + turmaColWidth }}
+          >
+            <colgroup>
+              <col style={{ width: 40 }} />
+              <col style={{ width: turmaColWidth }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: 140 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 90 }} />
+            </colgroup>
             <thead className="bg-slate-50 dark:bg-slate-950/70 border-b border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase tracking-wider">
               <tr>
-                <th className="py-3 px-4">
+                <th className="py-3 pl-4 pr-2">
+                  <Checkbox
+                    checked={paginatedLeads.length > 0 && paginatedLeads.every((l) => selectedIds.has(l.id))}
+                    onCheckedChange={() => toggleSelectAllVisible()}
+                    aria-label="Selecionar todas as turmas visíveis"
+                  />
+                </th>
+                <th className="py-3 px-4 relative overflow-hidden">
                   <ColumnHeaderWithFilter
                     colKey="curso"
                     title="Turma / Curso"
@@ -1290,6 +1530,11 @@ export default function LeadsPage() {
                       setSortDirection(dir)
                     }}
                     isSorted={sortField === 'curso' ? sortDirection : false}
+                  />
+                  <div
+                    onMouseDown={handleResizeStart}
+                    title="Arraste para redimensionar a coluna"
+                    className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-orange-500/40 active:bg-orange-500/60"
                   />
                 </th>
                 <th className="py-3 px-3">
@@ -1383,7 +1628,7 @@ export default function LeadsPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {paginatedLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-slate-500">
+                  <td colSpan={13} className="py-12 text-center text-slate-500">
                     Nenhuma turma encontrada para os critérios selecionados.
                   </td>
                 </tr>
@@ -1391,17 +1636,46 @@ export default function LeadsPage() {
                 paginatedLeads.map((lead) => {
                   const statusInfo = STATUS_CONFIG[lead.status] || STATUS_CONFIG.Novo
                   const sgeLink = sgeLinks.find((lnk) => lnk.leadId === lead.id)
+                  const isManualMode = sortField === 'manual'
 
                   return (
                     <tr
                       key={lead.id}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group cursor-pointer"
+                      className={cn(
+                        'hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group cursor-pointer',
+                        draggedId === lead.id && 'opacity-40',
+                      )}
                       onClick={() => setSelectedLead(lead)}
+                      draggable={isManualMode}
+                      onDragStart={(e) => {
+                        e.stopPropagation()
+                        handleDragStartRow(lead.id)
+                      }}
+                      onDragOver={(e) => isManualMode && e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleDropOnRow(lead.id)
+                      }}
                     >
+                      {/* Seleção + arrastar */}
+                      <td className="py-3.5 pl-4 pr-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5">
+                          {isManualMode && (
+                            <GripVertical className="h-4 w-4 text-slate-400 cursor-grab active:cursor-grabbing shrink-0" />
+                          )}
+                          <Checkbox
+                            checked={selectedIds.has(lead.id)}
+                            onCheckedChange={() => toggleSelectOne(lead.id)}
+                            aria-label={`Selecionar ${getFullTurmaName(lead)}`}
+                          />
+                        </div>
+                      </td>
+
                       {/* Turma / Curso */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 overflow-hidden">
                         <div
-                          className="font-semibold text-slate-900 dark:text-slate-100"
+                          className="font-semibold text-slate-900 dark:text-slate-100 overflow-hidden text-ellipsis whitespace-nowrap"
                           title={getFullTurmaName(lead)}
                         >
                           {getFullTurmaName(lead)}
@@ -1419,14 +1693,20 @@ export default function LeadsPage() {
                       <td className="py-3.5 px-3">
                         <Badge
                           variant="outline"
-                          className="font-bold text-xs bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                          className={cn(
+                            'font-bold text-xs',
+                            EMPRESA_CORES[lead.empresa || 'AFF'] || EMPRESA_COR_PADRAO,
+                          )}
                         >
                           {lead.empresa || 'AFF'}
                         </Badge>
                       </td>
 
                       {/* Faculdade */}
-                      <td className="py-3.5 px-3 font-medium text-slate-800 dark:text-slate-200">
+                      <td
+                        className="py-3.5 px-3 font-medium text-slate-800 dark:text-slate-200 overflow-hidden text-ellipsis whitespace-nowrap"
+                        title={lead.faculdade}
+                      >
                         {lead.faculdade}
                       </td>
 
