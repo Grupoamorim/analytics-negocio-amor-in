@@ -18,7 +18,6 @@ import Leads from '@/pages/Leads'
 import Probability from '@/pages/Probability'
 import Transcripts from '@/pages/Transcripts'
 import Notes from '@/pages/Notes'
-import Settings from '@/pages/Settings'
 import NotFound from '@/pages/NotFound'
 import Captacao from '@/pages/Captacao'
 import CaptacaoForm from '@/pages/CaptacaoForm'
@@ -101,7 +100,7 @@ const App = () => (
             <Route path="/financeiro" element={<Financeiro />} />
             <Route path="/dre" element={<DRE />} />
             <Route path="/projecoes" element={<Projecoes />} />
-            <Route path="/configuracoes" element={<Settings />} />
+            <Route path="/configuracoes" element={<Navigate to="/admin" replace />} />
             <Route
               path="/admin"
               element={

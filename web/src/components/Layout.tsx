@@ -7,7 +7,6 @@ import {
   BrainCircuit,
   FileText,
   StickyNote,
-  Settings,
   Menu,
   X,
   QrCode,
@@ -76,10 +75,6 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
       { path: '/dre', label: 'DRE', icon: TrendingUp },
       { path: '/projecoes', label: 'Projeções', icon: Rocket },
     ],
-  },
-  {
-    section: null,
-    items: [{ path: '/configuracoes', label: 'Configurações', icon: Settings }],
   },
 ]
 
