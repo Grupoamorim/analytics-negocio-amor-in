@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   X,
   GraduationCap,
@@ -26,6 +26,10 @@ import {
   Users,
   Target,
   LinkIcon,
+  Package,
+  Sparkles,
+  ClipboardCopy,
+  Check,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import {
@@ -49,6 +53,13 @@ import LastEditedBy from '@/components/LastEditedBy'
 import { getSGELinkForLead } from '@/utils/sgeIntegration'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import {
+  PacoteTurma,
+  listarPacotes,
+  adicionarPacote,
+  removerPacote,
+  gerarMensagemPacotes,
+} from '@/utils/pacotesTurma'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
 
@@ -850,6 +861,69 @@ function DealDetailModal({
     }
   }
 
+  // Pacotes de fotografia da turma + geração de mensagem de WhatsApp
+  const [pacotes, setPacotes] = useState<PacoteTurma[]>([])
+  const [loadingPacotes, setLoadingPacotes] = useState(true)
+  const [novoPacote, setNovoPacote] = useState({ nome: '', valor: '', parcelas: '', itens: '' })
+  const [salvandoPacote, setSalvandoPacote] = useState(false)
+  const [mensagemGerada, setMensagemGerada] = useState<string | null>(null)
+  const [gerandoMensagem, setGerandoMensagem] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+
+  useEffect(() => {
+    if (!lead) return
+    listarPacotes(lead.id).then((p) => {
+      setPacotes(p)
+      setLoadingPacotes(false)
+    })
+  }, [lead?.id])
+
+  const handleAdicionarPacote = async () => {
+    if (!lead || !novoPacote.nome.trim() || !novoPacote.valor.trim()) return
+    setSalvandoPacote(true)
+    try {
+      const criado = await adicionarPacote(lead.id, {
+        nome: novoPacote.nome.trim(),
+        valor: Number(novoPacote.valor.replace(',', '.')) || 0,
+        parcelas: Number(novoPacote.parcelas) || 1,
+        itens: novoPacote.itens
+          .split('\n')
+          .map((i) => i.trim())
+          .filter(Boolean),
+        ordem: pacotes.length,
+      })
+      setPacotes((prev) => [...prev, criado])
+      setNovoPacote({ nome: '', valor: '', parcelas: '', itens: '' })
+      setMensagemGerada(null)
+    } finally {
+      setSalvandoPacote(false)
+    }
+  }
+
+  const handleRemoverPacote = async (id: string) => {
+    await removerPacote(id)
+    setPacotes((prev) => prev.filter((p) => p.id !== id))
+    setMensagemGerada(null)
+  }
+
+  const handleGerarMensagem = async () => {
+    if (!lead || pacotes.length === 0) return
+    setGerandoMensagem(true)
+    try {
+      const texto = await gerarMensagemPacotes(lead, pacotes, sgeLink)
+      setMensagemGerada(texto)
+    } finally {
+      setGerandoMensagem(false)
+    }
+  }
+
+  const handleCopiarMensagem = () => {
+    if (!mensagemGerada) return
+    navigator.clipboard.writeText(mensagemGerada)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
   // Checklist de TODOS os estágios.
   const itemsByStage = useMemo(() => {
     const map = new Map<string, typeof DEFAULT_CHECKLIST_ITEMS>()
@@ -1136,6 +1210,140 @@ function DealDetailModal({
                   />
                 </label>
               </div>
+            </div>
+          )}
+
+          {/* Pacotes de Fotografia + Mensagem de WhatsApp */}
+          {lead && (
+            <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-3">
+              <div className="flex items-center gap-2 font-semibold text-slate-200">
+                <Package className="w-3.5 h-3.5 text-orange-400" /> Pacotes da Turma
+              </div>
+
+              {loadingPacotes ? (
+                <p className="text-slate-500">Carregando pacotes...</p>
+              ) : (
+                <div className="space-y-2">
+                  {pacotes.length === 0 && (
+                    <p className="text-slate-500">Nenhum pacote cadastrado ainda para essa turma.</p>
+                  )}
+                  {pacotes.map((p) => (
+                    <div
+                      key={p.id}
+                      className="p-2.5 rounded-lg bg-[#111820] border border-white/[0.06] flex items-start justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-semibold text-white">
+                          {p.nome} — R$ {p.valor.toLocaleString('pt-BR')} em {p.parcelas}x
+                        </div>
+                        {p.itens.length > 0 && (
+                          <ul className="text-[11px] text-slate-400 mt-1 space-y-0.5">
+                            {p.itens.map((item, i) => (
+                              <li key={i}>• {item}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoverPacote(p.id)}
+                        className="text-slate-500 hover:text-red-400 flex-shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Novo pacote */}
+              <div className="p-2.5 rounded-lg bg-[#111820] border border-dashed border-white/10 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <MiniField
+                    label="Nome do pacote"
+                    value={novoPacote.nome}
+                    onChange={(v) => setNovoPacote((d) => ({ ...d, nome: v }))}
+                  />
+                  <MiniField
+                    label="Valor (R$)"
+                    type="text"
+                    value={novoPacote.valor}
+                    onChange={(v) => setNovoPacote((d) => ({ ...d, valor: v }))}
+                  />
+                  <MiniField
+                    label="Parcelas"
+                    type="number"
+                    value={novoPacote.parcelas}
+                    onChange={(v) => setNovoPacote((d) => ({ ...d, parcelas: v }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] text-slate-500 mb-0.5 uppercase tracking-wide">
+                    Itens do pacote (um por linha)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={novoPacote.itens}
+                    onChange={(e) => setNovoPacote((d) => ({ ...d, itens: e.target.value }))}
+                    placeholder={'Amor In Two\nEnsaio de 50%\nConvite + Mkt'}
+                    className="w-full bg-[#0a0f14] border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAdicionarPacote}
+                  disabled={salvandoPacote || !novoPacote.nome.trim() || !novoPacote.valor.trim()}
+                  className="text-[10px] font-semibold text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded px-2.5 py-1.5 inline-flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Adicionar Pacote
+                </button>
+              </div>
+
+              {/* Gerar mensagem */}
+              {pacotes.length > 0 && (
+                <div className="pt-2 border-t border-white/[0.04] space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleGerarMensagem}
+                    disabled={gerandoMensagem}
+                    className="text-[11px] font-semibold text-white bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-60 rounded-lg px-3 py-2 inline-flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {gerandoMensagem ? 'Gerando...' : 'Gerar Mensagem de WhatsApp'}
+                  </button>
+                  {!sgeLink && (
+                    <p className="text-[10px] text-amber-400/80">
+                      Essa turma ainda não está vinculada ao SGE — a mensagem sai sem o link de
+                      assinatura do contrato.
+                    </p>
+                  )}
+                  {mensagemGerada && (
+                    <div className="space-y-1.5">
+                      <textarea
+                        readOnly
+                        rows={10}
+                        value={mensagemGerada}
+                        className="w-full bg-[#111820] border border-white/10 rounded-lg p-2.5 text-[11px] text-slate-200 leading-relaxed focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCopiarMensagem}
+                        className="text-[10px] font-semibold text-orange-300 hover:text-orange-200 inline-flex items-center gap-1"
+                      >
+                        {copiado ? (
+                          <>
+                            <Check className="w-3 h-3" /> Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <ClipboardCopy className="w-3 h-3" /> Copiar mensagem
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

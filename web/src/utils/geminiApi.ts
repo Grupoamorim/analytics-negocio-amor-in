@@ -90,7 +90,11 @@ export interface GeminiTranscriptAnalysis {
 interface GeminiRequestBody {
   contents: { role?: string; parts: { text: string }[] }[]
   systemInstruction?: { parts: { text: string }[] }
-  generationConfig: { temperature: number; maxOutputTokens: number }
+  generationConfig: {
+    temperature: number
+    maxOutputTokens: number
+    thinkingConfig?: { thinkingBudget: number }
+  }
 }
 
 /** Chamada de baixo nível ao endpoint generateContent do Gemini. */
@@ -131,6 +135,9 @@ async function postGemini(body: GeminiRequestBody, apiKey?: string, model?: stri
   if (!candidate) {
     throw new Error('Nenhuma resposta retornada pelo Gemini.')
   }
+  if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+    console.warn('Resposta do Gemini pode ter saído cortada (finishReason=MAX_TOKENS).')
+  }
 
   return candidate
 }
@@ -142,7 +149,11 @@ export async function callGemini(prompt: string, apiKey?: string, model?: string
   return postGemini(
     {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+      // thinkingBudget: 0 desliga o "raciocínio" interno dos modelos 2.5 — sem
+      // isso, parte do maxOutputTokens é consumida por tokens de pensamento
+      // invisíveis e a resposta visível pode sair cortada no meio (aconteceu
+      // com a geração de mensagens longas de pacotes).
+      generationConfig: { temperature: 0.4, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },
     },
     apiKey,
     model,

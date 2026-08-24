@@ -841,6 +841,57 @@ export type Database = {
         }
         Relationships: []
       }
+      pacotes_turma: {
+        Row: {
+          created_at: string
+          id: string
+          itens: string[]
+          nome: string
+          ordem: number
+          parcelas: number
+          turma_id: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          itens?: string[]
+          nome: string
+          ordem?: number
+          parcelas?: number
+          turma_id: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          itens?: string[]
+          nome?: string
+          ordem?: number
+          parcelas?: number
+          turma_id?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pacotes_turma_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacotes_turma_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pagamentos: {
         Row: {
           cliente_id: string | null
