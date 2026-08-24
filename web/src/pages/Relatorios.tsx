@@ -11,7 +11,7 @@ import { useCRM } from '@/context/CRMContext'
 import { Lead, Deal } from '@/types/crm'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 
-const GOLD = '#C9A227'
+const ORANGE = '#f97316'
 
 function brl(v: number): string {
   return `R$ ${(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -553,11 +553,11 @@ function SlideChrome({
 }) {
   return (
     <div className="w-full aspect-[16/9] max-h-[calc(100vh-140px)] mx-auto bg-[#0a0a0a] text-white flex flex-col p-8 sm:p-10 relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-1" style={{ background: GOLD }} />
+      <div className="absolute top-0 left-0 right-0 h-1" style={{ background: ORANGE }} />
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="text-[11px] tracking-[0.2em] text-slate-400 uppercase">{eyebrow}</div>
-          <h2 className="text-2xl sm:text-3xl font-serif font-bold mt-1">{titulo}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold mt-1">{titulo}</h2>
         </div>
         <div className="text-[11px] tracking-[0.15em] text-slate-500 uppercase font-semibold">
           Grupo Lucas Amorim
@@ -576,14 +576,14 @@ function SlideChrome({
 function SlideCapa({ tri, ano, vgvTotal }: { tri: number; ano: number; vgvTotal: number }) {
   return (
     <div className="w-full aspect-[16/9] max-h-[calc(100vh-140px)] mx-auto bg-black text-white flex flex-col items-center justify-center text-center p-10 relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: GOLD }} />
+      <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: ORANGE }} />
       <div className="text-[11px] tracking-[0.3em] text-slate-400 uppercase mb-4">Grupo Lucas Amorim</div>
-      <h1 className="text-4xl sm:text-5xl font-serif font-bold">
-        Relatório Comercial <span style={{ color: GOLD }} className="italic">{tri}º TRI</span>
+      <h1 className="text-4xl sm:text-5xl font-bold">
+        Relatório Comercial <span style={{ color: ORANGE }} className="italic">{tri}º TRI</span>
       </h1>
       <div className="w-16 h-px bg-white/20 my-6" />
       <div className="text-xs tracking-[0.2em] text-slate-400 uppercase mb-2">VGV Total · {ano}</div>
-      <div className="text-4xl sm:text-5xl font-bold" style={{ color: GOLD }}>
+      <div className="text-4xl sm:text-5xl font-bold" style={{ color: ORANGE }}>
         {brl(vgvTotal)}
       </div>
       <div className="absolute bottom-6 left-0 right-0 flex items-center justify-between px-10 text-[10px] tracking-[0.15em] text-slate-500 uppercase">
@@ -610,9 +610,9 @@ function SlideVgv({
 }) {
   return (
     <div className="w-full aspect-[16/9] max-h-[calc(100vh-140px)] mx-auto bg-black text-white flex flex-col items-center justify-center text-center p-10 relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: GOLD }} />
+      <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: ORANGE }} />
       <div className="text-xs tracking-[0.2em] text-slate-400 uppercase mb-3">{subtitulo}</div>
-      <div className="text-4xl sm:text-5xl font-bold" style={{ color: GOLD }}>
+      <div className="text-4xl sm:text-5xl font-bold" style={{ color: ORANGE }}>
         {brl(vgv)}
       </div>
       {crescimentoPct !== null ? (
@@ -636,20 +636,20 @@ function StatCard({
   label,
   value,
   sub,
-  tone = 'gold',
+  tone = 'primary',
 }: {
   icon: React.ReactNode
   label: string
   value: string
   sub?: string
-  tone?: 'gold' | 'red'
+  tone?: 'primary' | 'red'
 }) {
   return (
     <div className="bg-[#111111] border border-white/10 rounded-lg p-5 flex flex-col">
       <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wider uppercase text-slate-400 mb-3">
         {icon} {label}
       </div>
-      <div className="text-3xl font-serif font-bold" style={{ color: tone === 'gold' ? GOLD : '#f87171' }}>
+      <div className="text-3xl font-bold" style={{ color: tone === 'primary' ? ORANGE : '#f87171' }}>
         {value}
       </div>
       {sub && <div className="text-xs text-slate-400 mt-2">{sub}</div>}
@@ -707,7 +707,7 @@ function BarChartSimples({ dados, maxValor }: { dados: { mes: string; valor: num
             className="w-full rounded-t"
             style={{
               height: `${Math.max((m.valor / maxValor) * 100, 3)}%`,
-              background: m.valor === maxValor ? GOLD : '#3f3f46',
+              background: m.valor === maxValor ? ORANGE : '#3f3f46',
             }}
           />
           <div className="text-xs text-slate-400 mt-2">{m.mes}</div>
@@ -738,17 +738,17 @@ function SlidePerformanceMensal({
         </div>
         <div className="bg-[#111111] border border-white/10 rounded-lg p-4 space-y-4 text-xs">
           <div>
-            <div className="uppercase tracking-wider font-semibold" style={{ color: GOLD }}>
+            <div className="uppercase tracking-wider font-semibold" style={{ color: ORANGE }}>
               Destaque do Trimestre
             </div>
-            <div className="text-xl font-serif font-bold text-white mt-1">{destaque.mes}</div>
-            <div className="font-semibold" style={{ color: GOLD }}>
+            <div className="text-xl font-bold text-white mt-1">{destaque.mes}</div>
+            <div className="font-semibold" style={{ color: ORANGE }}>
               {brl(destaque.valor)}
             </div>
           </div>
           <div>
             <div className="uppercase tracking-wider font-semibold text-slate-400">Pior Mês do Trimestre</div>
-            <div className="text-xl font-serif font-bold text-white mt-1">
+            <div className="text-xl font-bold text-white mt-1">
               {pior.mes} <span className="text-sm text-slate-400">{brl(pior.valor)}</span>
             </div>
           </div>
@@ -784,10 +784,10 @@ function SlidePerformanceMensalCidade({
         </div>
         <div className="bg-[#111111] border border-white/10 rounded-lg p-4 space-y-4 text-xs">
           <div>
-            <div className="uppercase tracking-wider font-semibold" style={{ color: GOLD }}>
+            <div className="uppercase tracking-wider font-semibold" style={{ color: ORANGE }}>
               VGV {tri}º Trimestre
             </div>
-            <div className="text-xl font-serif font-bold text-white mt-1">{brl(vgvAtual)}</div>
+            <div className="text-xl font-bold text-white mt-1">{brl(vgvAtual)}</div>
             {variacao !== null && (
               <div className="text-slate-400 mt-1">
                 Representa {variacao.toFixed(2)}% do resultado do trimestre anterior.
@@ -798,7 +798,7 @@ function SlidePerformanceMensalCidade({
             <div className="uppercase tracking-wider font-semibold text-slate-400">
               VGV {triAnterior}º Trimestre
             </div>
-            <div className="text-xl font-serif font-bold text-white mt-1">{brl(vgvAnterior)}</div>
+            <div className="text-xl font-bold text-white mt-1">{brl(vgvAnterior)}</div>
           </div>
         </div>
       </div>
@@ -822,12 +822,12 @@ function SlidePipeline({
       ) : (
         <div className="grid gap-4 h-full" style={{ gridTemplateColumns: `repeat(${cursos.length}, minmax(0, 1fr))` }}>
           {cursos.map((c) => (
-            <div key={c.curso} className="border-t-2 rounded-t-lg overflow-hidden flex flex-col" style={{ borderColor: GOLD }}>
+            <div key={c.curso} className="border-t-2 rounded-t-lg overflow-hidden flex flex-col" style={{ borderColor: ORANGE }}>
               <div className="bg-[#111111] px-4 py-3 flex items-center justify-between">
-                <span className="font-serif font-bold text-lg">{c.curso}</span>
+                <span className="font-bold text-lg">{c.curso}</span>
                 <span
                   className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: `${GOLD}22`, color: GOLD }}
+                  style={{ background: `${ORANGE}22`, color: ORANGE }}
                 >
                   {c.total} ABERTAS
                 </span>
@@ -865,7 +865,7 @@ function SlideMarketShare({
         <div className="grid gap-6 h-full" style={{ gridTemplateColumns: `repeat(${cursos.length}, minmax(0, 1fr))` }}>
           {cursos.map((c) => (
             <div key={c.curso}>
-              <div className="font-serif font-bold text-lg mb-4">{c.curso}</div>
+              <div className="font-bold text-lg mb-4">{c.curso}</div>
               <div className="space-y-3">
                 {c.faculdades.map((f) => (
                   <div key={f.faculdade}>
@@ -874,7 +874,7 @@ function SlideMarketShare({
                       <span className="font-semibold text-white">{f.pct.toFixed(0)}%</span>
                     </div>
                     <div className="w-full h-2.5 bg-white/[0.06] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${Math.max(f.pct, 2)}%`, background: GOLD }} />
+                      <div className="h-full rounded-full" style={{ width: `${Math.max(f.pct, 2)}%`, background: ORANGE }} />
                     </div>
                   </div>
                 ))}
@@ -903,7 +903,7 @@ function SlideFunil({
               <div className="text-[10px] uppercase tracking-wider text-slate-500">Etapa 01</div>
               <div className="text-sm font-semibold text-white">Apresentações p/ Comissão</div>
             </div>
-            <div className="text-2xl font-serif font-bold text-white">{String(funil.comissao).padStart(2, '0')}</div>
+            <div className="text-2xl font-bold text-white">{String(funil.comissao).padStart(2, '0')}</div>
           </div>
           <div className="text-center text-slate-500">↓</div>
           <div className="bg-[#111111] border border-white/10 rounded-lg px-5 py-3 flex items-center justify-between">
@@ -911,16 +911,16 @@ function SlideFunil({
               <div className="text-[10px] uppercase tracking-wider text-slate-500">Etapa 02</div>
               <div className="text-sm font-semibold text-white">Apresentações p/ Turma</div>
             </div>
-            <div className="text-2xl font-serif font-bold text-white">{String(funil.turma).padStart(2, '0')}</div>
+            <div className="text-2xl font-bold text-white">{String(funil.turma).padStart(2, '0')}</div>
           </div>
           <div
             className="rounded-lg px-5 py-3 flex items-center justify-between mt-2"
-            style={{ background: `${GOLD}22`, border: `1px solid ${GOLD}55` }}
+            style={{ background: `${ORANGE}22`, border: `1px solid ${ORANGE}55` }}
           >
-            <div className="text-[10px] uppercase tracking-wider" style={{ color: GOLD }}>
+            <div className="text-[10px] uppercase tracking-wider" style={{ color: ORANGE }}>
               Resultado
             </div>
-            <div className="text-2xl font-serif font-bold" style={{ color: GOLD }}>
+            <div className="text-2xl font-bold" style={{ color: ORANGE }}>
               {funil.conversao}%
             </div>
           </div>
