@@ -15,6 +15,7 @@ import {
   Target,
   TrendingUp,
   Rocket,
+  Presentation,
   LogOut,
   Building2,
   GraduationCap,
@@ -75,6 +76,10 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
       { path: '/dre', label: 'DRE', icon: TrendingUp },
       { path: '/projecoes', label: 'Projeções', icon: Rocket },
     ],
+  },
+  {
+    section: null,
+    items: [{ path: '/relatorios', label: 'Relatórios', icon: Presentation }],
   },
 ]
 

@@ -27,6 +27,7 @@ import Adesoes from '@/pages/Adesoes'
 import Financeiro from '@/pages/Financeiro'
 import DRE from '@/pages/DRE'
 import Projecoes from '@/pages/Projecoes'
+import Relatorios from '@/pages/Relatorios'
 import Admin from '@/pages/Admin'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -100,6 +101,7 @@ const App = () => (
             <Route path="/financeiro" element={<Financeiro />} />
             <Route path="/dre" element={<DRE />} />
             <Route path="/projecoes" element={<Projecoes />} />
+            <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/configuracoes" element={<Navigate to="/admin" replace />} />
             <Route
               path="/admin"

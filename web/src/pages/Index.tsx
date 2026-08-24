@@ -37,6 +37,7 @@ import { useCRM } from '@/context/CRMContext'
 import { useToast } from '@/hooks/use-toast'
 import { Link, useNavigate } from 'react-router-dom'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import {
   Deal,
@@ -50,8 +51,8 @@ import {
 
 export default function Index() {
   const {
-    deals = [],
-    leads = [],
+    deals: allDeals = [],
+    leads: allLeads = [],
     tasks = [],
     activities = [],
     settings,
@@ -63,6 +64,25 @@ export default function Index() {
     error,
   } = useCRM()
   const { toast } = useToast()
+
+  // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhuma selecionada = todas
+  // somadas. Focar numa empresa deixa o Dashboard inteiro (KPIs, gráficos,
+  // funil, ciclo de vendas) recalculado só com as turmas daquela marca.
+  const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
+  const empresaOptions = useMemo(() => {
+    const set = new Set<string>()
+    allLeads.forEach((l) => l.empresa && set.add(l.empresa))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [allLeads])
+  const leads = useMemo(() => {
+    if (selectedEmpresas.length === 0) return allLeads
+    return allLeads.filter((l) => l.empresa && selectedEmpresas.includes(l.empresa))
+  }, [allLeads, selectedEmpresas])
+  const leadIdsFiltrados = useMemo(() => new Set(leads.map((l) => l.id)), [leads])
+  const deals = useMemo(() => {
+    if (selectedEmpresas.length === 0) return allDeals
+    return allDeals.filter((d) => !d.leadId || leadIdsFiltrados.has(d.leadId))
+  }, [allDeals, selectedEmpresas, leadIdsFiltrados])
 
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | 'year'>(
     settings.defaultPeriod || '30d',
@@ -92,10 +112,14 @@ export default function Index() {
         inicioJanela.setMonth(inicioJanela.getMonth() - 5)
         const desde = inicioJanela.toISOString().split('T')[0]
 
-        const rows = await fetchAllRows<{ valor: number; data_vencimento: string | null }>(() =>
+        const rows = await fetchAllRows<{
+          valor: number
+          data_vencimento: string | null
+          turmas: { empresa: string | null } | null
+        }>(() =>
           supabase
             .from('pagamentos')
-            .select('valor, data_vencimento, id')
+            .select('valor, data_vencimento, id, turmas(empresa)')
             .neq('status', 'cancelado')
             .gte('data_vencimento', desde)
             .order('id') as any,
@@ -104,6 +128,11 @@ export default function Index() {
         const porMes = new Map<string, number>()
         for (const r of rows) {
           if (!r.data_vencimento) continue
+          if (
+            selectedEmpresas.length > 0 &&
+            !(r.turmas?.empresa && selectedEmpresas.includes(r.turmas.empresa))
+          )
+            continue
           const chave = r.data_vencimento.slice(0, 7)
           porMes.set(chave, (porMes.get(chave) || 0) + Number(r.valor || 0))
         }
@@ -124,7 +153,7 @@ export default function Index() {
       }
     }
     loadFaturamentoMensal()
-  }, [])
+  }, [selectedEmpresas])
 
   // 1. Cálculos de KPIs
   const totalPipeline = (deals || [])
@@ -447,6 +476,15 @@ export default function Index() {
           <p className="text-sm text-slate-400 mt-1">Visão geral das suas vendas e equipe</p>
         </div>
 
+        {/* Controles de Período & Data Range Picker */}
+        <EmpresaFilterBar
+          options={empresaOptions}
+          selected={selectedEmpresas}
+          onChange={setSelectedEmpresas}
+        />
+      </div>
+
+      <div className="flex flex-col md:flex-row md:items-center justify-end gap-4">
         {/* Controles de Período & Data Range Picker */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Pills Segmentados */}
