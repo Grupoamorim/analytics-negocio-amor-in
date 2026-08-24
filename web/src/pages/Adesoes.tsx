@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import { supabase } from '@/lib/supabase/client'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 
 /** Empresas conhecidas (marcas internas). O texto da turma vindo do SGE sempre
  * começa com esse prefixo, ex.: "AIF Medicina FASA turma 7 2027.2 Itabuna". */
@@ -179,6 +180,23 @@ export default function Adesoes() {
 
   // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
+
+  // Ordenação das listas
+  const TURMA_SORT_OPTIONS = [
+    { value: 'quantidade', label: 'Quantidade' },
+    { value: 'valor', label: 'Valor' },
+    { value: 'turma', label: 'Turma (A-Z)' },
+  ]
+  const ADESAO_SORT_OPTIONS = [
+    { value: 'data_adesao', label: 'Data' },
+    { value: 'valor', label: 'Valor' },
+    { value: 'turma', label: 'Turma (A-Z)' },
+    { value: 'plano', label: 'Plano' },
+  ]
+  const [sortFieldTurma, setSortFieldTurma] = useState('quantidade')
+  const [sortDirTurma, setSortDirTurma] = useState<SortDirection>('desc')
+  const [sortFieldAdesoes, setSortFieldAdesoes] = useState('data_adesao')
+  const [sortDirAdesoes, setSortDirAdesoes] = useState<SortDirection>('desc')
   const empresaOptions = useMemo(() => {
     const set = new Set<string>()
     adesoes.forEach((a) => {
@@ -290,6 +308,15 @@ export default function Adesoes() {
       valorPrestacaoServico,
     }
   }, [adesoes, dtIni, dtFim, periodo, incluirPrestacaoServico, selectedEmpresas])
+
+  const porTurmaOrdenado = useMemo(
+    () => sortByField(analise.porTurma, sortFieldTurma, sortDirTurma, (t, f) => (t as any)[f]),
+    [analise.porTurma, sortFieldTurma, sortDirTurma],
+  )
+  const noPeriodoOrdenado = useMemo(
+    () => sortByField(analise.noPeriodo, sortFieldAdesoes, sortDirAdesoes, (a, f) => (a as any)[f]),
+    [analise.noPeriodo, sortFieldAdesoes, sortDirAdesoes],
+  )
 
   return (
     <div className="space-y-6">
@@ -435,12 +462,22 @@ export default function Adesoes() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-white mb-4">Adesões por Turma no Período</h2>
+              <div className="flex items-center justify-between mb-4 gap-2">
+                <h2 className="text-sm font-semibold text-white">Adesões por Turma no Período</h2>
+                <SortControl
+                  options={TURMA_SORT_OPTIONS}
+                  field={sortFieldTurma}
+                  direction={sortDirTurma}
+                  onFieldChange={setSortFieldTurma}
+                  onDirectionToggle={() => setSortDirTurma((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                  triggerClassName="w-[140px]"
+                />
+              </div>
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {analise.porTurma.length === 0 && (
+                {porTurmaOrdenado.length === 0 && (
                   <p className="text-xs text-slate-500">Nenhuma adesão registrada neste período.</p>
                 )}
-                {analise.porTurma.map((t) => (
+                {porTurmaOrdenado.map((t) => (
                   <div
                     key={t.turma}
                     className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04] text-sm"
@@ -456,12 +493,22 @@ export default function Adesoes() {
             </div>
 
             <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-white mb-4">Últimas Adesões</h2>
+              <div className="flex items-center justify-between mb-4 gap-2">
+                <h2 className="text-sm font-semibold text-white">Últimas Adesões</h2>
+                <SortControl
+                  options={ADESAO_SORT_OPTIONS}
+                  field={sortFieldAdesoes}
+                  direction={sortDirAdesoes}
+                  onFieldChange={setSortFieldAdesoes}
+                  onDirectionToggle={() => setSortDirAdesoes((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                  triggerClassName="w-[140px]"
+                />
+              </div>
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {analise.noPeriodo.length === 0 && (
+                {noPeriodoOrdenado.length === 0 && (
                   <p className="text-xs text-slate-500">Nenhuma adesão registrada neste período.</p>
                 )}
-                {analise.noPeriodo.slice(0, 50).map((a) => (
+                {noPeriodoOrdenado.slice(0, 50).map((a) => (
                   <div
                     key={a.id}
                     className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04] text-sm"

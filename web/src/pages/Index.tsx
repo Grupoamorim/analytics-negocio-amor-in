@@ -37,6 +37,7 @@ import { useCRM } from '@/context/CRMContext'
 import { useToast } from '@/hooks/use-toast'
 import { Link, useNavigate } from 'react-router-dom'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import {
   Deal,
   FUNNEL_STAGES,
@@ -376,6 +377,24 @@ export default function Index() {
     ;(window as any).__pipelineHighlightDealId = dealId
     navigate('/pipeline')
   }
+
+  // Ordenação das Tarefas Pendentes
+  const TASK_SORT_OPTIONS = [
+    { value: 'priority', label: 'Prioridade' },
+    { value: 'completed', label: 'Pendentes primeiro' },
+    { value: 'title', label: 'Título (A-Z)' },
+    { value: 'createdAt', label: 'Mais recentes' },
+  ]
+  const [taskSortField, setTaskSortField] = useState('priority')
+  const [taskSortDirection, setTaskSortDirection] = useState<SortDirection>('asc')
+  const PRIORITY_RANK: Record<string, number> = { Alta: 0, Média: 1, Baixa: 2 }
+  const sortedTasks = useMemo(() => {
+    return sortByField(tasks, taskSortField, taskSortDirection, (t, field) => {
+      if (field === 'priority') return PRIORITY_RANK[t.priority] ?? 99
+      if (field === 'completed') return t.completed ? 1 : 0
+      return (t as any)[field]
+    })
+  }, [tasks, taskSortField, taskSortDirection])
 
   // Handle criação de nova tarefa rápida
   const handleCreateTask = (e: React.FormEvent) => {
@@ -1141,6 +1160,16 @@ export default function Index() {
                   <p className="text-xs text-slate-400">Próximas ações prioritárias do time</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <SortControl
+                    options={TASK_SORT_OPTIONS}
+                    field={taskSortField}
+                    direction={taskSortDirection}
+                    onFieldChange={setTaskSortField}
+                    onDirectionToggle={() =>
+                      setTaskSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))
+                    }
+                    triggerClassName="w-[150px] bg-[#0a0f14] border-white/10 text-slate-300"
+                  />
                   <AIInsightsButton context="dashboard-tasks" />
                   <button
                     type="button"
@@ -1209,7 +1238,7 @@ export default function Index() {
 
               {/* Lista de Tarefas com Risco animado */}
               <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                {tasks.map((t) => (
+                {sortedTasks.map((t) => (
                   <div
                     key={t.id}
                     className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${

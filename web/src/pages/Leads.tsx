@@ -37,6 +37,7 @@ import {
   SGELink,
 } from '@/utils/sgeIntegration'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
+import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import { Button } from '@/components/ui/button'
 import ImportCsvModal from '@/components/ImportCsvModal'
 import { ColumnHeaderWithFilter, ColumnFilterKey } from '@/components/ColumnHeaderWithFilter'
@@ -132,6 +133,10 @@ export default function LeadsPage() {
   const [filterAno, setFilterAno] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterEmpresa, setFilterEmpresa] = useState<string>('all')
+
+  // Ordenação
+  const [sortField, setSortField] = useState<string>('curso')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   // Column Filters State (Excel / Notion style)
   const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnFilterKey, string[]>>>({})
@@ -390,6 +395,36 @@ export default function LeadsPage() {
     columnFilters,
   ])
 
+  // Opções de ordenação disponíveis para a tabela de turmas
+  const SORT_OPTIONS = [
+    { value: 'curso', label: 'Curso (A-Z)' },
+    { value: 'empresa', label: 'Empresa' },
+    { value: 'faculdade', label: 'Faculdade' },
+    { value: 'cidade', label: 'Cidade' },
+    { value: 'anoFormatura', label: 'Ano de Formatura' },
+    { value: 'status', label: 'Funil / Status' },
+    { value: 'tipoServico', label: 'Tipo de Serviço' },
+    { value: 'alunosFechados', label: 'Alunos Fechados' },
+    { value: 'potentialValue', label: 'Valor Potencial' },
+  ]
+
+  const extractSortValue = (lead: Lead, field: string): unknown => {
+    switch (field) {
+      case 'alunosFechados':
+        return lead.alunosFechados || 0
+      case 'potentialValue':
+        return lead.potentialValue || 0
+      default:
+        return (lead as any)[field]
+    }
+  }
+
+  // Sorted list (aplicada sobre os resultados já filtrados)
+  const sortedLeads = useMemo(
+    () => sortByField(filteredLeads, sortField, sortDirection, extractSortValue),
+    [filteredLeads, sortField, sortDirection],
+  )
+
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1)
@@ -406,15 +441,15 @@ export default function LeadsPage() {
 
   // Pagination calculation
   const totalPages = useMemo(() => {
-    if (pageSize === 'all' || filteredLeads.length === 0) return 1
-    return Math.ceil(filteredLeads.length / pageSize)
-  }, [filteredLeads.length, pageSize])
+    if (pageSize === 'all' || sortedLeads.length === 0) return 1
+    return Math.ceil(sortedLeads.length / pageSize)
+  }, [sortedLeads.length, pageSize])
 
   const paginatedLeads = useMemo(() => {
-    if (pageSize === 'all') return filteredLeads
+    if (pageSize === 'all') return sortedLeads
     const start = (currentPage - 1) * pageSize
-    return filteredLeads.slice(start, start + pageSize)
-  }, [filteredLeads, currentPage, pageSize])
+    return sortedLeads.slice(start, start + pageSize)
+  }, [sortedLeads, currentPage, pageSize])
 
   // Check active column filters count
   const activeColFiltersCount = useMemo(() => {
@@ -1025,6 +1060,15 @@ export default function LeadsPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Ordenação */}
+              <SortControl
+                options={SORT_OPTIONS}
+                field={sortField}
+                direction={sortDirection}
+                onFieldChange={setSortField}
+                onDirectionToggle={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              />
+
               {/* Dropdown Filtros Salvos */}
               {savedFilters.length > 0 && (
                 <Select
@@ -1237,6 +1281,11 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('curso', v)}
                     onSelectAll={() => handleSelectAllColumn('curso')}
                     onClear={() => handleClearColumn('curso')}
+                    onSort={(dir) => {
+                      setSortField('curso')
+                      setSortDirection(dir)
+                    }}
+                    isSorted={sortField === 'curso' ? sortDirection : false}
                   />
                 </th>
                 <th className="py-3 px-3">
@@ -1248,6 +1297,11 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('empresa', v)}
                     onSelectAll={() => handleSelectAllColumn('empresa')}
                     onClear={() => handleClearColumn('empresa')}
+                    onSort={(dir) => {
+                      setSortField('empresa')
+                      setSortDirection(dir)
+                    }}
+                    isSorted={sortField === 'empresa' ? sortDirection : false}
                   />
                 </th>
                 <th className="py-3 px-3">
@@ -1259,6 +1313,11 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('faculdade', v)}
                     onSelectAll={() => handleSelectAllColumn('faculdade')}
                     onClear={() => handleClearColumn('faculdade')}
+                    onSort={(dir) => {
+                      setSortField('faculdade')
+                      setSortDirection(dir)
+                    }}
+                    isSorted={sortField === 'faculdade' ? sortDirection : false}
                   />
                 </th>
                 <th className="py-3 px-3">
@@ -1270,6 +1329,11 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('cidade', v)}
                     onSelectAll={() => handleSelectAllColumn('cidade')}
                     onClear={() => handleClearColumn('cidade')}
+                    onSort={(dir) => {
+                      setSortField('cidade')
+                      setSortDirection(dir)
+                    }}
+                    isSorted={sortField === 'cidade' ? sortDirection : false}
                   />
                 </th>
                 <th className="py-3 px-3">
@@ -1281,6 +1345,11 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('anoFormatura', v)}
                     onSelectAll={() => handleSelectAllColumn('anoFormatura')}
                     onClear={() => handleClearColumn('anoFormatura')}
+                    onSort={(dir) => {
+                      setSortField('anoFormatura')
+                      setSortDirection(dir)
+                    }}
+                    isSorted={sortField === 'anoFormatura' ? sortDirection : false}
                   />
                 </th>
                 <th className="py-3 px-3">Serviço</th>
@@ -1294,6 +1363,11 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('status', v)}
                     onSelectAll={() => handleSelectAllColumn('status')}
                     onClear={() => handleClearColumn('status')}
+                    onSort={(dir) => {
+                      setSortField('status')
+                      setSortDirection(dir)
+                    }}
+                    isSorted={sortField === 'status' ? sortDirection : false}
                   />
                 </th>
                 <th className="py-3 px-3 text-center">SGE</th>

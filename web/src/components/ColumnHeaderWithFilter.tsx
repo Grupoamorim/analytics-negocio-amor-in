@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Search, ChevronDown } from 'lucide-react'
+import { Search, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -23,6 +23,9 @@ interface ColumnHeaderWithFilterProps {
   onToggleValue: (val: string) => void
   onSelectAll: () => void
   onClear: () => void
+  /** Se informado, exibe atalhos "Classificar A-Z / Z-A" que ordenam a tabela por esta coluna. */
+  onSort?: (direction: 'asc' | 'desc') => void
+  isSorted?: 'asc' | 'desc' | false
 }
 
 export function ColumnHeaderWithFilter({
@@ -34,6 +37,8 @@ export function ColumnHeaderWithFilter({
   onToggleValue,
   onSelectAll,
   onClear,
+  onSort,
+  isSorted,
 }: ColumnHeaderWithFilterProps) {
   const [open, setOpen] = useState(false)
   const [searchCol, setSearchCol] = useState('')
@@ -62,13 +67,21 @@ export function ColumnHeaderWithFilter({
             type="button"
             className={cn(
               'p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors focus:outline-none cursor-pointer',
-              isFiltered
+              isFiltered || isSorted
                 ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/80 font-bold'
                 : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
             )}
-            title={`Filtrar por ${title}`}
+            title={`Filtrar/ordenar por ${title}`}
           >
-            <ChevronDown className="h-3.5 w-3.5" />
+            {isSorted ? (
+              isSorted === 'asc' ? (
+                <ArrowUp className="h-3.5 w-3.5" />
+              ) : (
+                <ArrowDown className="h-3.5 w-3.5" />
+              )
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )}
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-64 p-3 space-y-3 z-50 shadow-xl" align="start">
@@ -85,6 +98,42 @@ export function ColumnHeaderWithFilter({
               </Badge>
             )}
           </div>
+
+          {/* Atalhos de ordenação */}
+          {onSort && (
+            <div className="flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  onSort('asc')
+                  setOpen(false)
+                }}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1.5 text-[11px] font-medium rounded-md py-1.5 border cursor-pointer transition-colors',
+                  isSorted === 'asc'
+                    ? 'bg-orange-600 text-white border-orange-600'
+                    : 'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800',
+                )}
+              >
+                <ArrowUp className="h-3 w-3" /> A-Z
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSort('desc')
+                  setOpen(false)
+                }}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1.5 text-[11px] font-medium rounded-md py-1.5 border cursor-pointer transition-colors',
+                  isSorted === 'desc'
+                    ? 'bg-orange-600 text-white border-orange-600'
+                    : 'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800',
+                )}
+              >
+                <ArrowDown className="h-3 w-3" /> Z-A
+              </button>
+            </div>
+          )}
 
           {/* Local search */}
           <div className="relative">

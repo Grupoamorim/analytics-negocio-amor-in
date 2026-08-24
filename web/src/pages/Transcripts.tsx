@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import { analyzeTranscriptWithGemini, getGeminiApiKey } from '@/utils/geminiApi'
 import { analyzeTranscriptText } from '@/utils/probabilityEngine'
+import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 
 export default function Transcripts() {
   const { transcripts, leads, settings, addTranscript, updateTranscript, deleteTranscript } =
@@ -41,6 +42,14 @@ export default function Transcripts() {
   // Estados de busca e filtros
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<string>('all')
+  const [sortField, setSortField] = useState('date')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const TRANSCRIPT_SORT_OPTIONS = [
+    { value: 'date', label: 'Data' },
+    { value: 'title', label: 'Turma / Reunião (A-Z)' },
+    { value: 'meetingType', label: 'Tipo' },
+    { value: 'probabilityScore', label: 'Probabilidade' },
+  ]
   const [activeDetailsTranscript, setActiveDetailsTranscript] = useState<Transcript | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
@@ -69,7 +78,7 @@ export default function Transcripts() {
 
   // Transcrições filtradas
   const filteredTranscripts = useMemo(() => {
-    return transcripts.filter((t) => {
+    const base = transcripts.filter((t) => {
       const q = searchQuery.toLowerCase().trim()
       const matchesSearch =
         !q ||
@@ -85,7 +94,8 @@ export default function Transcripts() {
 
       return matchesSearch && matchesType
     })
-  }, [transcripts, searchQuery, filterType])
+    return sortByField(base, sortField, sortDirection, (t, f) => (t as any)[f])
+  }, [transcripts, searchQuery, filterType, sortField, sortDirection])
 
   // Helper para buscar turmas filtradas para autocomplete
   const getFilteredLeads = (searchStr: string) => {
@@ -468,6 +478,13 @@ export default function Transcripts() {
             <option value="comissao">Reunião Comissão</option>
             <option value="turma">Reunião Turma</option>
           </select>
+          <SortControl
+            options={TRANSCRIPT_SORT_OPTIONS}
+            field={sortField}
+            direction={sortDirection}
+            onFieldChange={setSortField}
+            onDirectionToggle={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          />
         </div>
       </div>
 

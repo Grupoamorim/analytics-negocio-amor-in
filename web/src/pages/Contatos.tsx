@@ -4,6 +4,7 @@ import { useCRM } from '@/context/CRMContext'
 import { getTurmaDisplayName } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import LastEditedBy from '@/components/LastEditedBy'
+import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 
 interface ContactFormData {
   nome: string
@@ -20,6 +21,14 @@ export default function Contatos() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [turmaFilter, setTurmaFilter] = useState<string>('Todas')
+  const [sortField, setSortField] = useState<string>('nome')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const CONTACT_SORT_OPTIONS = [
+    { value: 'nome', label: 'Nome (A-Z)' },
+    { value: 'telefone', label: 'Telefone' },
+    { value: 'email', label: 'E-mail' },
+    { value: 'updatedAt', label: 'Última edição' },
+  ]
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<ContactFormData>(EMPTY_FORM)
@@ -30,28 +39,27 @@ export default function Contatos() {
   }, [leads])
 
   const filteredContacts = useMemo(() => {
-    return contacts
-      .filter((c) => {
-        if (turmaFilter !== 'Todas' && c.leadId !== turmaFilter) return false
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase()
-          const lead = leadById.get(c.leadId)
-          const haystack = [
-            c.nome,
-            c.telefone,
-            c.email,
-            lead ? getTurmaDisplayName(lead) : '',
-            lead?.faculdade || '',
-            lead?.curso || '',
-          ]
-            .join(' ')
-            .toLowerCase()
-          if (!haystack.includes(q)) return false
-        }
-        return true
-      })
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-  }, [contacts, turmaFilter, searchQuery, leadById])
+    const base = contacts.filter((c) => {
+      if (turmaFilter !== 'Todas' && c.leadId !== turmaFilter) return false
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const lead = leadById.get(c.leadId)
+        const haystack = [
+          c.nome,
+          c.telefone,
+          c.email,
+          lead ? getTurmaDisplayName(lead) : '',
+          lead?.faculdade || '',
+          lead?.curso || '',
+        ]
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+    return sortByField(base, sortField, sortDirection, (c, f) => (c as any)[f])
+  }, [contacts, turmaFilter, searchQuery, leadById, sortField, sortDirection])
 
   const handleOpenCreate = () => {
     setEditingId(null)
@@ -122,7 +130,7 @@ export default function Contatos() {
 
       {/* Filtros */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs font-semibold text-slate-400">Turma:</label>
           <select
             value={turmaFilter}
@@ -136,6 +144,13 @@ export default function Contatos() {
               </option>
             ))}
           </select>
+          <SortControl
+            options={CONTACT_SORT_OPTIONS}
+            field={sortField}
+            direction={sortDirection}
+            onFieldChange={setSortField}
+            onDirectionToggle={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          />
         </div>
         <div className="relative flex-1 sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />

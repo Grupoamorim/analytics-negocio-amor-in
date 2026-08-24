@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { supabase } from '@/lib/supabase/client'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
+import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
 import { fetchAllRows } from '@/utils/fetchAllRows'
 
@@ -86,6 +87,25 @@ export default function Financeiro() {
 
   // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
+
+  // Ordenação das tabelas
+  const RECEBER_SORT_OPTIONS = [
+    { value: 'data_vencimento', label: 'Vencimento' },
+    { value: 'status', label: 'Status' },
+    { value: 'valor', label: 'Valor' },
+    { value: 'valor_pago', label: 'Pago' },
+  ]
+  const PAGAR_SORT_OPTIONS = [
+    { value: 'data_vencimento', label: 'Vencimento' },
+    { value: 'fornecedor', label: 'Fornecedor' },
+    { value: 'categoria', label: 'Categoria' },
+    { value: 'status', label: 'Status' },
+    { value: 'valor', label: 'Valor' },
+  ]
+  const [sortFieldReceber, setSortFieldReceber] = useState('data_vencimento')
+  const [sortDirReceber, setSortDirReceber] = useState<SortDirection>('desc')
+  const [sortFieldPagar, setSortFieldPagar] = useState('data_vencimento')
+  const [sortDirPagar, setSortDirPagar] = useState<SortDirection>('desc')
 
   useEffect(() => {
     async function load() {
@@ -202,6 +222,15 @@ export default function Financeiro() {
       .slice(-12)
   }, [pagamentosEmpresaFiltrados])
 
+  const pagamentosOrdenados = useMemo(
+    () => sortByField(pagamentosFiltrados, sortFieldReceber, sortDirReceber, (p, f) => (p as any)[f]),
+    [pagamentosFiltrados, sortFieldReceber, sortDirReceber],
+  )
+  const contasPagarOrdenadas = useMemo(
+    () => sortByField(contasPagarFiltradas, sortFieldPagar, sortDirPagar, (c, f) => (c as any)[f]),
+    [contasPagarFiltradas, sortFieldPagar, sortDirPagar],
+  )
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -264,6 +293,21 @@ export default function Financeiro() {
           >
             Fluxo de Caixa
           </button>
+          {tab !== 'fluxo' && (
+            <div className="ml-auto flex items-center pr-3">
+              <SortControl
+                options={tab === 'receber' ? RECEBER_SORT_OPTIONS : PAGAR_SORT_OPTIONS}
+                field={tab === 'receber' ? sortFieldReceber : sortFieldPagar}
+                direction={tab === 'receber' ? sortDirReceber : sortDirPagar}
+                onFieldChange={tab === 'receber' ? setSortFieldReceber : setSortFieldPagar}
+                onDirectionToggle={() =>
+                  tab === 'receber'
+                    ? setSortDirReceber((d) => (d === 'asc' ? 'desc' : 'asc'))
+                    : setSortDirPagar((d) => (d === 'asc' ? 'desc' : 'asc'))
+                }
+              />
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -301,7 +345,7 @@ export default function Financeiro() {
                 </tr>
               </thead>
               <tbody>
-                {pagamentosFiltrados.slice(0, 50).map((p) => (
+                {pagamentosOrdenados.slice(0, 50).map((p) => (
                   <tr key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5 text-slate-300">
                       {p.data_vencimento ? new Date(p.data_vencimento).toLocaleDateString('pt-BR') : '—'}
@@ -327,7 +371,7 @@ export default function Financeiro() {
                 </tr>
               </thead>
               <tbody>
-                {contasPagarFiltradas.slice(0, 50).map((c) => (
+                {contasPagarOrdenadas.slice(0, 50).map((c) => (
                   <tr key={c.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5 text-slate-300">
                       {c.data_vencimento ? new Date(c.data_vencimento).toLocaleDateString('pt-BR') : '—'}

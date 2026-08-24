@@ -20,6 +20,7 @@ import { useCRM } from '@/context/CRMContext'
 import { Note, NoteType, Priority } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 
 export default function Notes() {
   const { notes, leads, members, deals, addNote, updateNote, deleteNote } = useCRM()
@@ -29,6 +30,13 @@ export default function Notes() {
   const [selectedLeadId, setSelectedLeadId] = useState<string>('Todos')
   const [selectedType, setSelectedType] = useState<string>('Todos')
   const [searchQuery, setSearchQuery] = useState('')
+  const [sortField, setSortField] = useState('date')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const NOTE_SORT_OPTIONS = [
+    { value: 'date', label: 'Data' },
+    { value: 'type', label: 'Tipo' },
+    { value: 'priority', label: 'Prioridade' },
+  ]
 
   // Modais
   const [modalOpen, setModalOpen] = useState(false)
@@ -44,24 +52,29 @@ export default function Notes() {
     priority: 'Média' as Priority,
   })
 
-  // Notas filtradas e ordenadas cronologicamente (mais recente no topo)
+  const PRIORITY_RANK: Record<string, number> = { Alta: 0, Média: 1, Baixa: 2 }
+
+  // Notas filtradas e ordenadas (padrão: mais recente no topo)
   const filteredNotes = useMemo(() => {
-    return notes
-      .filter((note) => {
-        if (selectedLeadId !== 'Todos' && note.leadId !== selectedLeadId) return false
-        if (selectedType !== 'Todos' && note.type !== selectedType) return false
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase()
-          const lead = leads.find((l) => l.id === note.leadId)
-          const matchContent = note.content.toLowerCase().includes(q)
-          const matchCompany = lead?.faculdade.toLowerCase().includes(q) ?? false
-          const matchLeadName = lead?.curso.toLowerCase().includes(q) ?? false
-          if (!matchContent && !matchCompany && !matchLeadName) return false
-        }
-        return true
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [notes, leads, selectedLeadId, selectedType, searchQuery])
+    const base = notes.filter((note) => {
+      if (selectedLeadId !== 'Todos' && note.leadId !== selectedLeadId) return false
+      if (selectedType !== 'Todos' && note.type !== selectedType) return false
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const lead = leads.find((l) => l.id === note.leadId)
+        const matchContent = note.content.toLowerCase().includes(q)
+        const matchCompany = lead?.faculdade.toLowerCase().includes(q) ?? false
+        const matchLeadName = lead?.curso.toLowerCase().includes(q) ?? false
+        if (!matchContent && !matchCompany && !matchLeadName) return false
+      }
+      return true
+    })
+    return sortByField(base, sortField, sortDirection, (note, field) => {
+      if (field === 'date') return new Date(note.date).getTime()
+      if (field === 'priority') return PRIORITY_RANK[note.priority] ?? 99
+      return (note as any)[field]
+    })
+  }, [notes, leads, selectedLeadId, selectedType, searchQuery, sortField, sortDirection])
 
   // Abrir modal de criação
   const handleOpenCreateModal = () => {
@@ -229,15 +242,24 @@ export default function Notes() {
           </div>
         </div>
 
-        {/* Busca por Texto */}
-        <div className="relative w-full md:w-72">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar nas notas..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#111820] border border-white/[0.08] rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          {/* Busca por Texto */}
+          <div className="relative flex-1 md:w-72">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar nas notas..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#111820] border border-white/[0.08] rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            />
+          </div>
+          <SortControl
+            options={NOTE_SORT_OPTIONS}
+            field={sortField}
+            direction={sortDirection}
+            onFieldChange={setSortField}
+            onDirectionToggle={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
           />
         </div>
       </div>
