@@ -22,7 +22,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
-import { Lead, LeadStatus, LeadSource, getTurmaDisplayName } from '@/types/crm'
+import { Lead, LeadStatus, LeadSource, getTurmaDisplayName, getFullTurmaName } from '@/types/crm'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   getSGELinks,
@@ -135,7 +135,7 @@ export default function LeadsPage() {
   const [filterEmpresa, setFilterEmpresa] = useState<string>('all')
 
   // Ordenação
-  const [sortField, setSortField] = useState<string>('curso')
+  const [sortField, setSortField] = useState<string>('faculdade')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   // Column Filters State (Excel / Notion style)
@@ -399,7 +399,7 @@ export default function LeadsPage() {
   const SORT_OPTIONS = [
     { value: 'curso', label: 'Curso (A-Z)' },
     { value: 'empresa', label: 'Empresa' },
-    { value: 'faculdade', label: 'Faculdade' },
+    { value: 'faculdade', label: 'Faculdade + Ano Formatura' },
     { value: 'cidade', label: 'Cidade' },
     { value: 'anoFormatura', label: 'Ano de Formatura' },
     { value: 'status', label: 'Funil / Status' },
@@ -414,6 +414,10 @@ export default function LeadsPage() {
         return lead.alunosFechados || 0
       case 'potentialValue':
         return lead.potentialValue || 0
+      // Ordenar por Faculdade agrupa por faculdade e, dentro de cada uma,
+      // ordena por Ano de Formatura — a ordem que o Lucas pediu.
+      case 'faculdade':
+        return [lead.faculdade, lead.anoFormatura]
       default:
         return (lead as any)[field]
     }
@@ -1396,8 +1400,11 @@ export default function LeadsPage() {
                     >
                       {/* Turma / Curso */}
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">
-                          {lead.curso}
+                        <div
+                          className="font-semibold text-slate-900 dark:text-slate-100"
+                          title={getFullTurmaName(lead)}
+                        >
+                          {getFullTurmaName(lead)}
                         </div>
                         <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
                           <span className="font-mono font-medium text-slate-700 dark:text-slate-300">

@@ -57,8 +57,23 @@ export function SortControl({
   )
 }
 
-/** Compara dois valores de forma genérica: números, datas (string ISO/BR) e texto (pt-BR, natural). */
+/**
+ * Compara dois valores de forma genérica: números, datas (string ISO/BR) e texto
+ * (pt-BR, natural). Aceita arrays para ordenação em múltiplos níveis — ex:
+ * [faculdade, anoFormatura] ordena por faculdade e, dentro da mesma faculdade,
+ * por ano de formatura.
+ */
 export function compareValues(a: unknown, b: unknown): number {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    const as = Array.isArray(a) ? a : [a]
+    const bs = Array.isArray(b) ? b : [b]
+    for (let i = 0; i < Math.max(as.length, bs.length); i++) {
+      const cmp = compareValues(as[i], bs[i])
+      if (cmp !== 0) return cmp
+    }
+    return 0
+  }
+
   if (a == null && b == null) return 0
   if (a == null) return -1
   if (b == null) return 1

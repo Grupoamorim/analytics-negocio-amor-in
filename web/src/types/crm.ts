@@ -99,6 +99,18 @@ export function getTurmaDisplayName(lead: Lead): string {
   return `${base}${turmaSufix}`.trim() || 'Turma sem nome'
 }
 
+/**
+ * Nome completo da turma, sem truncamento: Empresa + Curso + Faculdade + Turma +
+ * Ano de Formatura + Cidade. Usado onde o Lucas precisa identificar a turma
+ * inteira sem ambiguidade (ex: coluna principal da tabela de Turmas).
+ */
+export function getFullTurmaName(lead: Lead): string {
+  const partes = [lead.empresa, lead.curso, lead.faculdade, lead.turma, lead.anoFormatura, lead.cidade].filter(
+    Boolean,
+  )
+  return partes.length > 0 ? partes.join(' ') : 'Turma sem nome'
+}
+
 export type DealOutcome = 'ganho' | 'perdido' | 'aberto'
 
 /**
