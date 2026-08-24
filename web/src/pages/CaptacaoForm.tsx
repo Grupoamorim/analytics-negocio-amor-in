@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Target, Send, CheckCircle2 } from 'lucide-react'
 import { addLead } from '@/utils/captacaoStorage'
 import { fetchCidadeFaculdades, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
+import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
 import { fetchVendedoresAtivos } from '@/utils/vendedores'
 import { formatPhoneBR } from '@/utils/phoneMask'
 
@@ -9,6 +10,7 @@ const OUTRO = '__outro__'
 
 interface FormState {
   curso: string
+  cursoOutro: string
   faculdade: string
   faculdadeOutro: string
   turma: string
@@ -23,6 +25,7 @@ interface FormState {
 
 const EMPTY: FormState = {
   curso: '',
+  cursoOutro: '',
   faculdade: '',
   faculdadeOutro: '',
   turma: '',
@@ -42,10 +45,12 @@ export default function CaptacaoForm() {
   const [success, setSuccess] = useState(false)
   const [cidadeFaculdades, setCidadeFaculdades] = useState<CidadeFaculdadesMap>({})
   const [vendedores, setVendedores] = useState<string[]>([])
+  const [cursos, setCursos] = useState<string[]>([])
 
   useEffect(() => {
     fetchCidadeFaculdades().then(setCidadeFaculdades)
     fetchVendedoresAtivos().then(setVendedores)
+    fetchCursosConhecidos().then(setCursos)
   }, [])
 
   const cidades = useMemo(
@@ -65,10 +70,12 @@ export default function CaptacaoForm() {
 
   const cidadeFinal = form.cidade === OUTRO ? form.cidadeOutro.trim() : form.cidade
   const faculdadeFinal = form.faculdade === OUTRO ? form.faculdadeOutro.trim() : form.faculdade
+  const cursoFinal = form.curso === OUTRO ? form.cursoOutro.trim() : form.curso
 
   const validate = (): boolean => {
     const errs: Partial<Record<keyof FormState, string>> = {}
-    if (!form.curso.trim()) errs.curso = 'Informe o curso.'
+    if (!form.curso) errs.curso = 'Selecione o curso.'
+    if (form.curso === OUTRO && !form.cursoOutro.trim()) errs.cursoOutro = 'Informe o nome do curso.'
     if (!form.faculdade) errs.faculdade = 'Selecione a faculdade.'
     if (form.faculdade === OUTRO && !form.faculdadeOutro.trim())
       errs.faculdadeOutro = 'Informe o nome da faculdade.'
@@ -93,7 +100,7 @@ export default function CaptacaoForm() {
     try {
       setSubmitting(true)
       await addLead({
-        curso: form.curso.trim(),
+        curso: cursoFinal,
         faculdade: faculdadeFinal,
         turma: form.turma.trim(),
         anoFormatura: form.anoFormatura.trim(),
@@ -147,14 +154,39 @@ export default function CaptacaoForm() {
 
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {/* Curso */}
-            <FormField
-              label="Curso"
-              required
-              error={errors.curso}
-              value={form.curso}
-              onChange={(v) => set('curso', v)}
-              placeholder="Ex: Engenharia Civil"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Curso <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={form.curso}
+                onChange={(e) => set('curso', e.target.value)}
+                className={`w-full bg-[#0a0f14] border rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/60 transition-colors ${
+                  errors.curso ? 'border-red-500/60' : 'border-white/10'
+                }`}
+              >
+                <option value="">Selecione seu curso</option>
+                {cursos.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                <option value={OUTRO}>Outro (não está na lista)</option>
+              </select>
+              {errors.curso && <p className="text-xs text-red-400 mt-1">{errors.curso}</p>}
+              {form.curso === OUTRO && (
+                <div className="mt-2">
+                  <FormField
+                    label="Qual curso?"
+                    required
+                    error={errors.cursoOutro}
+                    value={form.cursoOutro}
+                    onChange={(v) => set('cursoOutro', v)}
+                    placeholder="Digite o nome do seu curso"
+                  />
+                </div>
+              )}
+            </div>
 
             {/* Cidade */}
             <div>
