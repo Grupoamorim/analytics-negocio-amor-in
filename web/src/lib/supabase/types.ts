@@ -1458,14 +1458,17 @@ export type Database = {
           empresa: string | null
           faculdade: string | null
           fechamento_contrato: string | null
+          foto_url: string | null
           funil_status: string | null
           id: string
           instituicao: string | null
+          meta_contratos: number | null
           meta_vendas: number | null
           nome: string
           observacoes: string | null
           primeiro_contato: string | null
           proposta_link: string | null
+          quantidade_comissao: number | null
           sdr: string | null
           status: string | null
           tipo_servico: string | null
@@ -1493,14 +1496,17 @@ export type Database = {
           empresa?: string | null
           faculdade?: string | null
           fechamento_contrato?: string | null
+          foto_url?: string | null
           funil_status?: string | null
           id?: string
           instituicao?: string | null
+          meta_contratos?: number | null
           meta_vendas?: number | null
           nome: string
           observacoes?: string | null
           primeiro_contato?: string | null
           proposta_link?: string | null
+          quantidade_comissao?: number | null
           sdr?: string | null
           status?: string | null
           tipo_servico?: string | null
@@ -1528,14 +1534,17 @@ export type Database = {
           empresa?: string | null
           faculdade?: string | null
           fechamento_contrato?: string | null
+          foto_url?: string | null
           funil_status?: string | null
           id?: string
           instituicao?: string | null
+          meta_contratos?: number | null
           meta_vendas?: number | null
           nome?: string
           observacoes?: string | null
           primeiro_contato?: string | null
           proposta_link?: string | null
+          quantidade_comissao?: number | null
           sdr?: string | null
           status?: string | null
           tipo_servico?: string | null

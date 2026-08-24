@@ -43,6 +43,9 @@ function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | n
     contatoTelefone: row.contato_telefone || '',
     totalAlunos: row.total_alunos || 0,
     alunosFechados: row.alunos_fechados || 0,
+    quantidadeComissao: row.quantidade_comissao ?? undefined,
+    metaContratos: row.meta_contratos ?? undefined,
+    fotoUrl: row.foto_url || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     updatedByEmail: row.updated_by_profile?.email || undefined,
@@ -80,6 +83,9 @@ function mapLeadToInsert(lead: Partial<Lead>, userId: string): TurmaInsert {
     proposta_link: lead.linkProposta || null,
     total_alunos: lead.totalAlunos || 0,
     alunos_fechados: lead.alunosFechados || 0,
+    quantidade_comissao: lead.quantidadeComissao ?? null,
+    meta_contratos: lead.metaContratos ?? null,
+    foto_url: lead.fotoUrl || null,
     data_cadastro: lead.dataCadastro || null,
     primeiro_contato: lead.primeiroContatoEm || null,
     fechamento_contrato: lead.dataFechamento || null,
@@ -213,6 +219,10 @@ export function useTurmas() {
         if (updates.totalAlunos !== undefined) updatePayload.total_alunos = updates.totalAlunos
         if (updates.alunosFechados !== undefined)
           updatePayload.alunos_fechados = updates.alunosFechados
+        if (updates.quantidadeComissao !== undefined)
+          updatePayload.quantidade_comissao = updates.quantidadeComissao
+        if (updates.metaContratos !== undefined) updatePayload.meta_contratos = updates.metaContratos
+        if (updates.fotoUrl !== undefined) updatePayload.foto_url = updates.fotoUrl
         updatePayload.updated_by = user.id
 
         const { error: err } = await supabase.from('turmas').update(updatePayload).eq('id', id)

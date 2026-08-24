@@ -80,6 +80,10 @@ export interface Lead {
   linkProposta?: string // Link da proposta (Google Drive/Canva)
   contatoNome?: string // Nome do contato principal
   contatoTelefone?: string // Telefone do contato principal
+
+  quantidadeComissao?: number // nº de pessoas na comissão da turma
+  metaContratos?: number // meta de contratos fechados para a turma
+  fotoUrl?: string // foto de capa da turma
 }
 
 /**

@@ -18,6 +18,14 @@ import {
   TrendingDown,
   Plus,
   Search,
+  Pencil,
+  Copy,
+  Trash2,
+  Save,
+  Image as ImageIcon,
+  Users,
+  Target,
+  LinkIcon,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import {
@@ -38,6 +46,9 @@ import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import LastEditedBy from '@/components/LastEditedBy'
+import { getSGELinkForLead } from '@/utils/sgeIntegration'
+import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
 
@@ -68,8 +79,12 @@ export default function Pipeline() {
     transcripts,
     moveDealStage,
     updateDeal,
+    deleteDeal,
     toggleChecklistItem,
     addDeal,
+    addLead,
+    updateLead,
+    deleteLead,
   } = useCRM()
   const { toast } = useToast()
 
@@ -151,6 +166,92 @@ export default function Pipeline() {
       })
     } finally {
       setCreatingBusy(false)
+    }
+  }
+
+  function proximaTurmaPara(base: Lead): string {
+    const nums = leads
+      .filter((l) => l.curso === base.curso && l.faculdade === base.faculdade && l.cidade === base.cidade)
+      .map((l) => parseInt((l.turma || '').replace(/\D/g, ''), 10))
+      .filter((n) => !isNaN(n))
+    const max = nums.length ? Math.max(...nums) : 0
+    return `Turma ${max + 1}`
+  }
+
+  const handleDuplicateDeal = async (deal: Deal, lead: Lead | null | undefined) => {
+    if (!lead) return
+    try {
+      const novoLead = await addLead({
+        curso: lead.curso,
+        faculdade: lead.faculdade,
+        turma: proximaTurmaPara(lead),
+        anoFormatura: lead.anoFormatura,
+        cidade: lead.cidade,
+        status: 'Novo',
+        source: lead.source,
+        potentialValue: lead.potentialValue,
+        ownerId: lead.ownerId || members[0]?.id || '',
+        empresa: lead.empresa,
+        tipoServico: lead.tipoServico,
+        comoConheceu: lead.comoConheceu,
+        closer: '',
+        concorrentes: '',
+        observacoes: '',
+        notes: '',
+        sdr: '',
+        primeiroContatoEm: '',
+        dataCadastro: '',
+        dataFechamento: '',
+        linkProposta: '',
+        contatoNome: '',
+        contatoTelefone: '',
+        alunosFechados: 0,
+        quantidadeComissao: lead.quantidadeComissao,
+        metaContratos: lead.metaContratos,
+        createdAt: new Date().toISOString(),
+        totalAlunos: 0,
+      })
+      await addDeal({
+        leadId: novoLead.id,
+        title: getTurmaDisplayName(novoLead),
+        company: novoLead.faculdade || novoLead.empresa || '',
+        contactName: '',
+        contactPhone: '',
+        value: deal.value,
+        stageId: 'stage-1',
+        probability: FUNNEL_STAGE_BY_ID['stage-1']?.defaultProbability ?? 20,
+        ownerId: deal.ownerId || members[0]?.id || 'm-1',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      toast({
+        title: 'Turma duplicada',
+        description: `${getTurmaDisplayName(novoLead)} criada em Prospecção. Edite o que precisar.`,
+      })
+      setSelectedDealId(null)
+    } catch {
+      toast({
+        title: 'Erro ao duplicar',
+        description: 'Não foi possível duplicar essa turma.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleDeleteDealAndLead = async (deal: Deal, lead: Lead | null | undefined) => {
+    const nome = lead ? getTurmaDisplayName(lead) : deal.title
+    if (!confirm(`Apagar "${nome}" do funil e das Turmas? Essa ação não pode ser desfeita.`)) return
+    try {
+      await deleteDeal(deal.id)
+      if (lead) await deleteLead(lead.id)
+      toast({ title: 'Turma apagada' })
+      setSelectedDealId(null)
+    } catch {
+      toast({
+        title: 'Erro ao apagar',
+        description: 'Não foi possível apagar essa turma.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -555,6 +656,9 @@ export default function Pipeline() {
           onProposalLinkChange={(link) => persistProposalLink(selectedDeal.id, link)}
           onToggleChecklist={(key, checked) => toggleChecklistItem(selectedDeal.id, key, checked)}
           onUpdateDeal={(updates) => updateDeal(selectedDeal.id, updates)}
+          onUpdateLead={(updates) => selectedLead && updateLead(selectedLead.id, updates)}
+          onDuplicate={() => handleDuplicateDeal(selectedDeal, selectedLead)}
+          onDelete={() => handleDeleteDealAndLead(selectedDeal, selectedLead)}
           onClose={() => setSelectedDealId(null)}
         />
       )}
@@ -641,8 +745,13 @@ interface DealDetailModalProps {
   onProposalLinkChange: (link: string) => void
   onToggleChecklist: (key: string, checked: boolean) => void
   onUpdateDeal: (updates: Partial<Deal>) => void
+  onUpdateLead: (updates: Partial<Lead>) => void
+  onDuplicate: () => void
+  onDelete: () => void
   onClose: () => void
 }
+
+const EMPRESAS_TURMA = ['AFF', 'AIF', 'AIF-SSA', 'AIF-V', 'AIM', 'SFF']
 
 function DealDetailModal({
   deal,
@@ -653,19 +762,93 @@ function DealDetailModal({
   onProposalLinkChange,
   onToggleChecklist,
   onUpdateDeal,
+  onUpdateLead,
+  onDuplicate,
+  onDelete,
   onClose,
 }: DealDetailModalProps) {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [linkInput, setLinkInput] = useState(proposalLink)
   const [editingNotes, setEditingNotes] = useState(false)
   const [notesDraft, setNotesDraft] = useState(deal.notes || '')
   const [lostReasonDraft, setLostReasonDraft] = useState(deal.lostReason || '')
   const stage = stages.find((s) => s.id === deal.stageId)
   const turmaName = lead ? getTurmaDisplayName(lead) : deal.title
+  const sgeLink = lead ? getSGELinkForLead(lead.id) : null
 
   const showProposal = isProposalStage(deal.stageId)
   const days = daysInCurrentStage(deal)
   const enteredAt = currentStageEnteredAt(deal)
+
+  // Edição de valor do negócio
+  const [editingValue, setEditingValue] = useState(false)
+  const [valueDraft, setValueDraft] = useState(String(deal.value || 0))
+
+  // Edição das informações da turma (dados do Lead)
+  const [editingTurma, setEditingTurma] = useState(false)
+  const [turmaDraft, setTurmaDraft] = useState({
+    curso: lead?.curso || '',
+    faculdade: lead?.faculdade || '',
+    turma: lead?.turma || '',
+    anoFormatura: lead?.anoFormatura || '',
+    cidade: lead?.cidade || '',
+    empresa: lead?.empresa || 'AFF',
+    quantidadeComissao: String(lead?.quantidadeComissao ?? ''),
+    metaContratos: String(lead?.metaContratos ?? ''),
+  })
+  const [savingTurma, setSavingTurma] = useState(false)
+  const [uploadingFoto, setUploadingFoto] = useState(false)
+
+  const handleSaveValue = () => {
+    const n = Number(valueDraft.replace(/\./g, '').replace(',', '.'))
+    onUpdateDeal({ value: isNaN(n) ? deal.value : n })
+    setEditingValue(false)
+  }
+
+  const handleSaveTurma = async () => {
+    setSavingTurma(true)
+    try {
+      onUpdateLead({
+        curso: turmaDraft.curso.trim(),
+        faculdade: turmaDraft.faculdade.trim(),
+        turma: turmaDraft.turma.trim() || 'Turma 0',
+        anoFormatura: turmaDraft.anoFormatura.trim(),
+        cidade: turmaDraft.cidade.trim(),
+        empresa: turmaDraft.empresa,
+        quantidadeComissao: turmaDraft.quantidadeComissao ? Number(turmaDraft.quantidadeComissao) : undefined,
+        metaContratos: turmaDraft.metaContratos ? Number(turmaDraft.metaContratos) : undefined,
+      })
+      toast({ title: 'Turma atualizada' })
+      setEditingTurma(false)
+    } finally {
+      setSavingTurma(false)
+    }
+  }
+
+  const handleSelectFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !lead || !user) return
+    setUploadingFoto(true)
+    try {
+      const path = `${lead.id}/${Date.now()}.${file.name.split('.').pop() || 'jpg'}`
+      const { error: uploadErr } = await supabase.storage.from('turmas-fotos').upload(path, file, {
+        upsert: true,
+      })
+      if (uploadErr) throw uploadErr
+      const { data } = supabase.storage.from('turmas-fotos').getPublicUrl(path)
+      onUpdateLead({ fotoUrl: `${data.publicUrl}?v=${Date.now()}` })
+      toast({ title: 'Foto da turma atualizada' })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao enviar foto',
+        description: err.message || 'Tente novamente.',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingFoto(false)
+    }
+  }
 
   // Checklist de TODOS os estágios.
   const itemsByStage = useMemo(() => {
@@ -691,16 +874,24 @@ function DealDetailModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.02]">
           <div className="flex items-center gap-3 min-w-0">
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{
-                backgroundColor: `${stage?.color || '#F97316'}22`,
-                border: `1px solid ${stage?.color || '#F97316'}55`,
-                color: stage?.color || '#FDBA74',
-              }}
-            >
-              <GraduationCap className="w-5 h-5" />
-            </div>
+            {lead?.fotoUrl ? (
+              <img
+                src={lead.fotoUrl}
+                alt={turmaName}
+                className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-white/10"
+              />
+            ) : (
+              <div
+                className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{
+                  backgroundColor: `${stage?.color || '#F97316'}22`,
+                  border: `1px solid ${stage?.color || '#F97316'}55`,
+                  color: stage?.color || '#FDBA74',
+                }}
+              >
+                <GraduationCap className="w-5 h-5" />
+              </div>
+            )}
             <div className="min-w-0">
               <h3 className="text-lg font-bold text-white truncate">{turmaName}</h3>
               <p className="text-xs text-slate-400 truncate">
@@ -709,30 +900,86 @@ function DealDetailModal({
                 {lead?.cidade ? ` • ${lead.cidade}` : ''}
                 {stage ? ` • ${stage.name}` : ''}
               </p>
-              <LastEditedBy
-                email={deal.updatedByEmail}
-                updatedAt={deal.updatedAt}
-                className="mt-0.5"
-              />
+              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                <LastEditedBy email={deal.updatedByEmail} updatedAt={deal.updatedAt} />
+                {sgeLink && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                    <LinkIcon className="w-2.5 h-2.5" /> SGE {sgeLink.sgeProjectCode}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] flex-shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              type="button"
+              onClick={onDuplicate}
+              title="Duplicar turma"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              title="Apagar turma"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
           {/* Detalhes da turma */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <DetailCard
-              icon={<DollarSign className="w-3.5 h-3.5" />}
-              label="Valor"
-              value={`R$ ${deal.value.toLocaleString('pt-BR')}`}
-            />
+            {editingValue ? (
+              <div className="p-2.5 rounded-lg bg-[#0a0f14] border border-orange-500/40">
+                <div className="flex items-center gap-1 text-[10px] text-slate-400 mb-1">
+                  <DollarSign className="w-3.5 h-3.5" /> Valor
+                </div>
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    type="text"
+                    inputMode="decimal"
+                    value={valueDraft}
+                    onChange={(e) => setValueDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveValue()}
+                    className="w-full bg-[#111820] border border-white/10 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  />
+                  <button type="button" onClick={handleSaveValue} className="text-emerald-400 flex-shrink-0">
+                    <Save className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setValueDraft(String(deal.value || 0))
+                  setEditingValue(true)
+                }}
+                className="p-2.5 rounded-lg bg-[#0a0f14] border border-white/[0.06] hover:border-orange-500/40 text-left group"
+              >
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                  <span className="flex items-center gap-1">
+                    <DollarSign className="w-3.5 h-3.5" /> Valor
+                  </span>
+                  <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <div className="text-xs font-semibold text-white truncate">
+                  R$ {deal.value.toLocaleString('pt-BR')}
+                </div>
+              </button>
+            )}
             <DetailCard
               icon={<MapPin className="w-3.5 h-3.5" />}
               label="Cidade"
@@ -749,6 +996,148 @@ function DealDetailModal({
               value={deal.nextActionDate || '—'}
             />
           </div>
+
+          {/* Editar Informações da Turma */}
+          {lead && (
+            <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-semibold text-slate-200">
+                  <Pencil className="w-3.5 h-3.5 text-orange-400" /> Informações da Turma
+                </div>
+                {!editingTurma ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTurmaDraft({
+                        curso: lead.curso || '',
+                        faculdade: lead.faculdade || '',
+                        turma: lead.turma || '',
+                        anoFormatura: lead.anoFormatura || '',
+                        cidade: lead.cidade || '',
+                        empresa: lead.empresa || 'AFF',
+                        quantidadeComissao: String(lead.quantidadeComissao ?? ''),
+                        metaContratos: String(lead.metaContratos ?? ''),
+                      })
+                      setEditingTurma(true)
+                    }}
+                    className="text-[10px] text-orange-300 hover:text-orange-200"
+                  >
+                    Editar
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingTurma(false)}
+                      className="text-[10px] text-slate-400 hover:text-white"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveTurma}
+                      disabled={savingTurma}
+                      className="text-[10px] font-semibold text-white bg-orange-600 hover:bg-orange-500 rounded px-2 py-1"
+                    >
+                      {savingTurma ? 'Salvando...' : 'Salvar'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {editingTurma ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <MiniField
+                    label="Empresa"
+                    select
+                    options={EMPRESAS_TURMA}
+                    value={turmaDraft.empresa}
+                    onChange={(v) => setTurmaDraft((d) => ({ ...d, empresa: v }))}
+                  />
+                  <MiniField
+                    label="Turma"
+                    value={turmaDraft.turma}
+                    onChange={(v) => setTurmaDraft((d) => ({ ...d, turma: v }))}
+                  />
+                  <MiniField
+                    label="Curso"
+                    value={turmaDraft.curso}
+                    onChange={(v) => setTurmaDraft((d) => ({ ...d, curso: v }))}
+                  />
+                  <MiniField
+                    label="Faculdade"
+                    value={turmaDraft.faculdade}
+                    onChange={(v) => setTurmaDraft((d) => ({ ...d, faculdade: v }))}
+                  />
+                  <MiniField
+                    label="Cidade"
+                    value={turmaDraft.cidade}
+                    onChange={(v) => setTurmaDraft((d) => ({ ...d, cidade: v }))}
+                  />
+                  <MiniField
+                    label="Ano Formatura"
+                    value={turmaDraft.anoFormatura}
+                    onChange={(v) => setTurmaDraft((d) => ({ ...d, anoFormatura: v }))}
+                  />
+                  <MiniField
+                    label="Qtd. Comissão"
+                    type="number"
+                    value={turmaDraft.quantidadeComissao}
+                    onChange={(v) => setTurmaDraft((d) => ({ ...d, quantidadeComissao: v }))}
+                  />
+                  <MiniField
+                    label="Meta de Contratos"
+                    type="number"
+                    value={turmaDraft.metaContratos}
+                    onChange={(v) => setTurmaDraft((d) => ({ ...d, metaContratos: v }))}
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <MiniStat label="Empresa" value={lead.empresa || '—'} />
+                  <MiniStat label="Turma" value={lead.turma || '—'} />
+                  <MiniStat label="Ano Formatura" value={lead.anoFormatura || '—'} />
+                  <MiniStat
+                    icon={<Users className="w-3 h-3" />}
+                    label="Qtd. Comissão"
+                    value={lead.quantidadeComissao != null ? String(lead.quantidadeComissao) : '—'}
+                  />
+                  <MiniStat
+                    icon={<Target className="w-3 h-3" />}
+                    label="Meta de Contratos"
+                    value={lead.metaContratos != null ? String(lead.metaContratos) : '—'}
+                  />
+                  <MiniStat
+                    icon={<CheckCircle2 className="w-3 h-3" />}
+                    label="Alunos Fechados"
+                    value={String(lead.alunosFechados || 0)}
+                  />
+                  <MiniStat label="Total de Alunos" value={String(lead.totalAlunos || 0)} />
+                </div>
+              )}
+
+              {/* Foto da turma */}
+              <div className="flex items-center gap-3 pt-1 border-t border-white/[0.04]">
+                <div className="w-14 h-14 rounded-lg border border-dashed border-white/15 bg-white/[0.02] flex items-center justify-center overflow-hidden shrink-0">
+                  {lead.fotoUrl ? (
+                    <img src={lead.fotoUrl} alt="Foto da turma" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="w-5 h-5 text-slate-600" />
+                  )}
+                </div>
+                <label className="text-[10px] text-orange-300 hover:text-orange-200 cursor-pointer">
+                  {uploadingFoto ? 'Enviando...' : lead.fotoUrl ? 'Trocar foto da turma' : 'Enviar foto da turma'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingFoto}
+                    onChange={handleSelectFoto}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
 
           {/* Tempo no estágio atual */}
           <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] flex items-center justify-between">
@@ -1032,6 +1421,67 @@ function DetailCard({
         {icon} {label}
       </div>
       <div className="text-xs font-semibold text-white truncate">{value}</div>
+    </div>
+  )
+}
+
+function MiniStat({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode
+  label: string
+  value: string
+}) {
+  return (
+    <div className="p-2 rounded-lg bg-[#111820] border border-white/[0.06]">
+      <div className="flex items-center gap-1 text-[9px] text-slate-500 mb-0.5 uppercase tracking-wide">
+        {icon} {label}
+      </div>
+      <div className="text-xs font-semibold text-slate-200 truncate">{value}</div>
+    </div>
+  )
+}
+
+function MiniField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  select,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+  select?: boolean
+  options?: string[]
+}) {
+  return (
+    <div>
+      <label className="block text-[9px] text-slate-500 mb-0.5 uppercase tracking-wide">{label}</label>
+      {select ? (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-[#111820] border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+        >
+          {(options || []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-[#111820] border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+        />
+      )}
     </div>
   )
 }
