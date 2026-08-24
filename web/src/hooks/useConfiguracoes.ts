@@ -168,7 +168,7 @@ export function useConfiguracoes() {
 
         const { error: err } = await supabase
           .from('configuracoes')
-          .upsert({ user_id: user.id, ...updatePayload })
+          .upsert({ user_id: user.id, ...updatePayload }, { onConflict: 'user_id' })
 
         if (err) throw err
       } catch (e: any) {

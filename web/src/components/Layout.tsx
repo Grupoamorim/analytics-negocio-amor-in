@@ -251,8 +251,14 @@ export default function Layout() {
 
           {/* Logo compacta visível no topo mobile */}
           <div className="flex items-center gap-2 md:hidden">
-            <BrandIconComponent />
-            <span className="font-bold text-base tracking-tight text-white">Amor In Formaturas</span>
+            {configuracoes.logoUrl ? (
+              <img src={configuracoes.logoUrl} alt="Amor In Formaturas" className="h-7 max-w-[140px] object-contain" />
+            ) : (
+              <>
+                <BrandIconComponent />
+                <span className="font-bold text-base tracking-tight text-white">Amor In Formaturas</span>
+              </>
+            )}
           </div>
 
           <div className="hidden md:flex items-center gap-2 md:pl-[248px]">
@@ -484,18 +490,24 @@ export default function Layout() {
       <aside className="hidden md:flex flex-col fixed top-0 left-0 bottom-0 w-[260px] bg-[#0a0f14] border-r border-white/[0.06] z-50">
         {/* Topo da Sidebar: Logo */}
         <div className="h-[60px] flex items-center px-6 gap-3 border-b border-white/[0.06]">
-          <div className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
-            <BrandIconComponent />
-          </div>
-          <div>
-            <div className="font-bold text-base tracking-tight text-white flex items-center gap-1.5">
-              Amor In Formaturas
-              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                PRO
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-400">Conversão de Vendas</div>
-          </div>
+          {configuracoes.logoUrl ? (
+            <img src={configuracoes.logoUrl} alt="Amor In Formaturas" className="h-9 max-w-[190px] object-contain" />
+          ) : (
+            <>
+              <div className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                <BrandIconComponent />
+              </div>
+              <div>
+                <div className="font-bold text-base tracking-tight text-white flex items-center gap-1.5">
+                  Amor In Formaturas
+                  <span className="text-[10px] font-semibold uppercase px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                    PRO
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400">Conversão de Vendas</div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Menu de Navegação Vertical, setorizado por módulo */}
@@ -581,8 +593,14 @@ export default function Layout() {
           <div className="relative w-[280px] max-w-[85%] bg-[#0a0f14] border-r border-white/10 h-full flex flex-col p-4 shadow-2xl z-10 animate-slide-right">
             <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
               <div className="flex items-center gap-2.5">
-                <BrandIconComponent />
-                <span className="font-bold text-lg text-white">Amor In Formaturas</span>
+                {configuracoes.logoUrl ? (
+                  <img src={configuracoes.logoUrl} alt="Amor In Formaturas" className="h-8 max-w-[170px] object-contain" />
+                ) : (
+                  <>
+                    <BrandIconComponent />
+                    <span className="font-bold text-lg text-white">Amor In Formaturas</span>
+                  </>
+                )}
               </div>
               <button
                 type="button"
