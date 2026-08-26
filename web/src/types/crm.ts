@@ -281,9 +281,13 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
       {
         label: 'Criar Grupo com a Comissão',
         detalhe:
-          'PENDENTE DE CONFIRMAR COM O LUCAS: padrão do nome do grupo, quais membros da ' +
-          'equipe Amor In entram e quais números da comissão entram. Assim que criar o ' +
-          'grupo, adicione a equipe Amor In responsável por essa turma e os contatos da comissão.',
+          'Nome do grupo: nome completo da turma (Empresa + Curso + Faculdade + Turma + ' +
+          'Ano + Cidade), igual já aparece no sistema.\n\n' +
+          'Quem entra, nesse primeiro momento:\n' +
+          '• O SDR/vendedor responsável por essa turma (o Responsável marcado no Funil)\n' +
+          '• Gestor Comercial — 77 98816-0314\n' +
+          '• CS/Atendimento Geral — 77 99129-7729\n\n' +
+          'Depois, adicione os contatos da comissão.',
       },
       {
         label: 'Montar/Preencher o Pacote',
