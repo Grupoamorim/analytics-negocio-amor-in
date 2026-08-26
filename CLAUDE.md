@@ -103,8 +103,15 @@ Reúne em abas: Usuários e Cargos, Integrações (SGE), Banco de Dados (Supabas
 ## Pendências abertas / dúvidas em aberto com o Lucas
 
 - **"Ordenar"**: já implementado de forma geral (ver seção de convenções acima). Se o Lucas pedir ordenação em uma tela nova, seguir o mesmo padrão do `SortControl`.
-- **Turmas concluídas automaticamente por semestre**: Lucas pediu (em áudio, parcialmente confuso) que turmas com ano de formatura já passado migrem automaticamente para "Concluída" ao virar o semestre, e que uma nova turma do semestre seguinte seja criada automaticamente. O mecanismo exato de criação da turma nova nunca foi confirmado — **não implementado, aguardando confirmação**.
 - **Aba "Conflitos" / aba "Movimentar"**: pedido de uma aba com checklist para marcar itens como concluídos, que somem e movam a turma para "Concluída" automaticamente. Escopo/página exata nunca foi confirmada — **não implementado, aguardando confirmação**.
+
+## Turmas concluídas automaticamente por semestre (implementado)
+
+Turma com `funil_status = 'Convertido'` cujo Ano de Formatura já passou (ex: "2026.1" conclui a partir de 01/07/2026; "2026.2" a partir de 01/01/2027) é marcada automaticamente com o campo `concluida` (independente do status do funil) pelo job `collectors/turma_conclusao.py`, rodando 1x/dia via `.github/workflows/sync-turma-conclusao.yml`.
+
+Ao concluir, o job tenta criar a turma seguinte (mesmo curso/faculdade/cidade/empresa) usando a duração do curso cadastrada em Administração → Turmas (tabela `duracao_cursos`, curso [+ faculdade opcional] → anos). **Fórmula confirmada com o Lucas**: `ano_formatura_nova = ano_formatura_antiga + duração_do_curso + 1`, mesmo semestre (ex: Odontologia 5 anos, turma que forma em 2026.2 → gera turma que forma em 2032.2). Se a duração não estiver cadastrada pro curso, a turma só é marcada concluída — a turma nova **não** é criada (não inventamos duração de curso). Duração já cadastrada de fábrica: Odontologia = 5 anos, Direito = 5 anos, Medicina = 6 anos (demais cursos ficam por conta do Lucas cadastrar em Administração → Turmas).
+
+Na tela de Turmas (`Leads.tsx`), turmas concluídas ficam ocultas por padrão (checkbox "Mostrar concluídas" na barra de filtros) e exibem uma badge verde "Concluída" ao lado do Ano de Formatura.
 
 ---
 

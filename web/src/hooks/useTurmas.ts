@@ -46,6 +46,9 @@ function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | n
     quantidadeComissao: row.quantidade_comissao ?? undefined,
     metaContratos: row.meta_contratos ?? undefined,
     fotoUrl: row.foto_url || undefined,
+    concluida: row.concluida || false,
+    concluidaEm: row.concluida_em || undefined,
+    turmaOrigemId: row.turma_origem_id || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     updatedByEmail: row.updated_by_profile?.email || undefined,
@@ -223,6 +226,8 @@ export function useTurmas() {
           updatePayload.quantidade_comissao = updates.quantidadeComissao
         if (updates.metaContratos !== undefined) updatePayload.meta_contratos = updates.metaContratos
         if (updates.fotoUrl !== undefined) updatePayload.foto_url = updates.fotoUrl
+        if (updates.concluida !== undefined) updatePayload.concluida = updates.concluida
+        if (updates.concluidaEm !== undefined) updatePayload.concluida_em = updates.concluidaEm || null
         updatePayload.updated_by = user.id
 
         const { error: err } = await supabase.from('turmas').update(updatePayload).eq('id', id)

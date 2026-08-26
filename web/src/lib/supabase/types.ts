@@ -12,7 +12,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -407,6 +407,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      duracao_cursos: {
+        Row: {
+          created_at: string
+          curso: string
+          duracao_anos: number
+          faculdade: string
+          id: string
+          observacoes: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          curso: string
+          duracao_anos: number
+          faculdade?: string
+          id?: string
+          observacoes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          curso?: string
+          duracao_anos?: number
+          faculdade?: string
+          id?: string
+          observacoes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       mercado_faculdades: {
         Row: {
@@ -1499,6 +1529,8 @@ export type Database = {
           codigo: string
           codigo_sge: string | null
           como_conheceu: string | null
+          concluida: boolean
+          concluida_em: string | null
           concorrentes: string | null
           contato_nome: string | null
           contato_telefone: string | null
@@ -1525,6 +1557,7 @@ export type Database = {
           tipo_servico: string | null
           total_alunos: number | null
           turma: string | null
+          turma_origem_id: string | null
           updated_at: string | null
           updated_by: string | null
           user_id: string | null
@@ -1537,6 +1570,8 @@ export type Database = {
           codigo: string
           codigo_sge?: string | null
           como_conheceu?: string | null
+          concluida?: boolean
+          concluida_em?: string | null
           concorrentes?: string | null
           contato_nome?: string | null
           contato_telefone?: string | null
@@ -1563,6 +1598,7 @@ export type Database = {
           tipo_servico?: string | null
           total_alunos?: number | null
           turma?: string | null
+          turma_origem_id?: string | null
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
@@ -1575,6 +1611,8 @@ export type Database = {
           codigo?: string
           codigo_sge?: string | null
           como_conheceu?: string | null
+          concluida?: boolean
+          concluida_em?: string | null
           concorrentes?: string | null
           contato_nome?: string | null
           contato_telefone?: string | null
@@ -1601,11 +1639,26 @@ export type Database = {
           tipo_servico?: string | null
           total_alunos?: number | null
           turma?: string | null
+          turma_origem_id?: string | null
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "turmas_turma_origem_id_fkey"
+            columns: ["turma_origem_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turmas_turma_origem_id_fkey"
+            columns: ["turma_origem_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "turmas_updated_by_fkey"
             columns: ["updated_by"]

@@ -168,6 +168,7 @@ export default function LeadsPage() {
   const [filterAno, setFilterAno] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterEmpresa, setFilterEmpresa] = useState<string>('all')
+  const [showConcluidas, setShowConcluidas] = useState(false)
 
   // Ordenação
   const [sortField, setSortField] = useState<string>('faculdade')
@@ -449,6 +450,7 @@ export default function LeadsPage() {
       const matchesColAno =
         !columnFilters.anoFormatura || columnFilters.anoFormatura.includes(lead.anoFormatura)
       const matchesColStatus = !columnFilters.status || columnFilters.status.includes(lead.status)
+      const matchesConcluida = showConcluidas || !lead.concluida
 
       return (
         matchesSearch &&
@@ -463,7 +465,8 @@ export default function LeadsPage() {
         matchesColFaculdade &&
         matchesColCidade &&
         matchesColAno &&
-        matchesColStatus
+        matchesColStatus &&
+        matchesConcluida
       )
     })
   }, [
@@ -476,6 +479,7 @@ export default function LeadsPage() {
     filterStatus,
     filterEmpresa,
     columnFilters,
+    showConcluidas,
   ])
 
   // Opções de ordenação disponíveis para a tabela de turmas
@@ -1451,6 +1455,14 @@ export default function LeadsPage() {
                 <SelectItem value="Perdido">Perdeu</SelectItem>
               </SelectContent>
             </Select>
+
+            <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap px-1">
+              <Checkbox
+                checked={showConcluidas}
+                onCheckedChange={(v) => setShowConcluidas(v === true)}
+              />
+              Mostrar concluídas
+            </label>
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800">
@@ -1699,6 +1711,19 @@ export default function LeadsPage() {
                           </span>
                           <span>•</span>
                           <span>{lead.anoFormatura}</span>
+                          {lead.concluida && (
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] py-0 px-1.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                              title={
+                                lead.concluidaEm
+                                  ? `Concluída em ${new Date(lead.concluidaEm).toLocaleDateString('pt-BR')}`
+                                  : 'Concluída'
+                              }
+                            >
+                              Concluída
+                            </Badge>
+                          )}
                         </div>
                       </td>
 

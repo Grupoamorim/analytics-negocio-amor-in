@@ -32,6 +32,13 @@ import {
   atualizarVendedor,
   removerVendedor,
 } from '@/utils/vendedores'
+import {
+  DuracaoCurso,
+  listarDuracaoCursos,
+  adicionarDuracaoCurso,
+  atualizarDuracaoCurso,
+  removerDuracaoCurso,
+} from '@/utils/duracaoCursos'
 import { supabase } from '@/lib/supabase/client'
 import {
   ShieldCheck,
@@ -48,6 +55,7 @@ import {
   LogIn,
   Image as ImageIcon,
   Trash2,
+  GraduationCap,
 } from 'lucide-react'
 
 interface Perfil {
@@ -80,6 +88,14 @@ export default function Admin() {
   const [carregandoVendedores, setCarregandoVendedores] = useState(true)
   const [novoVendedorNome, setNovoVendedorNome] = useState('')
   const [salvandoVendedor, setSalvandoVendedor] = useState(false)
+
+  // Duração de Cursos (conclusão automática de turma)
+  const [duracaoCursos, setDuracaoCursos] = useState<DuracaoCurso[]>([])
+  const [carregandoDuracaoCursos, setCarregandoDuracaoCursos] = useState(true)
+  const [novoCursoDuracao, setNovoCursoDuracao] = useState('')
+  const [novaFaculdadeDuracao, setNovaFaculdadeDuracao] = useState('')
+  const [novosAnosDuracao, setNovosAnosDuracao] = useState('')
+  const [salvandoDuracaoCurso, setSalvandoDuracaoCurso] = useState(false)
 
   // SGE State
   const [sgeCnpj, setSgeCnpj] = useState('')
@@ -168,6 +184,54 @@ export default function Admin() {
     if (!confirm(`Remover "${v.nome}" da lista de vendedores/SDR?`)) return
     await removerVendedor(v.id)
     setVendedores((prev) => prev.filter((x) => x.id !== v.id))
+  }
+
+  useEffect(() => {
+    async function carregar() {
+      setCarregandoDuracaoCursos(true)
+      setDuracaoCursos(await listarDuracaoCursos())
+      setCarregandoDuracaoCursos(false)
+    }
+    carregar()
+  }, [])
+
+  async function handleAdicionarDuracaoCurso(e: React.FormEvent) {
+    e.preventDefault()
+    const curso = novoCursoDuracao.trim()
+    const anos = Number(novosAnosDuracao)
+    if (!curso || !anos) return
+    setSalvandoDuracaoCurso(true)
+    try {
+      await adicionarDuracaoCurso(curso, novaFaculdadeDuracao, anos)
+      setDuracaoCursos(await listarDuracaoCursos())
+      setNovoCursoDuracao('')
+      setNovaFaculdadeDuracao('')
+      setNovosAnosDuracao('')
+      toast({ title: 'Duração cadastrada', description: `${curso} (${anos} anos) salvo.` })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao adicionar',
+        description: err.message || 'Não foi possível salvar. Talvez esse curso+faculdade já exista.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSalvandoDuracaoCurso(false)
+    }
+  }
+
+  async function handleEditarDuracaoCurso(d: DuracaoCurso) {
+    const novoValor = prompt(`Nova duração (em anos) para ${d.curso}${d.faculdade ? ' - ' + d.faculdade : ''}:`, String(d.duracaoAnos))
+    if (!novoValor) return
+    const anos = Number(novoValor)
+    if (!anos) return
+    await atualizarDuracaoCurso(d.id, { duracaoAnos: anos })
+    setDuracaoCursos((prev) => prev.map((x) => (x.id === d.id ? { ...x, duracaoAnos: anos } : x)))
+  }
+
+  async function handleRemoverDuracaoCurso(d: DuracaoCurso) {
+    if (!confirm(`Remover a duração cadastrada de "${d.curso}${d.faculdade ? ' - ' + d.faculdade : ''}"?`)) return
+    await removerDuracaoCurso(d.id)
+    setDuracaoCursos((prev) => prev.filter((x) => x.id !== d.id))
   }
 
   // Sync state from hook config
@@ -415,9 +479,10 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="usuarios" className="space-y-4">
-        <TabsList className="grid grid-cols-3 sm:grid-cols-7 w-full max-w-4xl bg-[#111820] border border-white/[0.06]">
+        <TabsList className="grid grid-cols-3 sm:grid-cols-8 w-full max-w-5xl bg-[#111820] border border-white/[0.06]">
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
           <TabsTrigger value="vendedores">Vendedores/SDR</TabsTrigger>
+          <TabsTrigger value="turmas">Turmas</TabsTrigger>
           <TabsTrigger value="integracoes">Integrações</TabsTrigger>
           <TabsTrigger value="supabase">Banco de Dados</TabsTrigger>
           <TabsTrigger value="ia">IA</TabsTrigger>
@@ -534,6 +599,98 @@ export default function Admin() {
                         <button
                           type="button"
                           onClick={() => handleRemoverVendedor(v)}
+                          className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05]"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ABA: TURMAS */}
+        <TabsContent value="turmas" className="space-y-4">
+          <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-orange-400" /> Duração dos Cursos
+            </h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Usado pela conclusão automática de turma: quando uma turma fecha o semestre de
+              formatura, o sistema marca ela como "Concluída" e — se a duração do curso estiver
+              cadastrada aqui — cria sozinho a turma seguinte (mesmo curso/faculdade/cidade,
+              formatura calculada a partir dessa duração). Sem duração cadastrada, a turma só é
+              marcada como concluída; a turma nova não é criada automaticamente.
+            </p>
+
+            <form onSubmit={handleAdicionarDuracaoCurso} className="flex items-center gap-2 mb-4">
+              <input
+                type="text"
+                placeholder="Curso (ex: Odontologia)"
+                value={novoCursoDuracao}
+                onChange={(e) => setNovoCursoDuracao(e.target.value)}
+                className="flex-1 bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <input
+                type="text"
+                placeholder="Faculdade (opcional)"
+                value={novaFaculdadeDuracao}
+                onChange={(e) => setNovaFaculdadeDuracao(e.target.value)}
+                className="flex-1 bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <input
+                type="number"
+                min={1}
+                placeholder="Anos"
+                value={novosAnosDuracao}
+                onChange={(e) => setNovosAnosDuracao(e.target.value)}
+                className="w-20 bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <Button
+                type="submit"
+                disabled={!novoCursoDuracao.trim() || !novosAnosDuracao || salvandoDuracaoCurso}
+                className="bg-orange-500 hover:bg-orange-600 text-white text-xs"
+              >
+                Adicionar
+              </Button>
+            </form>
+
+            {carregandoDuracaoCursos ? (
+              <div className="text-sm text-slate-400">Carregando...</div>
+            ) : duracaoCursos.length === 0 ? (
+              <div className="text-sm text-slate-500">Nenhuma duração de curso cadastrada ainda.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 text-xs uppercase border-b border-white/[0.06]">
+                    <th className="py-2">Curso</th>
+                    <th className="py-2">Faculdade</th>
+                    <th className="py-2">Duração</th>
+                    <th className="py-2 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {duracaoCursos.map((d) => (
+                    <tr key={d.id} className="border-b border-white/[0.04]">
+                      <td className="py-2.5 text-slate-200">{d.curso}</td>
+                      <td className="py-2.5 text-slate-400">{d.faculdade || 'Todas'}</td>
+                      <td className="py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleEditarDuracaoCurso(d)}
+                          className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-orange-500/15 text-orange-400 border-orange-500/30"
+                        >
+                          {d.duracaoAnos} anos
+                        </button>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverDuracaoCurso(d)}
                           className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05]"
                           title="Remover"
                         >

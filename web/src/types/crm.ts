@@ -84,6 +84,10 @@ export interface Lead {
   quantidadeComissao?: number // nº de pessoas na comissão da turma
   metaContratos?: number // meta de contratos fechados para a turma
   fotoUrl?: string // foto de capa da turma
+
+  concluida?: boolean // true quando a turma passou do semestre de formatura (job automático)
+  concluidaEm?: string // data em que foi marcada como concluída
+  turmaOrigemId?: string // id da turma que originou esta (quando criada automaticamente)
 }
 
 /**
