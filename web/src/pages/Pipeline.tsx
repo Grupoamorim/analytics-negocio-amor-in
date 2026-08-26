@@ -447,7 +447,8 @@ export default function Pipeline() {
                                     key={i}
                                     className="text-[10px] text-slate-300 flex items-start gap-1.5 leading-tight"
                                   >
-                                    <span className="text-slate-500 mt-0.5">•</span> {t}
+                                    <span className="text-slate-500 mt-0.5">•</span>{' '}
+                                    {typeof t === 'string' ? t : t.label}
                                   </li>
                                 ))}
                               </ul>
@@ -683,26 +684,16 @@ export default function Pipeline() {
                             </div>
                             {expandedChecklistDealIds.has(deal.id) && (
                               <div className="mt-2 space-y-1">
-                                {stageItems.map((it) => {
-                                  const checked = !!deal.checklist?.[it.id]
-                                  return (
-                                    <button
-                                      key={it.id}
-                                      type="button"
-                                      onClick={() => toggleChecklistItem(deal.id, it.id, !checked)}
-                                      className="w-full flex items-start gap-1.5 text-left text-[10px] text-slate-300 hover:text-white"
-                                    >
-                                      {checked ? (
-                                        <CheckSquare className="w-3 h-3 mt-0.5 flex-shrink-0 text-emerald-400" />
-                                      ) : (
-                                        <Circle className="w-3 h-3 mt-0.5 flex-shrink-0 text-slate-500" />
-                                      )}
-                                      <span className={checked ? 'line-through text-slate-500' : ''}>
-                                        {it.label}
-                                      </span>
-                                    </button>
-                                  )
-                                })}
+                                {stageItems.map((it) => (
+                                  <ChecklistItemRow
+                                    key={it.id}
+                                    item={it}
+                                    checked={!!deal.checklist?.[it.id]}
+                                    onToggle={() =>
+                                      toggleChecklistItem(deal.id, it.id, !deal.checklist?.[it.id])
+                                    }
+                                  />
+                                ))}
                               </div>
                             )}
                           </div>
@@ -1763,30 +1754,14 @@ function DealDetailModal({
                       </span>
                     </div>
                     <div className="space-y-1.5">
-                      {items.map((it) => {
-                        const checked = !!deal.checklist?.[it.id]
-                        return (
-                          <button
-                            key={it.id}
-                            type="button"
-                            onClick={() => onToggleChecklist(it.id, !checked)}
-                            className="flex items-center gap-2 w-full text-left group"
-                          >
-                            {checked ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                            ) : (
-                              <Circle className="w-4 h-4 text-slate-500 group-hover:text-slate-300 flex-shrink-0" />
-                            )}
-                            <span
-                              className={`text-xs ${
-                                checked ? 'text-slate-500 line-through' : 'text-slate-200'
-                              }`}
-                            >
-                              {it.label}
-                            </span>
-                          </button>
-                        )
-                      })}
+                      {items.map((it) => (
+                        <ChecklistItemRow
+                          key={it.id}
+                          item={it}
+                          checked={!!deal.checklist?.[it.id]}
+                          onToggle={() => onToggleChecklist(it.id, !deal.checklist?.[it.id])}
+                        />
+                      ))}
                     </div>
                   </div>
                 )
@@ -1892,6 +1867,85 @@ function DealDetailModal({
           sgeLink={sgeLink}
           onClose={() => setMostrarApresentacao(false)}
         />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Uma linha de item de checklist: marca feito/pendente clicando no ícone,
+ * e se o item tem `detalhe` (explicação) ou `script` (mensagem pronta),
+ * mostra uma setinha própria — minimizada por padrão — que revela o texto
+ * e um botão de copiar quando aplicável.
+ */
+function ChecklistItemRow({
+  item,
+  checked,
+  onToggle,
+}: {
+  item: { id: string; label: string; detalhe?: string; script?: string }
+  checked: boolean
+  onToggle: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+  const hasDetalhe = !!(item.detalhe || item.script)
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!item.script) return
+    navigator.clipboard.writeText(item.script)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
+  return (
+    <div className="text-[10px]">
+      <div className="w-full flex items-start gap-1.5 text-slate-300">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex items-start gap-1.5 text-left hover:text-white flex-1 min-w-0"
+        >
+          {checked ? (
+            <CheckSquare className="w-3 h-3 mt-0.5 flex-shrink-0 text-emerald-400" />
+          ) : (
+            <Circle className="w-3 h-3 mt-0.5 flex-shrink-0 text-slate-500" />
+          )}
+          <span className={checked ? 'line-through text-slate-500' : ''}>{item.label}</span>
+        </button>
+        {hasDetalhe && (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="text-slate-500 hover:text-white flex-shrink-0"
+            title={open ? 'Ocultar explicação' : 'Ver explicação'}
+          >
+            <ChevronRight className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
+          </button>
+        )}
+      </div>
+      {hasDetalhe && open && (
+        <div className="ml-[18px] mt-1 mb-1.5 p-2 rounded-lg bg-white/[0.03] border border-white/[0.06] space-y-1.5">
+          {item.detalhe && (
+            <p className="text-slate-400 whitespace-pre-line leading-relaxed">{item.detalhe}</p>
+          )}
+          {item.script && (
+            <div className="space-y-1">
+              <p className="text-slate-300 whitespace-pre-line leading-relaxed bg-black/20 rounded p-1.5">
+                {item.script}
+              </p>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200 font-semibold"
+              >
+                <ClipboardCopy className="w-3 h-3" />
+                {copiado ? 'Copiado!' : 'Copiar mensagem'}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

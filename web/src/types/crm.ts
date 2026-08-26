@@ -182,6 +182,21 @@ export interface Deal {
 // Funil de 6 estágios (Turmas)
 // ---------------------------------------------------------------------------
 
+/**
+ * Item de checklist de um estágio. Pode ser só um texto curto (label), ou um
+ * objeto com explicação/script — usado quando o item não é uma ação simples
+ * de marcar, e sim um passo com contexto (ex: o script de mensagem a copiar).
+ */
+export type StageTaskDef =
+  | string
+  | {
+      label: string
+      /** Explicação de como/quando fazer esse passo. */
+      detalhe?: string
+      /** Texto pronto pra copiar e colar (ex: script de mensagem). */
+      script?: string
+    }
+
 export interface FunnelStageMeta {
   id: string
   name: string
@@ -189,7 +204,7 @@ export interface FunnelStageMeta {
   /** Significado/objetivo do estágio (tooltip do ícone "i"). */
   description: string
   /** O que deve ser feito neste estágio. */
-  tasks: string[]
+  tasks: StageTaskDef[]
   /** Alerta de estagnação em dias (turma parada sem ação). */
   stagnationAlertDays: number
   /** Ação sugerida quando estagnada. */
@@ -227,13 +242,25 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
     defaultProbability: 40,
     description: 'Fase 1 do Playbook — Aquecimento: primeiro contato e qualificação.',
     tasks: [
-      'Enviar a sequência de Primeiro Contato (texto + áudio + texto do Instagram)',
-      'Marcar Primeiro Contato como concluído ao enviar (mesmo sem resposta)',
-      'Ao responder: perguntar se faz parte da comissão (script de Qualificação)',
-      'Se SIM: lead qualificado — preparar a proposta',
-      'Se NÃO souber quem é a comissão: pedir contato dos responsáveis',
-      'Se ainda NÃO tem comissão: enviar material "Como montar uma comissão" e agendar follow-up',
-      'Se NÃO RESPONDE: qualificar como não interessado, turma volta pra Prospecção',
+      {
+        label: 'Primeiro Contato',
+        detalhe:
+          'Envie a sequência abaixo assim que conseguir o contato. Marque como feito ao enviar — mesmo sem resposta ainda.',
+        script:
+          'Texto 1: Bom dia, [Nome do Aluno], tudo bem?\n\n' +
+          'Áudio: Meu nome é [Seu Nome], sou da Amor in Formaturas. Vi que você faz [Curso] na [Faculdade] e tenho um presente incrível para sua turma.\n\n' +
+          'Texto 2: É isso mesmo! O presente é pra toda a turma. Dá uma olhada no nosso Instagram aí pra conhecer nosso trabalho: @amorimformaturas.',
+      },
+      {
+        label: 'Qualificação do Contato',
+        detalhe:
+          'Assim que o lead responder, descubra se ele faz parte da comissão.\n\n' +
+          'Pergunta: "Pra eu poder explicar melhor sobre o presente, me tira uma dúvida — você faz parte da comissão?"\n\n' +
+          '• SIM: lead qualificado, preparar a proposta.\n' +
+          '• NÃO sabe quem é a comissão: pedir contato dos responsáveis e cadastrar no Mapa de Mercado.\n' +
+          '• Ainda NÃO tem comissão: enviar material "Como montar uma comissão" e agendar follow-up pro próximo semestre.\n' +
+          '• NÃO RESPONDE: qualificar como não interessado — a turma volta pra Prospecção.',
+      },
     ],
     stagnationAlertDays: 5,
     suggestedAction: 'Enviar o Primeiro Contato e confirmar se é a comissão.',
@@ -321,6 +348,8 @@ export interface ChecklistItem {
   id: string
   stageId: string
   label: string
+  detalhe?: string
+  script?: string
 }
 
 /**
@@ -333,10 +362,12 @@ export interface ChecklistItem {
  * Espelha `FUNNEL_STAGES[].tasks`.
  */
 export const DEFAULT_CHECKLIST_ITEMS: ChecklistItem[] = FUNNEL_STAGES.flatMap((stage) =>
-  stage.tasks.map((label, idx) => ({
+  stage.tasks.map((task, idx) => ({
     id: `${stage.id}-${idx}`,
     stageId: stage.id,
-    label,
+    label: typeof task === 'string' ? task : task.label,
+    detalhe: typeof task === 'string' ? undefined : task.detalhe,
+    script: typeof task === 'string' ? undefined : task.script,
   })),
 )
 
