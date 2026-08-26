@@ -406,9 +406,13 @@ export default function Pipeline() {
                     ? 'border-orange-500/60 bg-orange-500/[0.04]'
                     : 'border-white/[0.06] bg-[#0f1419]'
                 }`}
+                style={{ borderTop: `3px solid ${stage.color}` }}
               >
-                {/* Header da coluna */}
-                <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between sticky top-0">
+                {/* Header da coluna — cor de fundo reflete a cor da etapa */}
+                <div
+                  className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between sticky top-0 rounded-t-[10px]"
+                  style={{ backgroundColor: `${stage.color}1f` }}
+                >
                   <div className="flex items-center gap-2 min-w-0">
                     <span
                       className="w-2.5 h-2.5 rounded-full flex-shrink-0"
