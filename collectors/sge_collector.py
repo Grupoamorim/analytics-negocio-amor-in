@@ -249,7 +249,18 @@ def coletar_adesoes():
         # aninhados em "Cliente" (adesao) e "Projeto" (turma).
         c = sub(a, "Cliente")
         p = sub(a, "Projeto")
-        cod = str(a.get("Codigo") or a.get("Id") or chave_por_conteudo(a))
+        # Esse endpoint nunca traz Codigo/Id de primeiro nivel (confirmado
+        # em producao - 100% dos registros caiam no fallback). Usar
+        # chave_por_conteudo (hash do JSON inteiro) causava duplicata: como
+        # campos internos mudam ao longo da vida da adesao (ValorPago,
+        # DataAssinaturaContrato preenchidos depois), a "impressao digital"
+        # do mesmo registro real mudava a cada sync e o upsert nao
+        # reconhecia que era a mesma adesao, inserindo uma linha nova por
+        # execucao. Usamos so os campos que identificam a adesao em si e
+        # nao mudam depois de criada.
+        cod = str(a.get("Codigo") or a.get("Id") or gerar_chave(
+            c.get("DataAdesao"), c.get("Curso"), c.get("Instituicao"), c.get("Plano")
+        ))
         if cod in vistos:
             continue
         vistos.add(cod)
