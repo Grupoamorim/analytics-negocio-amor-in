@@ -64,9 +64,6 @@ import {
   gerarMensagemPacotes,
 } from '@/utils/pacotesTurma'
 import { ItemCatalogo, TemplatePacote, fetchCatalogoAtivo, fetchTemplatesAtivos } from '@/utils/pacoteCatalogo'
-import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
-import { fetchCidadeFaculdades, ensureCidadeFaculdade, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
-import DropdownComOutro from '@/components/DropdownComOutro'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
@@ -698,6 +695,7 @@ export default function Pipeline() {
           deal={selectedDeal}
           lead={selectedLead}
           owner={selectedDeal.ownerId ? memberById.get(selectedDeal.ownerId) : undefined}
+          members={members}
           stages={sortedStages}
           proposalLink={getProposalLink(selectedDeal)}
           onProposalLinkChange={(link) => persistProposalLink(selectedDeal.id, link)}
@@ -794,6 +792,7 @@ interface DealDetailModalProps {
   deal: Deal
   lead?: Lead
   owner?: TeamMember
+  members: TeamMember[]
   stages: PipelineStage[]
   proposalLink: string
   onProposalLinkChange: (link: string) => void
@@ -816,6 +815,7 @@ function DealDetailModal({
   deal,
   lead,
   owner,
+  members,
   stages,
   proposalLink,
   onProposalLinkChange,
@@ -902,12 +902,6 @@ function DealDetailModal({
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
   const [mostrarApresentacao, setMostrarApresentacao] = useState(false)
-  const [cursosConhecidos, setCursosConhecidos] = useState<string[]>([])
-  const [cidadeFaculdades, setCidadeFaculdades] = useState<CidadeFaculdadesMap>({})
-  const cidadesConhecidas = useMemo(
-    () => Object.keys(cidadeFaculdades).sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    [cidadeFaculdades],
-  )
 
   useEffect(() => {
     if (!lead) return
@@ -918,11 +912,6 @@ function DealDetailModal({
     fetchCatalogoAtivo().then(setCatalogoItens)
     fetchTemplatesAtivos().then(setTemplatesPacote)
   }, [lead?.id])
-
-  useEffect(() => {
-    fetchCursosConhecidos().then(setCursosConhecidos)
-    fetchCidadeFaculdades().then(setCidadeFaculdades)
-  }, [])
 
   // Ticket médio = média do valor dos pacotes cadastrados; Valor Esperado =
   // Ticket Médio x Meta de Contratos. Sempre calculado, nunca digitado — e o
@@ -1145,6 +1134,15 @@ function DealDetailModal({
                 <Pencil className="w-3.5 h-3.5 text-orange-400" /> Informações da Turma
               </div>
 
+              {/* Curso/Faculdade/Cidade/Ano só leitura aqui — edita em Turmas, que é a
+                  base oficial (evita editar em dois lugares e desalinhar). */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <MiniStat label="Curso" value={lead.curso || '—'} />
+                <MiniStat label="Faculdade" value={lead.faculdade || '—'} />
+                <MiniStat label="Cidade" value={lead.cidade || '—'} />
+                <MiniStat label="Ano Formatura" value={lead.anoFormatura || '—'} />
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <MiniField
                   label="Empresa"
@@ -1158,32 +1156,6 @@ function DealDetailModal({
                   defaultValue={lead.turma || ''}
                   onSave={(v) => onUpdateLead({ turma: v.trim() || 'Turma 0' })}
                 />
-                <DropdownComOutro
-                  label="Curso"
-                  value={lead.curso || ''}
-                  options={cursosConhecidos}
-                  onSave={(v) => onUpdateLead({ curso: v })}
-                />
-                <DropdownComOutro
-                  label="Cidade"
-                  value={lead.cidade || ''}
-                  options={cidadesConhecidas}
-                  onSave={(v) => onUpdateLead({ cidade: v })}
-                />
-                <DropdownComOutro
-                  label="Faculdade"
-                  value={lead.faculdade || ''}
-                  options={lead.cidade ? cidadeFaculdades[lead.cidade] || [] : []}
-                  onSave={(v) => {
-                    onUpdateLead({ faculdade: v })
-                    if (lead.cidade) ensureCidadeFaculdade(lead.cidade, v)
-                  }}
-                />
-                <MiniFieldBlur
-                  label="Ano Formatura"
-                  defaultValue={lead.anoFormatura || ''}
-                  onSave={(v) => onUpdateLead({ anoFormatura: v.trim() })}
-                />
                 <MiniFieldBlur
                   label="Qtd. Comissão"
                   type="number"
@@ -1196,28 +1168,30 @@ function DealDetailModal({
                   defaultValue={lead.metaContratos != null ? String(lead.metaContratos) : ''}
                   onSave={(v) => onUpdateLead({ metaContratos: v ? Number(v) : undefined })}
                 />
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <MiniFieldBlur
+                  label="Total de Alunos"
+                  type="number"
+                  defaultValue={String(lead.totalAlunos || 0)}
+                  onSave={(v) => onUpdateLead({ totalAlunos: Number(v) || 0 })}
+                />
                 <MiniStat
                   icon={<CheckCircle2 className="w-3 h-3" />}
-                  label="Alunos Fechados"
+                  label="Alunos Fechados (automático)"
                   value={String(lead.alunosFechados || 0)}
                 />
-                <MiniStat label="Total de Alunos" value={String(lead.totalAlunos || 0)} />
               </div>
 
-              {/* Foto da turma */}
+              {/* Foto da comissão responsável pela turma */}
               <div className="flex items-center gap-3 pt-1 border-t border-white/[0.04]">
                 <div className="w-14 h-14 rounded-lg border border-dashed border-white/15 bg-white/[0.02] flex items-center justify-center overflow-hidden shrink-0">
                   {lead.fotoUrl ? (
-                    <img src={lead.fotoUrl} alt="Foto da turma" className="w-full h-full object-cover" />
+                    <img src={lead.fotoUrl} alt="Foto da comissão" className="w-full h-full object-cover" />
                   ) : (
                     <ImageIcon className="w-5 h-5 text-slate-600" />
                   )}
                 </div>
                 <label className="text-[10px] text-orange-300 hover:text-orange-200 cursor-pointer">
-                  {uploadingFoto ? 'Enviando...' : lead.fotoUrl ? 'Trocar foto da turma' : 'Enviar foto da turma'}
+                  {uploadingFoto ? 'Enviando...' : lead.fotoUrl ? 'Trocar foto da comissão' : 'Enviar foto da comissão'}
                   <input
                     type="file"
                     accept="image/*"
