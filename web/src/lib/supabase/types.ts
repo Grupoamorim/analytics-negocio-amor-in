@@ -112,11 +112,13 @@ export type Database = {
       configuracoes: {
         Row: {
           created_at: string
+          email_alerta_turma_nova: string | null
           filtros_salvos: Json
           gemini_api_key: string | null
           id: string
           logo_url: string | null
           preferencias: Json
+          resend_api_key: string | null
           sge_cnpj: string | null
           sge_token: string | null
           updated_at: string
@@ -124,11 +126,13 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          email_alerta_turma_nova?: string | null
           filtros_salvos?: Json
           gemini_api_key?: string | null
           id?: string
           logo_url?: string | null
           preferencias?: Json
+          resend_api_key?: string | null
           sge_cnpj?: string | null
           sge_token?: string | null
           updated_at?: string
@@ -136,11 +140,13 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          email_alerta_turma_nova?: string | null
           filtros_salvos?: Json
           gemini_api_key?: string | null
           id?: string
           logo_url?: string | null
           preferencias?: Json
+          resend_api_key?: string | null
           sge_cnpj?: string | null
           sge_token?: string | null
           updated_at?: string
@@ -1839,6 +1845,12 @@ export type Database = {
       }
     }
     Views: {
+      logo_marca_publica: {
+        Row: {
+          logo_url: string | null
+        }
+        Relationships: []
+      }
       vw_faturamento_mensal: {
         Row: {
           faturamento_bruto: number | null

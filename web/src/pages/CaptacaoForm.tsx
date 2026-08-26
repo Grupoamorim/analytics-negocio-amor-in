@@ -9,8 +9,6 @@ import { listarDuracaoCursos } from '@/utils/duracaoCursos'
 import { formatPhoneBR } from '@/utils/phoneMask'
 
 const OUTRO = '__outro__'
-const LOGO_URL =
-  'https://mpodlzptnhvskqmbcsdv.supabase.co/storage/v1/object/public/logos/0a7a808f-dd35-4c2a-af05-bb785090e366/logo.png'
 
 interface FormState {
   curso: string
@@ -74,13 +72,17 @@ function calcularPeriodoAtual(anoFormatura: string, duracaoAnos: number): number
   const idxHoje = idxSemestre(semestreAtualCalendario())
   if (idxFormatura === null || idxHoje === null) return null
   const semestresTotais = duracaoAnos * 2
-  const periodo = semestresTotais - (idxFormatura - idxHoje)
+  // A formatura acontece 1 semestre depois do fim das aulas (regra
+  // confirmada com o Lucas) - por isso o +1 aqui, sem ele o período
+  // atual saía sempre 1 semestre atrasado.
+  const periodo = semestresTotais - (idxFormatura - idxHoje) + 1
   if (periodo < 1 || periodo > semestresTotais) return null
   return periodo
 }
 
 export default function CaptacaoForm() {
   const [modo, setModo] = useState<'buscar' | 'manual'>('buscar')
+  const [logoUrl, setLogoUrl] = useState('')
 
   const [cursos, setCursos] = useState<string[]>([])
   const [duracoes, setDuracoes] = useState<{ curso: string; faculdade: string; duracaoAnos: number }[]>([])
@@ -97,6 +99,11 @@ export default function CaptacaoForm() {
   const [vendedores, setVendedores] = useState<string[]>([])
 
   useEffect(() => {
+    supabase
+      .from('logo_marca_publica')
+      .select('logo_url')
+      .maybeSingle()
+      .then(({ data }) => setLogoUrl(data?.logo_url || ''))
     fetchCidadeFaculdades().then(setCidadeFaculdades)
     fetchVendedoresAtivos().then(setVendedores)
     fetchCursosConhecidos().then(setCursos)
@@ -276,7 +283,17 @@ export default function CaptacaoForm() {
       <div className="w-full max-w-lg">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <img src={LOGO_URL} alt="Amor In Formaturas" className="h-14 max-w-[240px] object-contain mb-2" />
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Amor In Formaturas"
+              className="h-14 max-w-[240px] object-contain mb-2"
+            />
+          ) : (
+            <span className="font-bold text-xl tracking-tight text-white mb-2">
+              Amor In Formaturas
+            </span>
+          )}
           <h1 className="text-2xl font-bold text-white text-center tracking-tight mt-2">
             Cadastro de Interesse
           </h1>
