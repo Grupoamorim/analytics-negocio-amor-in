@@ -22,10 +22,8 @@ import {
   Pencil,
   Copy,
   Trash2,
-  Save,
   Image as ImageIcon,
   Users,
-  Target,
   LinkIcon,
   Package,
   Presentation,
@@ -859,50 +857,7 @@ function DealDetailModal({
   const days = daysInCurrentStage(deal)
   const enteredAt = currentStageEnteredAt(deal)
 
-  // Edição de valor do negócio
-  const [editingValue, setEditingValue] = useState(false)
-  const [valueDraft, setValueDraft] = useState(String(deal.value || 0))
-
-  // Edição das informações da turma (dados do Lead)
-  const [editingTurma, setEditingTurma] = useState(false)
-  const [turmaDraft, setTurmaDraft] = useState({
-    curso: lead?.curso || '',
-    faculdade: lead?.faculdade || '',
-    turma: lead?.turma || '',
-    anoFormatura: lead?.anoFormatura || '',
-    cidade: lead?.cidade || '',
-    empresa: lead?.empresa || 'AFF',
-    quantidadeComissao: String(lead?.quantidadeComissao ?? ''),
-    metaContratos: String(lead?.metaContratos ?? ''),
-  })
-  const [savingTurma, setSavingTurma] = useState(false)
   const [uploadingFoto, setUploadingFoto] = useState(false)
-
-  const handleSaveValue = () => {
-    const n = Number(valueDraft.replace(/\./g, '').replace(',', '.'))
-    onUpdateDeal({ value: isNaN(n) ? deal.value : n })
-    setEditingValue(false)
-  }
-
-  const handleSaveTurma = async () => {
-    setSavingTurma(true)
-    try {
-      onUpdateLead({
-        curso: turmaDraft.curso.trim(),
-        faculdade: turmaDraft.faculdade.trim(),
-        turma: turmaDraft.turma.trim() || 'Turma 0',
-        anoFormatura: turmaDraft.anoFormatura.trim(),
-        cidade: turmaDraft.cidade.trim(),
-        empresa: turmaDraft.empresa,
-        quantidadeComissao: turmaDraft.quantidadeComissao ? Number(turmaDraft.quantidadeComissao) : undefined,
-        metaContratos: turmaDraft.metaContratos ? Number(turmaDraft.metaContratos) : undefined,
-      })
-      toast({ title: 'Turma atualizada' })
-      setEditingTurma(false)
-    } finally {
-      setSavingTurma(false)
-    }
-  }
 
   const handleSelectFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -1137,46 +1092,17 @@ function DealDetailModal({
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
           {/* Detalhes da turma */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {editingValue ? (
-              <div className="p-2.5 rounded-lg bg-[#0a0f14] border border-orange-500/40">
-                <div className="flex items-center gap-1 text-[10px] text-slate-400 mb-1">
-                  <DollarSign className="w-3.5 h-3.5" /> Valor
-                </div>
-                <div className="flex items-center gap-1">
-                  <input
-                    autoFocus
-                    type="text"
-                    inputMode="decimal"
-                    value={valueDraft}
-                    onChange={(e) => setValueDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveValue()}
-                    className="w-full bg-[#111820] border border-white/10 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  />
-                  <button type="button" onClick={handleSaveValue} className="text-emerald-400 flex-shrink-0">
-                    <Save className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+            <div
+              className="p-2.5 rounded-lg bg-[#0a0f14] border border-white/[0.06]"
+              title="Automático: Ticket Médio dos pacotes × Meta de Contratos"
+            >
+              <div className="flex items-center gap-1 text-[10px] text-slate-400 mb-0.5">
+                <DollarSign className="w-3.5 h-3.5" /> Valor (automático)
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setValueDraft(String(deal.value || 0))
-                  setEditingValue(true)
-                }}
-                className="p-2.5 rounded-lg bg-[#0a0f14] border border-white/[0.06] hover:border-orange-500/40 text-left group"
-              >
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
-                  <span className="flex items-center gap-1">
-                    <DollarSign className="w-3.5 h-3.5" /> Valor
-                  </span>
-                  <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-                <div className="text-xs font-semibold text-white truncate">
-                  R$ {deal.value.toLocaleString('pt-BR')}
-                </div>
-              </button>
-            )}
+              <div className="text-xs font-semibold text-white truncate">
+                R$ {deal.value.toLocaleString('pt-BR')}
+              </div>
+            </div>
             <DetailCard
               icon={<MapPin className="w-3.5 h-3.5" />}
               label="Cidade"
@@ -1194,124 +1120,68 @@ function DealDetailModal({
             />
           </div>
 
-          {/* Editar Informações da Turma */}
+          {/* Informações da Turma — clica em cada campo e já edita, sem passo de "Editar" */}
           {lead && (
             <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-semibold text-slate-200">
-                  <Pencil className="w-3.5 h-3.5 text-orange-400" /> Informações da Turma
-                </div>
-                {!editingTurma ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTurmaDraft({
-                        curso: lead.curso || '',
-                        faculdade: lead.faculdade || '',
-                        turma: lead.turma || '',
-                        anoFormatura: lead.anoFormatura || '',
-                        cidade: lead.cidade || '',
-                        empresa: lead.empresa || 'AFF',
-                        quantidadeComissao: String(lead.quantidadeComissao ?? ''),
-                        metaContratos: String(lead.metaContratos ?? ''),
-                      })
-                      setEditingTurma(true)
-                    }}
-                    className="text-[10px] text-orange-300 hover:text-orange-200"
-                  >
-                    Editar
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingTurma(false)}
-                      className="text-[10px] text-slate-400 hover:text-white"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveTurma}
-                      disabled={savingTurma}
-                      className="text-[10px] font-semibold text-white bg-orange-600 hover:bg-orange-500 rounded px-2 py-1"
-                    >
-                      {savingTurma ? 'Salvando...' : 'Salvar'}
-                    </button>
-                  </div>
-                )}
+              <div className="flex items-center gap-2 font-semibold text-slate-200">
+                <Pencil className="w-3.5 h-3.5 text-orange-400" /> Informações da Turma
               </div>
 
-              {editingTurma ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <MiniField
-                    label="Empresa"
-                    select
-                    options={EMPRESAS_TURMA}
-                    value={turmaDraft.empresa}
-                    onChange={(v) => setTurmaDraft((d) => ({ ...d, empresa: v }))}
-                  />
-                  <MiniField
-                    label="Turma"
-                    value={turmaDraft.turma}
-                    onChange={(v) => setTurmaDraft((d) => ({ ...d, turma: v }))}
-                  />
-                  <MiniField
-                    label="Curso"
-                    value={turmaDraft.curso}
-                    onChange={(v) => setTurmaDraft((d) => ({ ...d, curso: v }))}
-                  />
-                  <MiniField
-                    label="Faculdade"
-                    value={turmaDraft.faculdade}
-                    onChange={(v) => setTurmaDraft((d) => ({ ...d, faculdade: v }))}
-                  />
-                  <MiniField
-                    label="Cidade"
-                    value={turmaDraft.cidade}
-                    onChange={(v) => setTurmaDraft((d) => ({ ...d, cidade: v }))}
-                  />
-                  <MiniField
-                    label="Ano Formatura"
-                    value={turmaDraft.anoFormatura}
-                    onChange={(v) => setTurmaDraft((d) => ({ ...d, anoFormatura: v }))}
-                  />
-                  <MiniField
-                    label="Qtd. Comissão"
-                    type="number"
-                    value={turmaDraft.quantidadeComissao}
-                    onChange={(v) => setTurmaDraft((d) => ({ ...d, quantidadeComissao: v }))}
-                  />
-                  <MiniField
-                    label="Meta de Contratos"
-                    type="number"
-                    value={turmaDraft.metaContratos}
-                    onChange={(v) => setTurmaDraft((d) => ({ ...d, metaContratos: v }))}
-                  />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <MiniStat label="Empresa" value={lead.empresa || '—'} />
-                  <MiniStat label="Turma" value={lead.turma || '—'} />
-                  <MiniStat label="Ano Formatura" value={lead.anoFormatura || '—'} />
-                  <MiniStat
-                    icon={<Users className="w-3 h-3" />}
-                    label="Qtd. Comissão"
-                    value={lead.quantidadeComissao != null ? String(lead.quantidadeComissao) : '—'}
-                  />
-                  <MiniStat
-                    icon={<Target className="w-3 h-3" />}
-                    label="Meta de Contratos"
-                    value={lead.metaContratos != null ? String(lead.metaContratos) : '—'}
-                  />
-                  <MiniStat
-                    icon={<CheckCircle2 className="w-3 h-3" />}
-                    label="Alunos Fechados"
-                    value={String(lead.alunosFechados || 0)}
-                  />
-                  <MiniStat label="Total de Alunos" value={String(lead.totalAlunos || 0)} />
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-2">
+                <MiniField
+                  label="Empresa"
+                  select
+                  options={EMPRESAS_TURMA}
+                  value={lead.empresa || 'AFF'}
+                  onChange={(v) => onUpdateLead({ empresa: v })}
+                />
+                <MiniFieldBlur
+                  label="Turma"
+                  defaultValue={lead.turma || ''}
+                  onSave={(v) => onUpdateLead({ turma: v.trim() || 'Turma 0' })}
+                />
+                <MiniFieldBlur
+                  label="Curso"
+                  defaultValue={lead.curso || ''}
+                  onSave={(v) => onUpdateLead({ curso: v.trim() })}
+                />
+                <MiniFieldBlur
+                  label="Faculdade"
+                  defaultValue={lead.faculdade || ''}
+                  onSave={(v) => onUpdateLead({ faculdade: v.trim() })}
+                />
+                <MiniFieldBlur
+                  label="Cidade"
+                  defaultValue={lead.cidade || ''}
+                  onSave={(v) => onUpdateLead({ cidade: v.trim() })}
+                />
+                <MiniFieldBlur
+                  label="Ano Formatura"
+                  defaultValue={lead.anoFormatura || ''}
+                  onSave={(v) => onUpdateLead({ anoFormatura: v.trim() })}
+                />
+                <MiniFieldBlur
+                  label="Qtd. Comissão"
+                  type="number"
+                  defaultValue={lead.quantidadeComissao != null ? String(lead.quantidadeComissao) : ''}
+                  onSave={(v) => onUpdateLead({ quantidadeComissao: v ? Number(v) : undefined })}
+                />
+                <MiniFieldBlur
+                  label="Meta de Contratos"
+                  type="number"
+                  defaultValue={lead.metaContratos != null ? String(lead.metaContratos) : ''}
+                  onSave={(v) => onUpdateLead({ metaContratos: v ? Number(v) : undefined })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <MiniStat
+                  icon={<CheckCircle2 className="w-3 h-3" />}
+                  label="Alunos Fechados"
+                  value={String(lead.alunosFechados || 0)}
+                />
+                <MiniStat label="Total de Alunos" value={String(lead.totalAlunos || 0)} />
+              </div>
 
               {/* Foto da turma */}
               <div className="flex items-center gap-3 pt-1 border-t border-white/[0.04]">
