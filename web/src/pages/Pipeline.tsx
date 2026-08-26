@@ -61,9 +61,11 @@ import {
   PacoteTurma,
   listarPacotes,
   adicionarPacote,
+  atualizarPacote,
   removerPacote,
   gerarMensagemPacotes,
 } from '@/utils/pacotesTurma'
+import { ItemCatalogo, TemplatePacote, fetchCatalogoAtivo, fetchTemplatesAtivos } from '@/utils/pacoteCatalogo'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
@@ -929,8 +931,15 @@ function DealDetailModal({
   // Pacotes de fotografia da turma + geração de mensagem de WhatsApp
   const [pacotes, setPacotes] = useState<PacoteTurma[]>([])
   const [loadingPacotes, setLoadingPacotes] = useState(true)
-  const [novoPacote, setNovoPacote] = useState({ nome: '', valor: '', parcelas: '', itens: '' })
+  const [novoPacote, setNovoPacote] = useState<{
+    nome: string
+    valor: string
+    parcelas: string
+    itens: string[]
+  }>({ nome: '', valor: '', parcelas: '', itens: [] })
   const [salvandoPacote, setSalvandoPacote] = useState(false)
+  const [catalogoItens, setCatalogoItens] = useState<ItemCatalogo[]>([])
+  const [templatesPacote, setTemplatesPacote] = useState<TemplatePacote[]>([])
   const [mensagemGerada, setMensagemGerada] = useState<string | null>(null)
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
@@ -942,6 +951,8 @@ function DealDetailModal({
       setPacotes(p)
       setLoadingPacotes(false)
     })
+    fetchCatalogoAtivo().then(setCatalogoItens)
+    fetchTemplatesAtivos().then(setTemplatesPacote)
   }, [lead?.id])
 
   // Ticket médio = média do valor dos pacotes cadastrados; Valor Esperado =
@@ -963,14 +974,11 @@ function DealDetailModal({
         nome: novoPacote.nome.trim(),
         valor: Number(novoPacote.valor.replace(',', '.')) || 0,
         parcelas: Number(novoPacote.parcelas) || 1,
-        itens: novoPacote.itens
-          .split('\n')
-          .map((i) => i.trim())
-          .filter(Boolean),
+        itens: novoPacote.itens,
         ordem: pacotes.length,
       })
       setPacotes((prev) => [...prev, criado])
-      setNovoPacote({ nome: '', valor: '', parcelas: '', itens: '' })
+      setNovoPacote({ nome: '', valor: '', parcelas: '', itens: [] })
       setMensagemGerada(null)
     } finally {
       setSalvandoPacote(false)
@@ -980,6 +988,44 @@ function DealDetailModal({
   const handleRemoverPacote = async (id: string) => {
     await removerPacote(id)
     setPacotes((prev) => prev.filter((p) => p.id !== id))
+    setMensagemGerada(null)
+  }
+
+  const handleAplicarTemplate = (template: TemplatePacote) => {
+    setNovoPacote((d) => ({ ...d, nome: d.nome || template.nome, itens: [...template.itens] }))
+  }
+
+  const handleToggleItemNovoPacote = (nomeItem: string) => {
+    setNovoPacote((d) => ({
+      ...d,
+      itens: d.itens.includes(nomeItem)
+        ? d.itens.filter((i) => i !== nomeItem)
+        : [...d.itens, nomeItem],
+    }))
+  }
+
+  const handleToggleItemPacoteExistente = async (pacote: PacoteTurma, nomeItem: string) => {
+    const novosItens = pacote.itens.includes(nomeItem)
+      ? pacote.itens.filter((i) => i !== nomeItem)
+      : [...pacote.itens, nomeItem]
+    await atualizarPacote(pacote.id, { itens: novosItens })
+    setPacotes((prev) => prev.map((p) => (p.id === pacote.id ? { ...p, itens: novosItens } : p)))
+    setMensagemGerada(null)
+  }
+
+  const handleEditarCampoPacote = async (
+    pacote: PacoteTurma,
+    campo: 'nome' | 'valor' | 'parcelas',
+    valor: string,
+  ) => {
+    const patch =
+      campo === 'nome'
+        ? { nome: valor }
+        : campo === 'valor'
+          ? { valor: Number(valor.replace(',', '.')) || 0 }
+          : { parcelas: Number(valor) || 1 }
+    await atualizarPacote(pacote.id, patch)
+    setPacotes((prev) => prev.map((p) => (p.id === pacote.id ? { ...p, ...patch } : p)))
     setMensagemGerada(null)
   }
 
@@ -1341,27 +1387,55 @@ function DealDetailModal({
                   {pacotes.map((p) => (
                     <div
                       key={p.id}
-                      className="p-2.5 rounded-lg bg-[#111820] border border-white/[0.06] flex items-start justify-between gap-2"
+                      className="p-2.5 rounded-lg bg-[#111820] border border-white/[0.06] space-y-1.5"
                     >
-                      <div className="min-w-0">
-                        <div className="font-semibold text-white">
-                          {p.nome} — R$ {p.valor.toLocaleString('pt-BR')} em {p.parcelas}x
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1 grid grid-cols-3 gap-2">
+                          <MiniFieldBlur
+                            label="Nome"
+                            defaultValue={p.nome}
+                            onSave={(v) => handleEditarCampoPacote(p, 'nome', v)}
+                          />
+                          <MiniFieldBlur
+                            label="Valor (R$)"
+                            defaultValue={String(p.valor)}
+                            onSave={(v) => handleEditarCampoPacote(p, 'valor', v)}
+                          />
+                          <MiniFieldBlur
+                            label="Parcelas"
+                            type="number"
+                            defaultValue={String(p.parcelas)}
+                            onSave={(v) => handleEditarCampoPacote(p, 'parcelas', v)}
+                          />
                         </div>
-                        {p.itens.length > 0 && (
-                          <ul className="text-[11px] text-slate-400 mt-1 space-y-0.5">
-                            {p.itens.map((item, i) => (
-                              <li key={i}>• {item}</li>
-                            ))}
-                          </ul>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverPacote(p.id)}
+                          className="text-slate-500 hover:text-red-400 flex-shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoverPacote(p.id)}
-                        className="text-slate-500 hover:text-red-400 flex-shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {catalogoItens.map((item) => {
+                          const incluso = p.itens.includes(item.nome)
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => handleToggleItemPacoteExistente(p, item.nome)}
+                              className={`text-[10px] px-2 py-1 rounded-full border ${
+                                incluso
+                                  ? 'bg-orange-950/60 text-orange-400 border-orange-800'
+                                  : 'bg-[#0a0f14] text-slate-500 border-white/10'
+                              }`}
+                            >
+                              {incluso ? '✓ ' : ''}
+                              {item.nome}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1369,6 +1443,21 @@ function DealDetailModal({
 
               {/* Novo pacote */}
               <div className="p-2.5 rounded-lg bg-[#111820] border border-dashed border-white/10 space-y-2">
+                <div className="text-[9px] text-slate-500 uppercase tracking-wide">
+                  Novo pacote — comece por um template:
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {templatesPacote.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => handleAplicarTemplate(t)}
+                      className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-orange-600 text-white hover:bg-orange-500"
+                    >
+                      {t.nome}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <MiniField
                     label="Nome do pacote"
@@ -1381,24 +1470,37 @@ function DealDetailModal({
                     value={novoPacote.valor}
                     onChange={(v) => setNovoPacote((d) => ({ ...d, valor: v }))}
                   />
-                  <MiniField
-                    label="Parcelas"
-                    type="number"
-                    value={novoPacote.parcelas}
-                    onChange={(v) => setNovoPacote((d) => ({ ...d, parcelas: v }))}
-                  />
                 </div>
+                <MiniField
+                  label="Parcelas"
+                  type="number"
+                  value={novoPacote.parcelas}
+                  onChange={(v) => setNovoPacote((d) => ({ ...d, parcelas: v }))}
+                />
                 <div>
-                  <label className="block text-[9px] text-slate-500 mb-0.5 uppercase tracking-wide">
-                    Itens do pacote (um por linha)
+                  <label className="block text-[9px] text-slate-500 mb-1 uppercase tracking-wide">
+                    Itens do pacote (clique pra marcar)
                   </label>
-                  <textarea
-                    rows={3}
-                    value={novoPacote.itens}
-                    onChange={(e) => setNovoPacote((d) => ({ ...d, itens: e.target.value }))}
-                    placeholder={'Amor In Two\nEnsaio de 50%\nConvite + Mkt'}
-                    className="w-full bg-[#0a0f14] border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {catalogoItens.map((item) => {
+                      const incluso = novoPacote.itens.includes(item.nome)
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleToggleItemNovoPacote(item.nome)}
+                          className={`text-[10px] px-2 py-1 rounded-full border ${
+                            incluso
+                              ? 'bg-orange-950/60 text-orange-400 border-orange-800'
+                              : 'bg-[#0a0f14] text-slate-500 border-white/10'
+                          }`}
+                        >
+                          {incluso ? '✓ ' : ''}
+                          {item.nome}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -1929,6 +2031,32 @@ function MiniField({
           className="w-full bg-[#111820] border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
         />
       )}
+    </div>
+  )
+}
+
+/** Como MiniField, mas só salva ao sair do campo — evita 1 chamada ao banco por tecla. */
+function MiniFieldBlur({
+  label,
+  defaultValue,
+  onSave,
+  type = 'text',
+}: {
+  label: string
+  defaultValue: string
+  onSave: (value: string) => void
+  type?: string
+}) {
+  return (
+    <div>
+      <label className="block text-[9px] text-slate-500 mb-0.5 uppercase tracking-wide">{label}</label>
+      <input
+        key={defaultValue}
+        type={type}
+        defaultValue={defaultValue}
+        onBlur={(e) => e.target.value !== defaultValue && onSave(e.target.value)}
+        className="w-full bg-[#111820] border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+      />
     </div>
   )
 }

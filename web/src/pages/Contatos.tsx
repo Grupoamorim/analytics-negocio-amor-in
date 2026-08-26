@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, Search, Edit, Trash2, X, Users, Phone, Mail, GraduationCap } from 'lucide-react'
+import { Plus, Search, Trash2, X, Users, Phone, Mail } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import { getTurmaDisplayName } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import LastEditedBy from '@/components/LastEditedBy'
+import InlineEditText from '@/components/InlineEditText'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 
 interface ContactFormData {
@@ -30,7 +31,6 @@ export default function Contatos() {
     { value: 'updatedAt', label: 'Última edição' },
   ]
   const [modalOpen, setModalOpen] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<ContactFormData>(EMPTY_FORM)
 
   const leadById = useMemo(() => {
@@ -62,16 +62,7 @@ export default function Contatos() {
   }, [contacts, turmaFilter, searchQuery, leadById, sortField, sortDirection])
 
   const handleOpenCreate = () => {
-    setEditingId(null)
     setFormData({ ...EMPTY_FORM, leadId: leads[0]?.id || '' })
-    setModalOpen(true)
-  }
-
-  const handleOpenEdit = (id: string) => {
-    const c = contacts.find((x) => x.id === id)
-    if (!c) return
-    setEditingId(id)
-    setFormData({ nome: c.nome, telefone: c.telefone, email: c.email, leadId: c.leadId })
     setModalOpen(true)
   }
 
@@ -85,23 +76,13 @@ export default function Contatos() {
       toast({ title: 'Selecione uma turma', variant: 'destructive' })
       return
     }
-    if (editingId) {
-      updateContact(editingId, {
-        nome: formData.nome.trim(),
-        telefone: formData.telefone.trim(),
-        email: formData.email.trim(),
-        leadId: formData.leadId,
-      })
-      toast({ title: 'Contato atualizado' })
-    } else {
-      addContact({
-        nome: formData.nome.trim(),
-        telefone: formData.telefone.trim(),
-        email: formData.email.trim(),
-        leadId: formData.leadId,
-      })
-      toast({ title: 'Contato criado' })
-    }
+    addContact({
+      nome: formData.nome.trim(),
+      telefone: formData.telefone.trim(),
+      email: formData.email.trim(),
+      leadId: formData.leadId,
+    })
+    toast({ title: 'Contato criado' })
     setModalOpen(false)
   }
 
@@ -186,50 +167,59 @@ export default function Contatos() {
                     key={c.id}
                     className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors"
                   >
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-300 flex items-center justify-center text-[11px] font-bold">
+                        <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-300 flex items-center justify-center text-[11px] font-bold shrink-0">
                           {c.nome.substring(0, 2).toUpperCase()}
                         </div>
-                        <span className="font-semibold text-white">{c.nome}</span>
+                        <InlineEditText
+                          value={c.nome}
+                          onSave={(v) => v && updateContact(c.id, { nome: v })}
+                          className="font-semibold text-white"
+                        />
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      {lead ? (
-                        <span className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-300 border border-orange-500/20 text-[11px] font-semibold">
-                          {getTurmaDisplayName(lead)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 text-xs">—</span>
-                      )}
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={c.leadId}
+                        onChange={(e) => updateContact(c.id, { leadId: e.target.value })}
+                        className="bg-transparent border-b border-transparent hover:border-white/20 focus:border-orange-500 focus:outline-none text-orange-300 text-[11px] font-semibold py-0.5"
+                      >
+                        {leads.map((l) => (
+                          <option key={l.id} value={l.id} className="bg-[#111820] text-white">
+                            {getTurmaDisplayName(l)}
+                          </option>
+                        ))}
+                      </select>
                     </td>
-                    <td className="py-3 px-4 text-slate-300">{c.telefone || '—'}</td>
-                    <td className="py-3 px-4 text-slate-300">{c.email || '—'}</td>
+                    <td className="py-3 px-4 text-slate-300" onClick={(e) => e.stopPropagation()}>
+                      <InlineEditText
+                        value={c.telefone}
+                        onSave={(v) => updateContact(c.id, { telefone: v })}
+                      />
+                    </td>
+                    <td className="py-3 px-4 text-slate-300" onClick={(e) => e.stopPropagation()}>
+                      <InlineEditText
+                        value={c.email}
+                        type="email"
+                        onSave={(v) => updateContact(c.id, { email: v })}
+                      />
+                    </td>
                     <td className="py-3 px-4">
                       <LastEditedBy email={c.updatedByEmail} updatedAt={c.updatedAt} />
                     </td>
                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(c.id)}
-                          className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
-                          title="Editar"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            deleteContact(c.id)
-                            toast({ title: 'Contato excluído' })
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05]"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deleteContact(c.id)
+                          toast({ title: 'Contato excluído' })
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05]"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 )
@@ -253,51 +243,62 @@ export default function Contatos() {
               key={c.id}
               className="bg-[#111820] border border-white/[0.06] rounded-xl p-4 space-y-2"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-300 flex items-center justify-center text-xs font-bold">
+              <div className="flex items-start justify-between" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-300 flex items-center justify-center text-xs font-bold shrink-0">
                     {c.nome.substring(0, 2).toUpperCase()}
                   </div>
-                  <div>
-                    <h4 className="font-bold text-white text-sm">{c.nome}</h4>
+                  <div className="flex-1 min-w-0">
+                    <InlineEditText
+                      value={c.nome}
+                      onSave={(v) => v && updateContact(c.id, { nome: v })}
+                      className="font-bold text-white text-sm"
+                    />
                     {lead && (
-                      <span className="text-[11px] text-orange-300">
-                        {getTurmaDisplayName(lead)}
-                      </span>
+                      <select
+                        value={c.leadId}
+                        onChange={(e) => updateContact(c.id, { leadId: e.target.value })}
+                        className="bg-transparent text-[11px] text-orange-300 focus:outline-none max-w-full"
+                      >
+                        {leads.map((l) => (
+                          <option key={l.id} value={l.id} className="bg-[#111820] text-white">
+                            {getTurmaDisplayName(l)}
+                          </option>
+                        ))}
+                      </select>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(c.id)}
-                    className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      deleteContact(c.id)
-                      toast({ title: 'Contato excluído' })
-                    }}
-                    className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05]"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteContact(c.id)
+                    toast({ title: 'Contato excluído' })
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05] shrink-0"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-              <div className="text-xs text-slate-300 space-y-1 pt-2 border-t border-white/[0.04]">
-                {c.telefone && (
-                  <div className="flex items-center gap-1.5">
-                    <Phone className="w-3 h-3 text-slate-400" /> {c.telefone}
-                  </div>
-                )}
-                {c.email && (
-                  <div className="flex items-center gap-1.5">
-                    <Mail className="w-3 h-3 text-slate-400" /> {c.email}
-                  </div>
-                )}
+              <div
+                className="text-xs text-slate-300 space-y-1 pt-2 border-t border-white/[0.04]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                  <InlineEditText
+                    value={c.telefone}
+                    onSave={(v) => updateContact(c.id, { telefone: v })}
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                  <InlineEditText
+                    value={c.email}
+                    type="email"
+                    onSave={(v) => updateContact(c.id, { email: v })}
+                  />
+                </div>
                 <LastEditedBy email={c.updatedByEmail} updatedAt={c.updatedAt} />
               </div>
             </div>
@@ -314,7 +315,7 @@ export default function Contatos() {
           <div className="relative w-full max-w-[480px] max-h-[90vh] bg-[#111820] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in">
             <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">
-                {editingId ? 'Editar Contato' : 'Novo Contato'}
+                Novo Contato
               </h3>
               <button
                 type="button"
