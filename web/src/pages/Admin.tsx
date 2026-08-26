@@ -83,6 +83,13 @@ export default function Admin() {
   const [carregandoPerfis, setCarregandoPerfis] = useState(true)
   const [salvandoId, setSalvandoId] = useState<string | null>(null)
 
+  // Convite de usuário por e-mail
+  const [conviteEmail, setConviteEmail] = useState('')
+  const [conviteNome, setConviteNome] = useState('')
+  const [conviteRole, setConviteRole] = useState<Perfil['role']>('membro')
+  const [enviandoConvite, setEnviandoConvite] = useState(false)
+  const [resetandoSenhaId, setResetandoSenhaId] = useState<string | null>(null)
+
   // Vendedores / SDR
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [carregandoVendedores, setCarregandoVendedores] = useState(true)
@@ -143,6 +150,66 @@ export default function Admin() {
     await supabase.from('profiles').update({ role }).eq('id', id)
     setPerfis((prev) => prev.map((p) => (p.id === id ? { ...p, role } : p)))
     setSalvandoId(null)
+  }
+
+  async function handleResetarSenha(p: Perfil) {
+    if (!confirm(`Enviar e-mail de redefinição de senha pra ${p.email}?`)) return
+    setResetandoSenhaId(p.id)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(p.email, {
+        redirectTo: `${window.location.origin}/redefinir-senha`,
+      })
+      if (error) throw error
+      toast({
+        title: 'E-mail enviado',
+        description: `${p.email} vai receber o link pra definir uma nova senha.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao enviar',
+        description: err.message || 'Não foi possível enviar o e-mail de redefinição.',
+        variant: 'destructive',
+      })
+    } finally {
+      setResetandoSenhaId(null)
+    }
+  }
+
+  async function handleConvidarUsuario(e: React.FormEvent) {
+    e.preventDefault()
+    const email = conviteEmail.trim()
+    if (!email) return
+    setEnviandoConvite(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Sessão expirada, faça login novamente.')
+
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { email, nome: conviteNome.trim(), role: conviteRole },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+
+      toast({
+        title: 'Convite enviado',
+        description: `${email} vai receber um e-mail pra definir a própria senha.`,
+      })
+      setConviteEmail('')
+      setConviteNome('')
+      setConviteRole('membro')
+      const { data: perfisAtualizados } = await supabase.from('profiles').select('*').order('created_at')
+      setPerfis((perfisAtualizados || []) as Perfil[])
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao convidar',
+        description: err.message || 'Não foi possível enviar o convite.',
+        variant: 'destructive',
+      })
+    } finally {
+      setEnviandoConvite(false)
+    }
   }
 
   useEffect(() => {
@@ -493,9 +560,49 @@ export default function Admin() {
         {/* ABA: USUÁRIOS E CARGOS */}
         <TabsContent value="usuarios" className="space-y-4">
           <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
               <Users className="w-4 h-4 text-orange-400" /> Usuários e Cargos
             </h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Convide por e-mail — a pessoa recebe um link e define a própria senha. Você nunca vê nem
+              define a senha de ninguém.
+            </p>
+
+            <form onSubmit={handleConvidarUsuario} className="flex items-center gap-2 mb-4 flex-wrap">
+              <input
+                type="email"
+                placeholder="E-mail"
+                value={conviteEmail}
+                onChange={(e) => setConviteEmail(e.target.value)}
+                className="flex-1 min-w-[180px] bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <input
+                type="text"
+                placeholder="Nome (opcional)"
+                value={conviteNome}
+                onChange={(e) => setConviteNome(e.target.value)}
+                className="flex-1 min-w-[140px] bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <select
+                value={conviteRole}
+                onChange={(e) => setConviteRole(e.target.value as Perfil['role'])}
+                className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-2 text-slate-200 text-xs"
+              >
+                {CARGOS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="submit"
+                disabled={!conviteEmail.trim() || enviandoConvite}
+                className="bg-orange-500 hover:bg-orange-600 text-white text-xs"
+              >
+                {enviandoConvite ? 'Enviando...' : 'Convidar'}
+              </Button>
+            </form>
+
             {carregandoPerfis ? (
               <div className="text-sm text-slate-400">Carregando...</div>
             ) : (
@@ -505,6 +612,7 @@ export default function Admin() {
                     <th className="py-2">Nome</th>
                     <th className="py-2">E-mail</th>
                     <th className="py-2">Cargo</th>
+                    <th className="py-2 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -527,6 +635,16 @@ export default function Admin() {
                             </option>
                           ))}
                         </select>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleResetarSenha(p)}
+                          disabled={resetandoSenhaId === p.id}
+                          className="text-[11px] text-slate-400 hover:text-orange-400 underline decoration-dotted"
+                        >
+                          {resetandoSenhaId === p.id ? 'Enviando...' : 'Resetar senha'}
+                        </button>
                       </td>
                     </tr>
                   ))}

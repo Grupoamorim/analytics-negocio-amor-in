@@ -94,24 +94,25 @@ analytics-negocio-amor-in/
 
 ## Administração (`/admin`, restrito a `role = 'admin'`)
 
-Reúne em abas: Usuários e Cargos, Integrações (SGE), Banco de Dados (Supabase), IA (Gemini), Marca (logo), Preferências. A antiga página `/configuracoes` (aberta a qualquer usuário logado) foi removida e agora redireciona para `/admin` — só o admin tem acesso a essas configurações.
+Reúne em abas: Usuários e Cargos, Vendedores/SDR, Turmas (duração de curso), Integrações (SGE), Banco de Dados (Supabase), IA (Gemini), Marca (logo), Preferências. A antiga página `/configuracoes` (aberta a qualquer usuário logado) foi removida e agora redireciona para `/admin` — só o admin tem acesso a essas configurações.
 
-**Pendente:** funcionalidade de convidar usuário por e-mail (o convidado define a própria senha, vinculada ao e-mail; o admin pode resetar a senha sem nunca vê-la). Precisa de uma Supabase Edge Function usando a service role key (não pode rodar no cliente) — ainda não implementada.
+**Convite de usuário por e-mail (implementado)**: aba Usuários → formulário de convite (e-mail, nome, cargo) chama a Edge Function `invite-user` (`web/supabase/functions/invite-user/index.ts`, deployada no projeto Supabase), que usa a service role key pra chamar `auth.admin.inviteUserByEmail`. O convidado recebe e-mail, clica no link e cai em `/redefinir-senha` (mesma página do fluxo de esqueci-minha-senha) pra definir a própria senha — o admin nunca vê nem define senha de ninguém. Reset de senha de um usuário existente já funciona sem Edge Function (`supabase.auth.resetPasswordForEmail`, não precisa de service role).
 
 ---
 
 ## Pendências abertas / dúvidas em aberto com o Lucas
 
 - **"Ordenar"**: já implementado de forma geral (ver seção de convenções acima). Se o Lucas pedir ordenação em uma tela nova, seguir o mesmo padrão do `SortControl`.
-- **Aba "Conflitos" / aba "Movimentar"**: pedido de uma aba com checklist para marcar itens como concluídos, que somem e movam a turma para "Concluída" automaticamente. Escopo/página exata nunca foi confirmada — **não implementado, aguardando confirmação**.
 
-## Turmas concluídas automaticamente por semestre (implementado)
+## Turmas "Formado" — conclusão automática por semestre (implementado)
+
+Esse era o pedido antigo de "aba Conflitos/Movimentar" (nome descartado — o Lucas esclareceu que não é conflito nem um checklist de vários itens, é só a marcação de que a turma já se formou, já que ela não pode ir pra "Ganhou" nem "Perdeu" no funil).
 
 Turma com `funil_status = 'Convertido'` cujo Ano de Formatura já passou (ex: "2026.1" conclui a partir de 01/07/2026; "2026.2" a partir de 01/01/2027) é marcada automaticamente com o campo `concluida` (independente do status do funil) pelo job `collectors/turma_conclusao.py`, rodando 1x/dia via `.github/workflows/sync-turma-conclusao.yml`.
 
 Ao concluir, o job tenta criar a turma seguinte (mesmo curso/faculdade/cidade/empresa) usando a duração do curso cadastrada em Administração → Turmas (tabela `duracao_cursos`, curso [+ faculdade opcional] → anos). **Fórmula confirmada com o Lucas**: `ano_formatura_nova = ano_formatura_antiga + duração_do_curso + 1`, mesmo semestre (ex: Odontologia 5 anos, turma que forma em 2026.2 → gera turma que forma em 2032.2). Se a duração não estiver cadastrada pro curso, a turma só é marcada concluída — a turma nova **não** é criada (não inventamos duração de curso). Duração já cadastrada de fábrica: Odontologia = 5 anos, Direito = 5 anos, Medicina = 6 anos (demais cursos ficam por conta do Lucas cadastrar em Administração → Turmas).
 
-Na tela de Turmas (`Leads.tsx`), turmas concluídas ficam ocultas por padrão (checkbox "Mostrar concluídas" na barra de filtros) e exibem uma badge verde "Concluída" ao lado do Ano de Formatura.
+Na tela de Turmas (`Leads.tsx`), turmas formadas ficam ocultas da visualização principal por padrão (checkbox "Mostrar formados" na barra de filtros — o dado nunca é perdido, só sai da visão de trabalho) e exibem uma badge verde "Formado" ao lado do Ano de Formatura. Campo interno no banco continua se chamando `concluida`/`concluida_em` — só o texto exibido pro usuário é "Formado".
 
 ---
 

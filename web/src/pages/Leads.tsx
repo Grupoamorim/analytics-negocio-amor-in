@@ -1461,7 +1461,7 @@ export default function LeadsPage() {
                 checked={showConcluidas}
                 onCheckedChange={(v) => setShowConcluidas(v === true)}
               />
-              Mostrar concluídas
+              Mostrar formados
             </label>
           </div>
 
@@ -1717,11 +1717,11 @@ export default function LeadsPage() {
                               className="text-[10px] py-0 px-1.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
                               title={
                                 lead.concluidaEm
-                                  ? `Concluída em ${new Date(lead.concluidaEm).toLocaleDateString('pt-BR')}`
-                                  : 'Concluída'
+                                  ? `Formou em ${new Date(lead.concluidaEm).toLocaleDateString('pt-BR')}`
+                                  : 'Formado'
                               }
                             >
-                              Concluída
+                              Formado
                             </Badge>
                           )}
                         </div>
