@@ -64,6 +64,9 @@ import {
   gerarMensagemPacotes,
 } from '@/utils/pacotesTurma'
 import { ItemCatalogo, TemplatePacote, fetchCatalogoAtivo, fetchTemplatesAtivos } from '@/utils/pacoteCatalogo'
+import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
+import { fetchCidadeFaculdades, ensureCidadeFaculdade, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
+import DropdownComOutro from '@/components/DropdownComOutro'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
@@ -899,6 +902,12 @@ function DealDetailModal({
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
   const [mostrarApresentacao, setMostrarApresentacao] = useState(false)
+  const [cursosConhecidos, setCursosConhecidos] = useState<string[]>([])
+  const [cidadeFaculdades, setCidadeFaculdades] = useState<CidadeFaculdadesMap>({})
+  const cidadesConhecidas = useMemo(
+    () => Object.keys(cidadeFaculdades).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [cidadeFaculdades],
+  )
 
   useEffect(() => {
     if (!lead) return
@@ -909,6 +918,11 @@ function DealDetailModal({
     fetchCatalogoAtivo().then(setCatalogoItens)
     fetchTemplatesAtivos().then(setTemplatesPacote)
   }, [lead?.id])
+
+  useEffect(() => {
+    fetchCursosConhecidos().then(setCursosConhecidos)
+    fetchCidadeFaculdades().then(setCidadeFaculdades)
+  }, [])
 
   // Ticket médio = média do valor dos pacotes cadastrados; Valor Esperado =
   // Ticket Médio x Meta de Contratos. Sempre calculado, nunca digitado — e o
@@ -1013,6 +1027,10 @@ function DealDetailModal({
     return map
   }, [])
 
+  // Próxima Ação = primeiro item não marcado do checklist da etapa atual —
+  // nunca digitado à mão, sempre reflete o checklist de etapas de verdade.
+  const proximaAcao = (itemsByStage.get(deal.stageId) || []).find((it) => !deal.checklist?.[it.id])
+
   const setOutcome = (outcome: DealOutcome) => {
     onUpdateDeal({ outcome })
     toast({
@@ -1115,8 +1133,8 @@ function DealDetailModal({
             />
             <DetailCard
               icon={<Calendar className="w-3.5 h-3.5" />}
-              label="Próx. Ação"
-              value={deal.nextActionDate || '—'}
+              label="Próx. Ação (checklist)"
+              value={proximaAcao?.label || 'Todas as etapas concluídas'}
             />
           </div>
 
@@ -1140,20 +1158,26 @@ function DealDetailModal({
                   defaultValue={lead.turma || ''}
                   onSave={(v) => onUpdateLead({ turma: v.trim() || 'Turma 0' })}
                 />
-                <MiniFieldBlur
+                <DropdownComOutro
                   label="Curso"
-                  defaultValue={lead.curso || ''}
-                  onSave={(v) => onUpdateLead({ curso: v.trim() })}
+                  value={lead.curso || ''}
+                  options={cursosConhecidos}
+                  onSave={(v) => onUpdateLead({ curso: v })}
                 />
-                <MiniFieldBlur
-                  label="Faculdade"
-                  defaultValue={lead.faculdade || ''}
-                  onSave={(v) => onUpdateLead({ faculdade: v.trim() })}
-                />
-                <MiniFieldBlur
+                <DropdownComOutro
                   label="Cidade"
-                  defaultValue={lead.cidade || ''}
-                  onSave={(v) => onUpdateLead({ cidade: v.trim() })}
+                  value={lead.cidade || ''}
+                  options={cidadesConhecidas}
+                  onSave={(v) => onUpdateLead({ cidade: v })}
+                />
+                <DropdownComOutro
+                  label="Faculdade"
+                  value={lead.faculdade || ''}
+                  options={lead.cidade ? cidadeFaculdades[lead.cidade] || [] : []}
+                  onSave={(v) => {
+                    onUpdateLead({ faculdade: v })
+                    if (lead.cidade) ensureCidadeFaculdade(lead.cidade, v)
+                  }}
                 />
                 <MiniFieldBlur
                   label="Ano Formatura"
@@ -1839,7 +1863,9 @@ function DetailCard({
       <div className="flex items-center gap-1 text-[10px] text-slate-400 mb-0.5">
         {icon} {label}
       </div>
-      <div className="text-xs font-semibold text-white truncate">{value}</div>
+      <div className="text-xs font-semibold text-white truncate" title={value}>
+        {value}
+      </div>
     </div>
   )
 }

@@ -88,6 +88,9 @@ import {
   fetchCatalogoAtivo,
   fetchTemplatesAtivos,
 } from '@/utils/pacoteCatalogo'
+import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
+import { fetchCidadeFaculdades, ensureCidadeFaculdade, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
+import DropdownComOutro from '@/components/DropdownComOutro'
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: string }> = {
   Novo: {
@@ -282,6 +285,19 @@ export default function LeadsPage() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  // Base real de cursos/cidades/faculdades já cadastrados — usada nos
+  // dropdowns pra evitar erro de digitação ao criar/editar turma.
+  const [cursosConhecidosModal, setCursosConhecidosModal] = useState<string[]>([])
+  const [cidadeFaculdadesModal, setCidadeFaculdadesModal] = useState<CidadeFaculdadesMap>({})
+  const cidadesConhecidasModal = useMemo(
+    () => Object.keys(cidadeFaculdadesModal).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [cidadeFaculdadesModal],
+  )
+  useEffect(() => {
+    fetchCursosConhecidos().then(setCursosConhecidosModal)
+    fetchCidadeFaculdades().then(setCidadeFaculdadesModal)
+  }, [])
 
   // Persist saved filters
   useEffect(() => {
@@ -2024,21 +2040,30 @@ export default function LeadsPage() {
 
               <div>
                 <Label htmlFor="curso">Curso *</Label>
-                <Input
-                  id="curso"
-                  placeholder="Ex: Agronomia, Direito"
+                <DropdownComOutro
+                  label="Curso"
+                  showLabel={false}
                   value={formData.curso}
-                  onChange={(e) => setFormData({ ...formData, curso: e.target.value })}
+                  options={cursosConhecidosModal}
+                  onSave={(v) => setFormData({ ...formData, curso: v })}
+                  placeholder="Ex: Agronomia, Direito"
+                  fieldClassName="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-sm"
                 />
               </div>
 
               <div>
                 <Label htmlFor="faculdade">Faculdade *</Label>
-                <Input
-                  id="faculdade"
-                  placeholder="Ex: FAINOR, UNEX, UEFS"
+                <DropdownComOutro
+                  label="Faculdade"
+                  showLabel={false}
                   value={formData.faculdade}
-                  onChange={(e) => setFormData({ ...formData, faculdade: e.target.value })}
+                  options={formData.cidade ? cidadeFaculdadesModal[formData.cidade] || [] : []}
+                  onSave={(v) => {
+                    setFormData({ ...formData, faculdade: v })
+                    if (formData.cidade) ensureCidadeFaculdade(formData.cidade, v)
+                  }}
+                  placeholder="Ex: FAINOR, UNEX, UEFS"
+                  fieldClassName="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-sm"
                 />
               </div>
             </div>
@@ -2067,11 +2092,14 @@ export default function LeadsPage() {
 
               <div>
                 <Label htmlFor="cidade">Cidade *</Label>
-                <Input
-                  id="cidade"
-                  placeholder="Ex: Conquista, Feira de Santana"
+                <DropdownComOutro
+                  label="Cidade"
+                  showLabel={false}
                   value={formData.cidade}
-                  onChange={(e) => setFormData({ ...formData, cidade: e.target.value })}
+                  options={cidadesConhecidasModal}
+                  onSave={(v) => setFormData({ ...formData, cidade: v })}
+                  placeholder="Ex: Conquista, Feira de Santana"
+                  fieldClassName="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-sm"
                 />
               </div>
             </div>
@@ -2386,6 +2414,12 @@ function SelectedLeadDetail({
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
   const [mostrarApresentacao, setMostrarApresentacao] = useState(false)
+  const [cursosConhecidos, setCursosConhecidos] = useState<string[]>([])
+  const [cidadeFaculdades, setCidadeFaculdades] = useState<CidadeFaculdadesMap>({})
+  const cidadesConhecidas = useMemo(
+    () => Object.keys(cidadeFaculdades).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [cidadeFaculdades],
+  )
 
   // Ticket médio = média do valor dos pacotes cadastrados; Valor Esperado =
   // Ticket Médio x Meta de Contratos da turma. Sempre calculado, nunca digitado.
@@ -2400,6 +2434,11 @@ function SelectedLeadDetail({
     fetchCatalogoAtivo().then(setCatalogoItens)
     fetchTemplatesAtivos().then(setTemplatesPacote)
   }, [lead.id])
+
+  useEffect(() => {
+    fetchCursosConhecidos().then(setCursosConhecidos)
+    fetchCidadeFaculdades().then(setCidadeFaculdades)
+  }, [])
 
   const handleAdicionarPacote = async () => {
     if (!novoPacote.nome.trim() || !novoPacote.valor.trim()) return
@@ -2508,17 +2547,26 @@ function SelectedLeadDetail({
             <DialogTitle className="text-xl sr-only">{getTurmaDisplayName(lead)}</DialogTitle>
           </div>
           <div className="grid grid-cols-2 gap-2 pt-1">
-            <input
-              defaultValue={lead.curso}
-              onBlur={(e) => e.target.value !== lead.curso && onPatch({ curso: e.target.value })}
+            <DropdownComOutro
+              label="Curso"
+              showLabel={false}
+              value={lead.curso}
+              options={cursosConhecidos}
+              onSave={(v) => onPatch({ curso: v })}
               placeholder="Curso"
-              className="bg-transparent text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-transparent hover:border-slate-300 focus:border-orange-500 focus:outline-none px-0.5"
+              fieldClassName="bg-transparent text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-transparent hover:border-slate-300 focus:border-orange-500 focus:outline-none px-0.5 w-full"
             />
-            <input
-              defaultValue={lead.faculdade}
-              onBlur={(e) => e.target.value !== lead.faculdade && onPatch({ faculdade: e.target.value })}
+            <DropdownComOutro
+              label="Faculdade"
+              showLabel={false}
+              value={lead.faculdade}
+              options={lead.cidade ? cidadeFaculdades[lead.cidade] || [] : []}
+              onSave={(v) => {
+                onPatch({ faculdade: v })
+                if (lead.cidade) ensureCidadeFaculdade(lead.cidade, v)
+              }}
               placeholder="Faculdade"
-              className="bg-transparent text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-transparent hover:border-slate-300 focus:border-orange-500 focus:outline-none px-0.5"
+              fieldClassName="bg-transparent text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-transparent hover:border-slate-300 focus:border-orange-500 focus:outline-none px-0.5 w-full"
             />
           </div>
           <LastEditedBy email={lead.updatedByEmail} updatedAt={lead.updatedAt} className="mt-1" />
@@ -2532,7 +2580,13 @@ function SelectedLeadDetail({
               defaultValue={lead.anoFormatura}
               onSave={(v) => onPatch({ anoFormatura: v })}
             />
-            <InlineField label="Cidade" defaultValue={lead.cidade} onSave={(v) => onPatch({ cidade: v })} />
+            <DropdownComOutro
+              label="Cidade"
+              variant="underline"
+              value={lead.cidade}
+              options={cidadesConhecidas}
+              onSave={(v) => onPatch({ cidade: v })}
+            />
             <div>
               <span className="text-slate-500 block mb-0.5">Tipo Serviço</span>
               <select
