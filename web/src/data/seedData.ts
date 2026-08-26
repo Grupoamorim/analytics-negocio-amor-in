@@ -51,17 +51,17 @@ export const INITIAL_MEMBERS: TeamMember[] = [
 
 // Funil de 6 estágios oficiais do CRM
 export const INITIAL_STAGES: PipelineStage[] = [
-  { id: 'stage-1', name: 'Prospecção', color: '#eab308', order: 1, defaultProbability: 20 },
+  { id: 'stage-1', name: 'Prospecção', color: '#18181b', order: 1, defaultProbability: 20 },
   {
     id: 'stage-2',
     name: 'Qualificação/Contato',
-    color: '#f97316',
+    color: '#71717a',
     order: 2,
     defaultProbability: 40,
   },
-  { id: 'stage-3', name: 'Reunião Comissão', color: '#3b82f6', order: 3, defaultProbability: 60 },
-  { id: 'stage-4', name: 'Reunião Turma', color: '#1d4ed8', order: 4, defaultProbability: 75 },
-  { id: 'stage-5', name: 'Decisão', color: '#ea580c', order: 5, defaultProbability: 90 },
+  { id: 'stage-3', name: 'Reunião Comissão', color: '#eab308', order: 3, defaultProbability: 60 },
+  { id: 'stage-4', name: 'Reunião Turma', color: '#f97316', order: 4, defaultProbability: 75 },
+  { id: 'stage-5', name: 'Decisão', color: '#3b82f6', order: 5, defaultProbability: 90 },
   { id: 'stage-6', name: 'Fechou ou Perdeu', color: '#64748b', order: 6, defaultProbability: 100 },
 ]
 

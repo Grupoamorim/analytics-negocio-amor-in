@@ -225,7 +225,7 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
   {
     id: 'stage-1',
     name: 'Prospecção',
-    color: '#eab308',
+    color: '#18181b',
     defaultProbability: 20,
     description: 'Ainda sem contato direto da comissão — base do Mapa de Mercado.',
     tasks: [
@@ -238,7 +238,7 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
   {
     id: 'stage-2',
     name: 'Qualificação/Contato',
-    color: '#f97316',
+    color: '#71717a',
     defaultProbability: 40,
     description: 'Fase 1 do Playbook — Aquecimento: primeiro contato e qualificação.',
     tasks: [
@@ -268,7 +268,7 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
   {
     id: 'stage-3',
     name: 'Reunião Comissão',
-    color: '#3b82f6',
+    color: '#eab308',
     defaultProbability: 60,
     description: 'Fase 2 do Playbook — agendar e realizar a reunião com a comissão.',
     tasks: [
@@ -315,7 +315,7 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
   {
     id: 'stage-4',
     name: 'Reunião Turma',
-    color: '#1d4ed8',
+    color: '#f97316',
     defaultProbability: 75,
     description: 'Fase 3 do Playbook — apresentar a proposta pra turma inteira.',
     tasks: [
@@ -340,7 +340,7 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
   {
     id: 'stage-5',
     name: 'Decisão',
-    color: '#ea580c',
+    color: '#3b82f6',
     defaultProbability: 90,
     description: 'Fase 4 do Playbook — acompanhar até a turma dar a resposta final.',
     tasks: [

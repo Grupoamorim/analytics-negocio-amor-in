@@ -559,7 +559,7 @@ export default function Pipeline() {
                         }`}
                         style={{
                           borderTop: `3px solid ${cardAccentColor}`,
-                          borderLeft: `4px solid ${stage.id === 'stage-6' ? cardAccentColor : urgencyColor}`,
+                          borderLeft: `4px solid ${cardAccentColor}`,
                         }}
                         title={
                           stage.id === 'stage-6'
