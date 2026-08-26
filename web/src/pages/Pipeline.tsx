@@ -516,6 +516,17 @@ export default function Pipeline() {
                     const urgencyColor =
                       urgencyRatio >= 1 ? '#f87171' : urgencyRatio >= 0.6 ? '#fbbf24' : '#34d399'
 
+                    // Fechou ou Perdeu é uma coluna só pros dois resultados —
+                    // o card em si fica verde (ganhou) ou vermelho (perdeu).
+                    const cardAccentColor =
+                      stage.id === 'stage-6'
+                        ? deal.outcome === 'ganho'
+                          ? '#22c55e'
+                          : deal.outcome === 'perdido'
+                            ? '#ef4444'
+                            : stage.color
+                        : stage.color
+
                     // Buscar transcrição mais recente para obter a probabilidade da IA
                     const latestTranscript = deal.leadId
                       ? transcripts
@@ -547,8 +558,8 @@ export default function Pipeline() {
                             : 'border-white/[0.08]'
                         }`}
                         style={{
-                          borderTop: `3px solid ${stage.color}`,
-                          borderLeft: `4px solid ${urgencyColor}`,
+                          borderTop: `3px solid ${cardAccentColor}`,
+                          borderLeft: `4px solid ${stage.id === 'stage-6' ? cardAccentColor : urgencyColor}`,
                         }}
                         title={
                           stage.id === 'stage-6'
