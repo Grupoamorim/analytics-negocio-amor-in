@@ -127,6 +127,9 @@ export default function Pipeline() {
   // Checklist no card do Kanban vem sempre minimizado (só a barra de
   // progresso) — clicar na setinha expande e mostra os itens dessa etapa.
   const [expandedChecklistDealIds, setExpandedChecklistDealIds] = useState<Set<string>>(new Set())
+  // Popup com a lista de turmas Ganhou/Perdeu — a coluna Fechou ou Perdeu só
+  // mostra os 2 tickets com a contagem, a lista completa abre aqui.
+  const [resultPopup, setResultPopup] = useState<'ganho' | 'perdido' | null>(null)
   const toggleChecklistExpanded = (dealId: string) => {
     setExpandedChecklistDealIds((prev) => {
       const next = new Set(prev)
@@ -348,6 +351,32 @@ export default function Pipeline() {
     setDragOverStageId(null)
   }
 
+  /**
+   * Marca o item do checklist e, se for o ÚLTIMO item da etapa atual,
+   * avança a turma sozinha pra próxima etapa — exceto em Decisão
+   * (stage-5), que precisa do botão Ganhou/Perdeu pra decidir pra onde
+   * vai, e em Fechou ou Perdeu (stage-6), que já é o final.
+   */
+  const handleToggleChecklistItem = (dealId: string, itemId: string, checked: boolean) => {
+    toggleChecklistItem(dealId, itemId, checked)
+    if (!checked) return
+    const deal = deals.find((d) => d.id === dealId)
+    if (!deal || deal.stageId === 'stage-5' || deal.stageId === 'stage-6') return
+    const stageItems = DEFAULT_CHECKLIST_ITEMS.filter((it) => it.stageId === deal.stageId)
+    const isLastItem = stageItems.length > 0 && stageItems[stageItems.length - 1].id === itemId
+    if (!isLastItem) return
+    const currentStage = sortedStages.find((s) => s.id === deal.stageId)
+    const nextStage = currentStage
+      ? sortedStages.find((s) => s.order === currentStage.order + 1)
+      : undefined
+    if (!nextStage) return
+    moveDealStage(dealId, nextStage.id)
+    toast({
+      title: `Turma avançou para ${nextStage.name}`,
+      description: `Checklist concluído — ${deal.company} agora está em ${nextStage.name}.`,
+    })
+  }
+
   const selectedDeal = selectedDealId ? deals.find((d) => d.id === selectedDealId) : null
   const selectedLead = selectedDeal?.leadId ? leadById.get(selectedDeal.leadId) : null
 
@@ -490,7 +519,55 @@ export default function Pipeline() {
 
                 {/* Cards */}
                 <div className="p-3 space-y-3 min-h-[120px]">
-                  {stageDeals.map((deal) => {
+                  {stage.id === 'stage-6' ? (
+                    <>
+                      {(() => {
+                        const ganhoDeals = stageDeals.filter((d) => d.outcome === 'ganho')
+                        const perdidoDeals = stageDeals.filter((d) => d.outcome === 'perdido')
+                        const semResultado = stageDeals.length - ganhoDeals.length - perdidoDeals.length
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setResultPopup('ganho')}
+                              className="w-full p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.1] transition-colors text-left"
+                            >
+                              <div className="flex items-center gap-2 text-emerald-300 font-semibold text-sm">
+                                <TrendingUp className="w-4 h-4" /> Fechou
+                              </div>
+                              <div className="text-3xl font-bold text-white mt-1">
+                                {ganhoDeals.length}
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                {ganhoDeals.length === 1 ? 'turma ganha' : 'turmas ganhas'} — clique pra ver
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setResultPopup('perdido')}
+                              className="w-full p-4 rounded-xl border border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.1] transition-colors text-left"
+                            >
+                              <div className="flex items-center gap-2 text-red-300 font-semibold text-sm">
+                                <TrendingDown className="w-4 h-4" /> Perdeu
+                              </div>
+                              <div className="text-3xl font-bold text-white mt-1">
+                                {perdidoDeals.length}
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                {perdidoDeals.length === 1 ? 'turma perdida' : 'turmas perdidas'} — clique pra ver
+                              </div>
+                            </button>
+                            {semResultado > 0 && (
+                              <div className="text-center text-[11px] text-amber-400/90 py-2 border border-dashed border-amber-500/20 rounded-lg">
+                                {semResultado} turma(s) aqui ainda sem Ganhou/Perdeu marcado
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </>
+                  ) : (
+                    stageDeals.map((deal) => {
                     const lead = deal.leadId ? leadById.get(deal.leadId) : undefined
                     const owner = memberById.get(deal.ownerId)
                     const link = getProposalLink(deal)
@@ -709,7 +786,7 @@ export default function Pipeline() {
                                     item={it}
                                     checked={!!deal.checklist?.[it.id]}
                                     onToggle={() =>
-                                      toggleChecklistItem(deal.id, it.id, !deal.checklist?.[it.id])
+                                      handleToggleChecklistItem(deal.id, it.id, !deal.checklist?.[it.id])
                                     }
                                   />
                                 ))}
@@ -732,9 +809,10 @@ export default function Pipeline() {
                         )}
                       </div>
                     )
-                  })}
+                    })
+                  )}
 
-                  {stageDeals.length === 0 && (
+                  {stage.id !== 'stage-6' && stageDeals.length === 0 && (
                     <div className="text-center text-[11px] text-slate-500 py-6 border border-dashed border-white/[0.06] rounded-lg">
                       Arraste uma turma para cá
                     </div>
@@ -756,7 +834,7 @@ export default function Pipeline() {
           stages={sortedStages}
           proposalLink={getProposalLink(selectedDeal)}
           onProposalLinkChange={(link) => persistProposalLink(selectedDeal.id, link)}
-          onToggleChecklist={(key, checked) => toggleChecklistItem(selectedDeal.id, key, checked)}
+          onToggleChecklist={(key, checked) => handleToggleChecklistItem(selectedDeal.id, key, checked)}
           onUpdateDeal={(updates) => updateDeal(selectedDeal.id, updates)}
           onUpdateLead={(updates) => selectedLead && updateLead(selectedLead.id, updates)}
           onDuplicate={() => handleDuplicateDeal(selectedDeal, selectedLead)}
@@ -770,6 +848,74 @@ export default function Pipeline() {
           onMarcarNaoResponde={(id) => marcarNaoResponde(id)}
           onMarcarRespondeu={(id) => marcarRespondeu(id)}
         />
+      )}
+
+      {/* Popup: lista de turmas Ganhou/Perdeu (a coluna só mostra os tickets) */}
+      {resultPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          onClick={() => setResultPopup(null)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[80vh] bg-[#0f1419] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-white/[0.08] flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                {resultPopup === 'ganho' ? (
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <TrendingDown className="w-4 h-4 text-red-400" />
+                )}
+                Turmas que {resultPopup === 'ganho' ? 'Ganharam' : 'Perderam'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setResultPopup(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-2">
+              {deals
+                .filter((d) => d.stageId === 'stage-6' && d.outcome === resultPopup)
+                .map((deal) => {
+                  const lead = deal.leadId ? leadById.get(deal.leadId) : undefined
+                  const owner = memberById.get(deal.ownerId)
+                  return (
+                    <button
+                      key={deal.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDealId(deal.id)
+                        setResultPopup(null)
+                      }}
+                      className="w-full text-left p-3 rounded-lg bg-[#111820] border border-white/[0.08] hover:border-orange-500/40 transition-colors"
+                    >
+                      <div className="font-semibold text-white text-xs truncate">
+                        {lead ? getTurmaDisplayName(lead) : deal.title}
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                        {lead?.faculdade || deal.company}
+                        {lead?.curso ? ` • ${lead.curso}` : ''}
+                      </div>
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-[10px] text-slate-500">{owner?.name || '—'}</span>
+                        <span className="font-bold text-emerald-400 text-xs">
+                          R$ {(deal.value / 1000).toFixed(0)}k
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              {deals.filter((d) => d.stageId === 'stage-6' && d.outcome === resultPopup).length ===
+                0 && (
+                <p className="text-xs text-slate-500 text-center py-6">Nenhuma turma aqui ainda.</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal: adicionar turma existente ao funil numa etapa específica */}
@@ -1094,6 +1240,15 @@ function DealDetailModal({
     onUpdateDeal({ outcome })
     toast({
       title: outcome === 'ganho' ? 'Turma marcada como Ganhou' : 'Turma marcada como Perdeu',
+    })
+  }
+
+  /** Usado em Decisão (stage-5): decide o resultado e já move pra Fechou ou Perdeu. */
+  const decidirEAvancar = (outcome: DealOutcome) => {
+    onUpdateDeal({ outcome, stage: 'fechou-ou-perdeu' as any, stageId: 'stage-6', probability: 100 })
+    toast({
+      title: outcome === 'ganho' ? 'Turma marcada como Ganhou' : 'Turma marcada como Perdeu',
+      description: 'Movida para Fechou ou Perdeu.',
     })
   }
 
@@ -1630,6 +1785,29 @@ function DealDetailModal({
               </Button>
             </div>
           </div>
+
+          {/* Decisão (stage-5): decidir aqui já move pra Fechou ou Perdeu */}
+          {deal.stageId === 'stage-5' && (
+            <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-2">
+              <div className="font-semibold text-slate-200">A turma decidiu?</div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => decidirEAvancar('ganho')}
+                  className="px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:text-emerald-300 hover:border-emerald-500/40"
+                >
+                  <TrendingUp className="w-3.5 h-3.5" /> Ganhou
+                </button>
+                <button
+                  type="button"
+                  onClick={() => decidirEAvancar('perdido')}
+                  className="px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:text-red-300 hover:border-red-500/40"
+                >
+                  <TrendingDown className="w-3.5 h-3.5" /> Perdeu
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Outcome (apenas stage-6) */}
           {deal.stageId === 'stage-6' && (
