@@ -895,6 +895,60 @@ export type Database = {
         }
         Relationships: []
       }
+      pacote_itens_catalogo: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          ordem: number
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          ordem?: number
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem?: number
+        }
+        Relationships: []
+      }
+      pacote_templates: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          itens: string[]
+          nome: string
+          ordem: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          itens?: string[]
+          nome: string
+          ordem?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          itens?: string[]
+          nome?: string
+          ordem?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pacotes_turma: {
         Row: {
           created_at: string

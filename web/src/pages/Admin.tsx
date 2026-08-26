@@ -46,6 +46,18 @@ import {
   atualizarMotivoPerda,
   removerMotivoPerda,
 } from '@/utils/motivosPerda'
+import {
+  ItemCatalogo,
+  TemplatePacote,
+  listarCatalogo,
+  adicionarItemCatalogo,
+  atualizarItemCatalogo,
+  removerItemCatalogo,
+  listarTemplates,
+  adicionarTemplate,
+  atualizarTemplate,
+  removerTemplate,
+} from '@/utils/pacoteCatalogo'
 import { supabase } from '@/lib/supabase/client'
 import {
   ShieldCheck,
@@ -64,6 +76,7 @@ import {
   Trash2,
   GraduationCap,
   TrendingDown,
+  Package,
 } from 'lucide-react'
 
 interface Perfil {
@@ -117,6 +130,14 @@ export default function Admin() {
   const [carregandoMotivosPerda, setCarregandoMotivosPerda] = useState(true)
   const [novoMotivoPerda, setNovoMotivoPerda] = useState('')
   const [salvandoMotivoPerda, setSalvandoMotivoPerda] = useState(false)
+
+  // Catálogo de itens de pacote + templates (Luxo/Moderno/Clássico/Básico)
+  const [catalogoItens, setCatalogoItens] = useState<ItemCatalogo[]>([])
+  const [templatesPacote, setTemplatesPacote] = useState<TemplatePacote[]>([])
+  const [carregandoCatalogo, setCarregandoCatalogo] = useState(true)
+  const [novoItemCatalogo, setNovoItemCatalogo] = useState('')
+  const [salvandoItemCatalogo, setSalvandoItemCatalogo] = useState(false)
+  const [novoTemplateNome, setNovoTemplateNome] = useState('')
 
   // SGE State
   const [sgeCnpj, setSgeCnpj] = useState('')
@@ -354,6 +375,83 @@ export default function Admin() {
     if (!confirm(`Remover o motivo "${m.motivo}"?`)) return
     await removerMotivoPerda(m.id)
     setMotivosPerda((prev) => prev.filter((x) => x.id !== m.id))
+  }
+
+  useEffect(() => {
+    async function carregar() {
+      setCarregandoCatalogo(true)
+      const [itens, templates] = await Promise.all([listarCatalogo(), listarTemplates()])
+      setCatalogoItens(itens)
+      setTemplatesPacote(templates)
+      setCarregandoCatalogo(false)
+    }
+    carregar()
+  }, [])
+
+  async function handleAdicionarItemCatalogo(e: React.FormEvent) {
+    e.preventDefault()
+    const nome = novoItemCatalogo.trim()
+    if (!nome) return
+    setSalvandoItemCatalogo(true)
+    try {
+      await adicionarItemCatalogo(nome)
+      setCatalogoItens(await listarCatalogo())
+      setNovoItemCatalogo('')
+      toast({ title: 'Item adicionado', description: `"${nome}" já aparece clicável ao montar pacotes.` })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao adicionar',
+        description: err.message || 'Não foi possível salvar. Talvez esse item já exista.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSalvandoItemCatalogo(false)
+    }
+  }
+
+  async function handleToggleAtivoItemCatalogo(item: ItemCatalogo) {
+    await atualizarItemCatalogo(item.id, { ativo: !item.ativo })
+    setCatalogoItens((prev) => prev.map((x) => (x.id === item.id ? { ...x, ativo: !x.ativo } : x)))
+  }
+
+  async function handleRemoverItemCatalogo(item: ItemCatalogo) {
+    if (!confirm(`Remover o item "${item.nome}" do catálogo?`)) return
+    await removerItemCatalogo(item.id)
+    setCatalogoItens((prev) => prev.filter((x) => x.id !== item.id))
+  }
+
+  async function handleAdicionarTemplate(e: React.FormEvent) {
+    e.preventDefault()
+    const nome = novoTemplateNome.trim()
+    if (!nome) return
+    try {
+      await adicionarTemplate(nome)
+      setTemplatesPacote(await listarTemplates())
+      setNovoTemplateNome('')
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao adicionar',
+        description: err.message || 'Não foi possível salvar. Talvez esse template já exista.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  async function handleToggleItemNoTemplate(template: TemplatePacote, itemNome: string) {
+    const jaTem = template.itens.includes(itemNome)
+    const novosItens = jaTem
+      ? template.itens.filter((i) => i !== itemNome)
+      : [...template.itens, itemNome]
+    await atualizarTemplate(template.id, { itens: novosItens })
+    setTemplatesPacote((prev) =>
+      prev.map((t) => (t.id === template.id ? { ...t, itens: novosItens } : t)),
+    )
+  }
+
+  async function handleRemoverTemplate(template: TemplatePacote) {
+    if (!confirm(`Remover o template "${template.nome}"?`)) return
+    await removerTemplate(template.id)
+    setTemplatesPacote((prev) => prev.filter((x) => x.id !== template.id))
   }
 
   // Sync state from hook config
@@ -948,6 +1046,128 @@ export default function Admin() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+
+          <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+              <Package className="w-4 h-4 text-orange-400" /> Pacotes — Itens e Templates
+            </h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Itens do catálogo aparecem clicáveis ao montar o pacote de uma turma. Cada template
+              (Luxo/Moderno/Clássico/Básico) é só um ponto de partida — clicar no template
+              pré-marca esses itens, e depois dá pra tirar/acrescentar item por item em cada
+              pacote individualmente.
+            </p>
+
+            {carregandoCatalogo ? (
+              <div className="text-sm text-slate-400">Carregando...</div>
+            ) : (
+              <>
+                <div className="mb-5">
+                  <h3 className="text-xs font-semibold text-slate-300 mb-2">Catálogo de itens</h3>
+                  <form onSubmit={handleAdicionarItemCatalogo} className="flex items-center gap-2 mb-3">
+                    <input
+                      type="text"
+                      placeholder="Novo item (ex: Making Of)"
+                      value={novoItemCatalogo}
+                      onChange={(e) => setNovoItemCatalogo(e.target.value)}
+                      className="flex-1 bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    />
+                    <Button
+                      type="submit"
+                      disabled={!novoItemCatalogo.trim() || salvandoItemCatalogo}
+                      className="bg-orange-500 hover:bg-orange-600 text-white text-xs"
+                    >
+                      Adicionar
+                    </Button>
+                  </form>
+                  <div className="flex flex-wrap gap-2">
+                    {catalogoItens.map((item) => (
+                      <span
+                        key={item.id}
+                        className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border ${
+                          item.ativo
+                            ? 'bg-white/[0.04] text-slate-200 border-white/[0.1]'
+                            : 'bg-slate-500/10 text-slate-500 border-slate-500/20 line-through'
+                        }`}
+                      >
+                        <button type="button" onClick={() => handleToggleAtivoItemCatalogo(item)}>
+                          {item.nome}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverItemCatalogo(item)}
+                          className="text-slate-500 hover:text-red-400"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-300 mb-2">Templates</h3>
+                  <form onSubmit={handleAdicionarTemplate} className="flex items-center gap-2 mb-3">
+                    <input
+                      type="text"
+                      placeholder="Novo template (ex: Premium)"
+                      value={novoTemplateNome}
+                      onChange={(e) => setNovoTemplateNome(e.target.value)}
+                      className="flex-1 bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    />
+                    <Button
+                      type="submit"
+                      disabled={!novoTemplateNome.trim()}
+                      className="bg-orange-500 hover:bg-orange-600 text-white text-xs"
+                    >
+                      Adicionar
+                    </Button>
+                  </form>
+                  <div className="space-y-3">
+                    {templatesPacote.map((template) => (
+                      <div
+                        key={template.id}
+                        className="rounded-lg border border-white/[0.06] p-3 bg-[#0a0f14]"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-orange-400">{template.nome}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverTemplate(template)}
+                            className="p-1 text-slate-500 hover:text-red-400 rounded"
+                            title="Remover template"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {catalogoItens.map((item) => {
+                            const incluso = template.itens.includes(item.nome)
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => handleToggleItemNoTemplate(template, item.nome)}
+                                className={`text-[10px] px-2 py-1 rounded-full border ${
+                                  incluso
+                                    ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                                    : 'bg-white/[0.02] text-slate-500 border-white/[0.08]'
+                                }`}
+                              >
+                                {incluso ? '✓ ' : ''}
+                                {item.nome}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </TabsContent>
