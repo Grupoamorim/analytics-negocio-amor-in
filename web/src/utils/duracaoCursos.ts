@@ -54,7 +54,7 @@ export async function atualizarDuracaoCurso(
   id: string,
   patch: Partial<Pick<DuracaoCurso, 'duracaoAnos' | 'observacoes'>>,
 ): Promise<void> {
-  const payload: Record<string, unknown> = {}
+  const payload: { duracao_anos?: number; observacoes?: string | null } = {}
   if (patch.duracaoAnos !== undefined) payload.duracao_anos = patch.duracaoAnos
   if (patch.observacoes !== undefined) payload.observacoes = patch.observacoes
   const { error } = await supabase.from('duracao_cursos').update(payload).eq('id', id)
