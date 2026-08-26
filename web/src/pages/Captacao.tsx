@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   QrCode,
   Copy,
@@ -28,10 +29,18 @@ type Tab = 'lista' | 'mapa'
 
 export default function Captacao() {
   const { toast } = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [leads, setLeads] = useState<CaptacaoLead[]>([])
   const [copied, setCopied] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
-  const [activeTab, setActiveTab] = useState<Tab>('lista')
+  const [activeTab, setActiveTab] = useState<Tab>(
+    searchParams.get('tab') === 'mapa' ? 'mapa' : 'lista',
+  )
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab)
+    setSearchParams(tab === 'mapa' ? { tab: 'mapa' } : {}, { replace: true })
+  }
 
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField>('dataCadastro')
@@ -302,13 +311,13 @@ export default function Captacao() {
       <div className="flex items-center gap-1 p-1 bg-[rgba(255,255,255,0.03)] border border-white/[0.06] rounded-xl w-fit">
         <TabButton
           active={activeTab === 'lista'}
-          onClick={() => setActiveTab('lista')}
+          onClick={() => handleTabChange('lista')}
           icon={<List className="w-4 h-4" />}
           label="Lista"
         />
         <TabButton
           active={activeTab === 'mapa'}
-          onClick={() => setActiveTab('mapa')}
+          onClick={() => handleTabChange('mapa')}
           icon={<MapIcon className="w-4 h-4" />}
           label="Mapa de Mercado"
         />

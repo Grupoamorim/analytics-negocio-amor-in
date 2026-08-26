@@ -22,7 +22,6 @@ import NotFound from '@/pages/NotFound'
 import Captacao from '@/pages/Captacao'
 import CaptacaoForm from '@/pages/CaptacaoForm'
 import Contatos from '@/pages/Contatos'
-import MapaMercado from '@/pages/MapaMercado'
 import Adesoes from '@/pages/Adesoes'
 import Financeiro from '@/pages/Financeiro'
 import DRE from '@/pages/DRE'
@@ -96,7 +95,7 @@ const App = () => (
             <Route path="/transcricoes" element={<Transcripts />} />
             <Route path="/notas" element={<Notes />} />
             <Route path="/captacao" element={<Captacao />} />
-            <Route path="/mapa-mercado" element={<MapaMercado />} />
+            <Route path="/mapa-mercado" element={<Navigate to="/captacao?tab=mapa" replace />} />
             <Route path="/adesoes" element={<Adesoes />} />
             <Route path="/financeiro" element={<Financeiro />} />
             <Route path="/dre" element={<DRE />} />
