@@ -12,8 +12,8 @@ import {
   Bookmark,
   Trash2,
 } from 'lucide-react'
-import { CaptacaoLead, extractTurmaNumber } from '@/types/captacao'
-import { Deal, FUNNEL_STAGES } from '@/types/crm'
+import { extractTurmaNumber } from '@/types/captacao'
+import { Deal, Lead, FUNNEL_STAGES } from '@/types/crm'
 import { useCRM } from '@/context/CRMContext'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import { Button } from '@/components/ui/button'
@@ -31,10 +31,6 @@ interface SavedMapFilter {
 }
 
 const SAVED_MAP_FILTERS_KEY = 'mapa_mercado_saved_filters'
-
-interface MarketMapProps {
-  leads: CaptacaoLead[]
-}
 
 type FilterKey = 'curso' | 'faculdade' | 'cidade' | 'anoFormatura'
 
@@ -67,25 +63,14 @@ function countBy<T>(items: T[], key: (i: T) => string): Map<string, number> {
   return map
 }
 
-/** Chave canônica de turma (curso|faculdade|turma|ano|cidade) para cruzar dados. */
-function turmaKeyOf(l: {
-  curso: string
-  faculdade: string
-  turma: string
-  anoFormatura: string
-  cidade: string
-}): string {
-  return [
-    (l.curso || '').trim().toLowerCase(),
-    (l.faculdade || '').trim().toLowerCase(),
-    (l.turma || '').trim().toLowerCase(),
-    (l.anoFormatura || '').trim().toLowerCase(),
-    (l.cidade || '').trim().toLowerCase(),
-  ].join('|')
-}
-
-export default function MarketMap({ leads }: MarketMapProps) {
-  const { leads: crmLeads, deals } = useCRM()
+/**
+ * O Mapa de Mercado é a mesma base de Turmas do Funil — toda turma
+ * cadastrada já entra automaticamente aqui, sem lista separada. O status
+ * do funil de cada uma vem direto do deal vinculado (mesmo id, sem
+ * cruzamento por nome/curso como antes).
+ */
+export default function MarketMap() {
+  const { leads, deals } = useCRM()
 
   const [filters, setFilters] = useState<Record<FilterKey, string>>({
     curso: '',
@@ -151,29 +136,23 @@ export default function MarketMap({ leads }: MarketMapProps) {
     if (activeSavedFilterId === id) setActiveSavedFilterId(null)
   }
 
-  // Mapa turmaKey -> stageId atual (cruzando leads do CRM com seus deals).
-  // Turmas sem deal ficam ausentes do mapa (resolvem para "sem-pipeline").
-  const stageByTurmaKey = useMemo(() => {
-    const map = new Map<string, string>()
-    // Para cada lead do CRM, encontra o deal mais recente vinculado.
-    const dealsByLead = new Map<string, Deal>()
+  // Mapa leadId -> stageId atual (mesmo id da turma, sem cruzamento por nome).
+  const stageByLeadId = useMemo(() => {
+    const latestByLead = new Map<string, Deal>()
     for (const d of deals) {
       if (!d.leadId) continue
-      const prev = dealsByLead.get(d.leadId)
+      const prev = latestByLead.get(d.leadId)
       if (!prev || new Date(d.updatedAt) > new Date(prev.updatedAt)) {
-        dealsByLead.set(d.leadId, d)
+        latestByLead.set(d.leadId, d)
       }
     }
-    for (const lead of crmLeads) {
-      const deal = dealsByLead.get(lead.id)
-      if (deal) map.set(turmaKeyOf(lead), deal.stageId)
-    }
+    const map = new Map<string, string>()
+    latestByLead.forEach((d, leadId) => map.set(leadId, d.stageId))
     return map
-  }, [crmLeads, deals])
+  }, [deals])
 
-  /** Retorna o stageId atual de um CaptacaoLead (ou "sem-pipeline"). */
-  const stageOfLead = (l: CaptacaoLead): string =>
-    stageByTurmaKey.get(turmaKeyOf(l)) ?? SEM_PIPELINE_ID
+  /** Retorna o stageId atual de uma turma (ou "sem-pipeline"). */
+  const stageOfLead = (l: Lead): string => stageByLeadId.get(l.id) ?? SEM_PIPELINE_ID
 
   // Listas de opções disponíveis (derivadas dos dados brutos)
   const options = useMemo(() => {
@@ -198,7 +177,7 @@ export default function MarketMap({ leads }: MarketMapProps) {
       if (selectedStages.length > 0 && !selectedStages.includes(stageOfLead(l))) return false
       return true
     })
-  }, [leads, filters, selectedStages, stageByTurmaKey])
+  }, [leads, filters, selectedStages, stageByLeadId])
 
   const hasActiveFilter = Object.values(filters).some(Boolean) || selectedStages.length > 0
 
