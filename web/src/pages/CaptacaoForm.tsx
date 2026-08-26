@@ -304,7 +304,7 @@ export default function CaptacaoForm() {
             </span>
           )}
           <h1 className="text-2xl font-bold text-white text-center tracking-tight mt-2">
-            Cadastro de Interesse
+            Você quer um presente?
           </h1>
           <p className="text-sm text-slate-400 text-center mt-1">
             Preencha seus dados para entrarmos em contato
