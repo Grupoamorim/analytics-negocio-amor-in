@@ -272,14 +272,30 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
     defaultProbability: 60,
     description: 'Fase 2 do Playbook — agendar e realizar a reunião com a comissão.',
     tasks: [
-      'Agendar reunião com a comissão (só concluir com data e hora confirmadas)',
-      'Criar grupo no WhatsApp com todos os membros da comissão',
-      'Enviar o formulário inicial no grupo e coletar todas as respostas',
-      'Montar a proposta visual no Canva com base nas respostas',
+      {
+        label: 'Agendar Reunião com a Comissão',
+        detalhe:
+          'Sua meta é obter a confirmação de data e hora — só marque como feito quando a ' +
+          'reunião estiver efetivamente agendada, não só proposta.',
+      },
+      {
+        label: 'Criar Grupo com a Comissão',
+        detalhe:
+          'PENDENTE DE CONFIRMAR COM O LUCAS: padrão do nome do grupo, quais membros da ' +
+          'equipe Amor In entram e quais números da comissão entram. Assim que criar o ' +
+          'grupo, adicione a equipe Amor In responsável por essa turma e os contatos da comissão.',
+      },
+      {
+        label: 'Montar/Preencher o Pacote',
+        detalhe:
+          'Monte o(s) pacote(s) dessa turma na seção "Pacotes da Turma" mais abaixo neste ' +
+          'mesmo card — escolha um template (Luxo/Moderno/Clássico/Básico) ou marque os ' +
+          'itens do catálogo um a um. Isso já vira o Valor automático da turma.',
+      },
       'Anexar o link da proposta no card antes da reunião (obrigatório)',
     ],
     stagnationAlertDays: 5,
-    suggestedAction: 'Agendar a reunião e montar a proposta no Canva antes dela.',
+    suggestedAction: 'Agendar a reunião, criar o grupo e montar o pacote antes dela.',
   },
   {
     id: 'stage-4',
