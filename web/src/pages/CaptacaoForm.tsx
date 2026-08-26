@@ -130,6 +130,7 @@ export default function CaptacaoForm() {
       .select('id, curso, faculdade, turma, ano_formatura, cidade, empresa')
       .eq('curso', cursoBusca)
       .eq('concluida', false)
+      .not('funil_status', 'in', '("Convertido","Perdido")')
       .then(({ data }) => {
         const encontradas: TurmaEncontrada[] = (data || []).map((t) => {
           const duracao = duracaoParaCurso(t.curso || '', t.faculdade || '')
@@ -144,7 +145,15 @@ export default function CaptacaoForm() {
             periodoAtual: duracao ? calcularPeriodoAtual(t.ano_formatura || '', duracao) : null,
           }
         })
-        encontradas.sort((a, b) => (a.faculdade + a.cidade).localeCompare(b.faculdade + b.cidade, 'pt-BR'))
+        // Ordem: Faculdade (alfabética) -> número da turma -> ano de formatura.
+        encontradas.sort((a, b) => {
+          const porFaculdade = a.faculdade.localeCompare(b.faculdade, 'pt-BR')
+          if (porFaculdade !== 0) return porFaculdade
+          const numA = parseInt(a.turma.replace(/\D/g, ''), 10) || 0
+          const numB = parseInt(b.turma.replace(/\D/g, ''), 10) || 0
+          if (numA !== numB) return numA - numB
+          return a.anoFormatura.localeCompare(b.anoFormatura, 'pt-BR')
+        })
         setTurmasEncontradas(encontradas)
         setBuscando(false)
       })
