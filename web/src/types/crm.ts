@@ -396,6 +396,7 @@ export interface Contact {
   phone?: string
   isPrimary?: boolean
   notes?: string
+  naoRespondeCount?: number // quantas vezes marcaram que esse contato não respondeu (3 = volta a turma pra Prospecção)
 }
 
 export type CallTranscript = Transcript

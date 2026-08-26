@@ -219,6 +219,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          nao_responde_count: number
           nome: string
           telefone: string | null
           turma_id: string
@@ -229,6 +230,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          nao_responde_count?: number
           nome: string
           telefone?: string | null
           turma_id: string
@@ -239,6 +241,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          nao_responde_count?: number
           nome?: string
           telefone?: string | null
           turma_id?: string
@@ -506,6 +509,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      motivos_perda: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          motivo: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          motivo: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          motivo?: string
+        }
+        Relationships: []
       }
       notas: {
         Row: {

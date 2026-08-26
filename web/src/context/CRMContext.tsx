@@ -57,6 +57,8 @@ interface CRMContextType {
   addContact: (contact: Omit<Contact, 'id' | 'createdAt'>) => Promise<Contact>
   updateContact: (id: string, updates: Partial<Contact>) => Promise<void>
   deleteContact: (id: string) => Promise<void>
+  marcarNaoResponde: (id: string) => Promise<void>
+  marcarRespondeu: (id: string) => Promise<void>
 
   // Notas
   addNote: (note: Omit<Note, 'id' | 'createdAt'>) => Promise<Note>
@@ -121,6 +123,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addContact,
     updateContact,
     deleteContact,
+    marcarNaoResponde,
+    marcarRespondeu,
     refreshContatos,
   } = useContatos()
 
@@ -602,6 +606,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addContact,
     updateContact,
     deleteContact,
+    marcarNaoResponde,
+    marcarRespondeu,
 
     addNote,
     updateNote,

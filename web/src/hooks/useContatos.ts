@@ -25,6 +25,7 @@ function mapRowToContact(
     email: row.email || '',
     isPrimary: false,
     notes: '',
+    naoRespondeCount: row.nao_responde_count || 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at || undefined,
     updatedByEmail: row.updated_by_profile?.email || undefined,
@@ -224,6 +225,56 @@ export function useContatos() {
     })
   }
 
+  /** Marca +1 "não respondeu" nesse contato. Ao chegar em 3, um trigger no
+   * Supabase move a turma sozinha de volta pra Prospecção. */
+  const marcarNaoResponde = async (id: string): Promise<void> => {
+    const atual = contacts.find((c) => c.id === id)
+    const novoCount = (atual?.naoRespondeCount || 0) + 1
+
+    if (isAuthenticated && user) {
+      try {
+        const { error: err } = await supabase
+          .from('contatos')
+          .update({ nao_responde_count: novoCount, updated_by: user.id })
+          .eq('id', id)
+        if (err) throw err
+      } catch (e: any) {
+        console.warn('Erro ao marcar não responde:', e)
+        setError(e.message)
+        return
+      }
+    }
+
+    setContacts((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, naoRespondeCount: novoCount } : c))
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  /** Zera o contador (a pessoa respondeu) - a badge de alerta some do card. */
+  const marcarRespondeu = async (id: string): Promise<void> => {
+    if (isAuthenticated && user) {
+      try {
+        const { error: err } = await supabase
+          .from('contatos')
+          .update({ nao_responde_count: 0, updated_by: user.id })
+          .eq('id', id)
+        if (err) throw err
+      } catch (e: any) {
+        console.warn('Erro ao marcar respondeu:', e)
+        setError(e.message)
+        return
+      }
+    }
+
+    setContacts((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, naoRespondeCount: 0 } : c))
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }
+
   const deleteContact = async (id: string): Promise<void> => {
     if (isAuthenticated) {
       try {
@@ -249,6 +300,8 @@ export function useContatos() {
     addContact,
     updateContact,
     deleteContact,
+    marcarNaoResponde,
+    marcarRespondeu,
     refreshContatos: fetchContatos,
   }
 }

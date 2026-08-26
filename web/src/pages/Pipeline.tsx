@@ -46,6 +46,7 @@ import {
   currentStageEnteredAt,
   formatBRDate,
   Transcript,
+  Contact,
 } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
@@ -99,6 +100,11 @@ export default function Pipeline() {
     addLead,
     updateLead,
     deleteLead,
+    contacts,
+    addContact,
+    deleteContact,
+    marcarNaoResponde,
+    marcarRespondeu,
   } = useCRM()
   const { toast } = useToast()
 
@@ -691,6 +697,13 @@ export default function Pipeline() {
           onDuplicate={() => handleDuplicateDeal(selectedDeal, selectedLead)}
           onDelete={() => handleDeleteDealAndLead(selectedDeal, selectedLead)}
           onClose={() => setSelectedDealId(null)}
+          contatos={selectedDeal.leadId ? contacts.filter((c) => c.leadId === selectedDeal.leadId) : []}
+          onAddContato={(nome, telefone) =>
+            selectedDeal.leadId && addContact({ leadId: selectedDeal.leadId, nome, telefone, email: '' })
+          }
+          onDeleteContato={(id) => deleteContact(id)}
+          onMarcarNaoResponde={(id) => marcarNaoResponde(id)}
+          onMarcarRespondeu={(id) => marcarRespondeu(id)}
         />
       )}
 
@@ -780,6 +793,11 @@ interface DealDetailModalProps {
   onDuplicate: () => void
   onDelete: () => void
   onClose: () => void
+  contatos: Contact[]
+  onAddContato: (nome: string, telefone: string) => void
+  onDeleteContato: (id: string) => void
+  onMarcarNaoResponde: (id: string) => void
+  onMarcarRespondeu: (id: string) => void
 }
 
 const EMPRESAS_TURMA = ['AFF', 'AIF', 'AIF-SSA', 'AIF-V', 'AIM', 'SFF']
@@ -797,9 +815,16 @@ function DealDetailModal({
   onDuplicate,
   onDelete,
   onClose,
+  contatos,
+  onAddContato,
+  onDeleteContato,
+  onMarcarNaoResponde,
+  onMarcarRespondeu,
 }: DealDetailModalProps) {
   const { toast } = useToast()
   const { user } = useAuth()
+  const [novoContatoNome, setNovoContatoNome] = useState('')
+  const [novoContatoTelefone, setNovoContatoTelefone] = useState('')
   const [linkInput, setLinkInput] = useState(proposalLink)
   const [editingNotes, setEditingNotes] = useState(false)
   const [notesDraft, setNotesDraft] = useState(deal.notes || '')
@@ -1447,6 +1472,102 @@ function DealDetailModal({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Contatos da turma — cada um com seu próprio contador de "não respondeu".
+              Ao chegar em 3, a turma volta sozinha pra Prospecção (automação no banco). */}
+          <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-2">
+            <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-orange-400" /> Contatos
+            </div>
+            {contatos.length === 0 && (
+              <p className="text-[11px] text-slate-500">Nenhum contato cadastrado ainda.</p>
+            )}
+            {contatos.map((c) => {
+              const naoResponde = c.naoRespondeCount || 0
+              const alertado = naoResponde >= 3
+              return (
+                <div
+                  key={c.id}
+                  className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 ${
+                    alertado
+                      ? 'bg-red-500/10 border-red-500/30'
+                      : 'bg-white/[0.02] border-white/[0.06]'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-slate-200 truncate flex items-center gap-1.5">
+                      {c.nome}
+                      {alertado && (
+                        <span className="text-[10px] font-semibold text-red-400">
+                          ⚠️ não responde
+                        </span>
+                      )}
+                    </div>
+                    {c.telefone && (
+                      <div className="text-[10px] text-slate-400">{c.telefone}</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {alertado ? (
+                      <button
+                        type="button"
+                        onClick={() => onMarcarRespondeu(c.id)}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
+                      >
+                        Respondeu
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onMarcarNaoResponde(c.id)}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white/[0.04] text-slate-400 border border-white/[0.08] hover:text-red-400 hover:border-red-500/30"
+                        title="Marcar que não respondeu"
+                      >
+                        Não respondeu ({naoResponde}/3)
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onDeleteContato(c.id)}
+                      className="p-1 text-slate-500 hover:text-red-400 rounded"
+                      title="Remover contato"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+            <div className="flex items-center gap-1.5 pt-1">
+              <input
+                type="text"
+                placeholder="Nome"
+                value={novoContatoNome}
+                onChange={(e) => setNovoContatoNome(e.target.value)}
+                className="flex-1 min-w-0 bg-[#111820] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <input
+                type="text"
+                placeholder="Telefone"
+                value={novoContatoTelefone}
+                onChange={(e) => setNovoContatoTelefone(e.target.value)}
+                className="w-28 shrink-0 bg-[#111820] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!novoContatoNome.trim()}
+                onClick={() => {
+                  onAddContato(novoContatoNome.trim(), novoContatoTelefone.trim())
+                  setNovoContatoNome('')
+                  setNovoContatoTelefone('')
+                }}
+                className="h-7 px-2 bg-orange-500 hover:bg-orange-600 text-white text-[11px] shrink-0"
+              >
+                Add
+              </Button>
+            </div>
           </div>
 
           {/* Outcome (apenas stage-6) */}
