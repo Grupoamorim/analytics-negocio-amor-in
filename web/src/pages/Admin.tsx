@@ -39,6 +39,13 @@ import {
   atualizarDuracaoCurso,
   removerDuracaoCurso,
 } from '@/utils/duracaoCursos'
+import {
+  MotivoPerda,
+  listarMotivosPerda,
+  adicionarMotivoPerda,
+  atualizarMotivoPerda,
+  removerMotivoPerda,
+} from '@/utils/motivosPerda'
 import { supabase } from '@/lib/supabase/client'
 import {
   ShieldCheck,
@@ -56,6 +63,7 @@ import {
   Image as ImageIcon,
   Trash2,
   GraduationCap,
+  TrendingDown,
 } from 'lucide-react'
 
 interface Perfil {
@@ -103,6 +111,12 @@ export default function Admin() {
   const [novaFaculdadeDuracao, setNovaFaculdadeDuracao] = useState('')
   const [novosAnosDuracao, setNovosAnosDuracao] = useState('')
   const [salvandoDuracaoCurso, setSalvandoDuracaoCurso] = useState(false)
+
+  // Motivos de perda (Funil)
+  const [motivosPerda, setMotivosPerda] = useState<MotivoPerda[]>([])
+  const [carregandoMotivosPerda, setCarregandoMotivosPerda] = useState(true)
+  const [novoMotivoPerda, setNovoMotivoPerda] = useState('')
+  const [salvandoMotivoPerda, setSalvandoMotivoPerda] = useState(false)
 
   // SGE State
   const [sgeCnpj, setSgeCnpj] = useState('')
@@ -299,6 +313,47 @@ export default function Admin() {
     if (!confirm(`Remover a duração cadastrada de "${d.curso}${d.faculdade ? ' - ' + d.faculdade : ''}"?`)) return
     await removerDuracaoCurso(d.id)
     setDuracaoCursos((prev) => prev.filter((x) => x.id !== d.id))
+  }
+
+  useEffect(() => {
+    async function carregar() {
+      setCarregandoMotivosPerda(true)
+      setMotivosPerda(await listarMotivosPerda())
+      setCarregandoMotivosPerda(false)
+    }
+    carregar()
+  }, [])
+
+  async function handleAdicionarMotivoPerda(e: React.FormEvent) {
+    e.preventDefault()
+    const motivo = novoMotivoPerda.trim()
+    if (!motivo) return
+    setSalvandoMotivoPerda(true)
+    try {
+      await adicionarMotivoPerda(motivo)
+      setMotivosPerda(await listarMotivosPerda())
+      setNovoMotivoPerda('')
+      toast({ title: 'Motivo adicionado', description: `"${motivo}" já aparece no Funil.` })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao adicionar',
+        description: err.message || 'Não foi possível salvar. Talvez esse motivo já exista.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSalvandoMotivoPerda(false)
+    }
+  }
+
+  async function handleToggleAtivoMotivoPerda(m: MotivoPerda) {
+    await atualizarMotivoPerda(m.id, { ativo: !m.ativo })
+    setMotivosPerda((prev) => prev.map((x) => (x.id === m.id ? { ...x, ativo: !x.ativo } : x)))
+  }
+
+  async function handleRemoverMotivoPerda(m: MotivoPerda) {
+    if (!confirm(`Remover o motivo "${m.motivo}"?`)) return
+    await removerMotivoPerda(m.id)
+    setMotivosPerda((prev) => prev.filter((x) => x.id !== m.id))
   }
 
   // Sync state from hook config
@@ -809,6 +864,80 @@ export default function Admin() {
                         <button
                           type="button"
                           onClick={() => handleRemoverDuracaoCurso(d)}
+                          className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05]"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+              <TrendingDown className="w-4 h-4 text-orange-400" /> Motivos de Perda (Funil)
+            </h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Lista de motivos que aparece quando uma turma é marcada como "Perdeu" no Funil —
+              vira dado analisável em vez de texto livre. Desative em vez de remover se só quiser
+              tirar da lista sem perder o histórico de turmas já marcadas com esse motivo.
+            </p>
+
+            <form onSubmit={handleAdicionarMotivoPerda} className="flex items-center gap-2 mb-4">
+              <input
+                type="text"
+                placeholder="Novo motivo"
+                value={novoMotivoPerda}
+                onChange={(e) => setNovoMotivoPerda(e.target.value)}
+                className="flex-1 bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <Button
+                type="submit"
+                disabled={!novoMotivoPerda.trim() || salvandoMotivoPerda}
+                className="bg-orange-500 hover:bg-orange-600 text-white text-xs"
+              >
+                Adicionar
+              </Button>
+            </form>
+
+            {carregandoMotivosPerda ? (
+              <div className="text-sm text-slate-400">Carregando...</div>
+            ) : motivosPerda.length === 0 ? (
+              <div className="text-sm text-slate-500">Nenhum motivo cadastrado ainda.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 text-xs uppercase border-b border-white/[0.06]">
+                    <th className="py-2">Motivo</th>
+                    <th className="py-2">Status</th>
+                    <th className="py-2 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {motivosPerda.map((m) => (
+                    <tr key={m.id} className="border-b border-white/[0.04]">
+                      <td className="py-2.5 text-slate-200">{m.motivo}</td>
+                      <td className="py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAtivoMotivoPerda(m)}
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                            m.ativo
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                          }`}
+                        >
+                          {m.ativo ? 'Ativo' : 'Inativo'}
+                        </button>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverMotivoPerda(m)}
                           className="p-1.5 text-slate-400 hover:text-red-400 rounded hover:bg-white/[0.05]"
                           title="Remover"
                         >

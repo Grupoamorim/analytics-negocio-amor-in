@@ -52,6 +52,7 @@ import AIInsightsButton from '@/components/AIInsightsButton'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import LastEditedBy from '@/components/LastEditedBy'
 import { getSGELinkForLead } from '@/utils/sgeIntegration'
+import { fetchMotivosPerdaAtivos } from '@/utils/motivosPerda'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -126,10 +127,13 @@ export default function Pipeline() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [leads])
   const filteredDeals = useMemo(() => {
-    if (selectedEmpresas.length === 0) return deals
     return deals.filter((d) => {
+      // Turma já formada (ano de formatura passou) some do Funil — não tem mais
+      // o que prospectar/negociar nela.
       const lead = d.leadId ? leadById.get(d.leadId) : null
-      return lead && selectedEmpresas.includes(lead.empresa || 'AFF')
+      if (lead?.concluida) return false
+      if (selectedEmpresas.length === 0) return true
+      return !!lead && selectedEmpresas.includes(lead.empresa || 'AFF')
     })
   }, [deals, leadById, selectedEmpresas])
 
@@ -306,10 +310,16 @@ export default function Pipeline() {
     const stage = stages.find((s) => s.id === stageId)
     if (deal && stage && deal.stageId !== stageId) {
       moveDealStage(dealId, stageId)
-      toast({
-        title: `Turma movida para ${stage.name}`,
-        description: `${deal.company} agora está em ${stage.name}.`,
-      })
+      if (stageId === 'stage-6') {
+        // Última etapa do funil: abre o card na hora pra marcar Fechou/Perdeu
+        // (e o motivo, se perdeu) — garante que esse dado nunca fica em branco.
+        setSelectedDealId(dealId)
+      } else {
+        toast({
+          title: `Turma movida para ${stage.name}`,
+          description: `${deal.company} agora está em ${stage.name}.`,
+        })
+      }
     }
   }
 
@@ -348,7 +358,15 @@ export default function Pipeline() {
       <div className="overflow-x-auto pb-4 -mx-2 px-2">
         <div className="flex gap-4 min-w-max">
           {sortedStages.map((stage) => {
-            const stageDeals = filteredDeals.filter((d) => d.stageId === stage.id)
+            const stageDeals = filteredDeals.filter((d) => {
+              if (d.stageId !== stage.id) return false
+              // Prospecção nunca mostra turma que já tem resultado (ganhou/perdeu)
+              // registrado — evita card "zumbi" que não reflete mais o funil ativo.
+              if (stage.id === 'stage-1' && (d.outcome === 'ganho' || d.outcome === 'perdido')) {
+                return false
+              }
+              return true
+            })
             const stageTotalVal = stageDeals.reduce((acc, d) => acc + (d.value || 0), 0)
             const isDragOver = dragOverStageId === stage.id
             const meta = FUNNEL_STAGE_BY_ID[stage.id]
@@ -785,7 +803,20 @@ function DealDetailModal({
   const [linkInput, setLinkInput] = useState(proposalLink)
   const [editingNotes, setEditingNotes] = useState(false)
   const [notesDraft, setNotesDraft] = useState(deal.notes || '')
-  const [lostReasonDraft, setLostReasonDraft] = useState(deal.lostReason || '')
+  const [motivosPerda, setMotivosPerda] = useState<string[]>([])
+  const motivoJaSalvo = deal.lostReason || ''
+  const [motivoSelecionado, setMotivoSelecionado] = useState(motivoJaSalvo)
+  const [motivoOutroDraft, setMotivoOutroDraft] = useState('')
+  useEffect(() => {
+    fetchMotivosPerdaAtivos().then((motivos) => {
+      setMotivosPerda(motivos)
+      if (motivoJaSalvo && !motivos.includes(motivoJaSalvo)) {
+        setMotivoSelecionado('Outro')
+        setMotivoOutroDraft(motivoJaSalvo)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const stage = stages.find((s) => s.id === deal.stageId)
   const turmaName = lead ? getTurmaDisplayName(lead) : deal.title
   const sgeLink = lead ? getSGELinkForLead(lead.id) : null
@@ -1448,14 +1479,37 @@ function DealDetailModal({
               </div>
               {deal.outcome === 'perdido' && (
                 <div className="space-y-2 pt-1">
-                  <textarea
-                    rows={2}
-                    placeholder="Motivo da recusa e aprendizado..."
-                    value={lostReasonDraft}
-                    onChange={(e) => setLostReasonDraft(e.target.value)}
-                    onBlur={() => onUpdateDeal({ lostReason: lostReasonDraft })}
-                    className="w-full bg-[#111820] border border-white/10 rounded-lg p-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                  />
+                  <select
+                    value={motivoSelecionado}
+                    onChange={(e) => {
+                      const valor = e.target.value
+                      setMotivoSelecionado(valor)
+                      if (valor !== 'Outro') {
+                        setMotivoOutroDraft('')
+                        onUpdateDeal({ lostReason: valor })
+                      }
+                    }}
+                    className="w-full bg-[#111820] border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-red-500"
+                  >
+                    <option value="" disabled>
+                      Selecione o motivo...
+                    </option>
+                    {motivosPerda.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  {motivoSelecionado === 'Outro' && (
+                    <textarea
+                      rows={2}
+                      placeholder="Descreva o motivo..."
+                      value={motivoOutroDraft}
+                      onChange={(e) => setMotivoOutroDraft(e.target.value)}
+                      onBlur={() => onUpdateDeal({ lostReason: motivoOutroDraft })}
+                      className="w-full bg-[#111820] border border-white/10 rounded-lg p-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    />
+                  )}
                 </div>
               )}
             </div>
