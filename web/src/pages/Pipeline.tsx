@@ -367,10 +367,16 @@ export default function Pipeline() {
           {sortedStages.map((stage) => {
             const stageDeals = filteredDeals.filter((d) => {
               if (d.stageId !== stage.id) return false
-              // Prospecção nunca mostra turma que já tem resultado (ganhou/perdeu)
-              // registrado — evita card "zumbi" que não reflete mais o funil ativo.
-              if (stage.id === 'stage-1' && (d.outcome === 'ganho' || d.outcome === 'perdido')) {
-                return false
+              if (stage.id === 'stage-1') {
+                // Prospecção nunca mostra turma que já tem resultado (ganhou/perdeu).
+                if (d.outcome === 'ganho' || d.outcome === 'perdido') return false
+                // Prospecção só mostra turma SEM nenhum contato vinculado — assim
+                // que tem contato, ela é de Qualificação (o gatilho no banco já
+                // move sozinho). Única exceção: voltou pra cá porque um contato
+                // bateu 3x "não respondeu".
+                const contatosDaTurma = d.leadId ? contacts.filter((c) => c.leadId === d.leadId) : []
+                const voltouPorNaoResponde = contatosDaTurma.some((c) => (c.naoRespondeCount || 0) >= 3)
+                if (contatosDaTurma.length > 0 && !voltouPorNaoResponde) return false
               }
               return true
             })

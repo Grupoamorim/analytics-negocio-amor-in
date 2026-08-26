@@ -1802,7 +1802,7 @@ export default function LeadsPage() {
                               <TooltipTrigger asChild>
                                 <button
                                   type="button"
-                                  onClick={() => handleOpenEdit(lead)}
+                                  onClick={() => setSelectedLead(lead)}
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors cursor-pointer"
                                 >
                                   <LinkIcon className="w-3 h-3" />
@@ -1873,7 +1873,7 @@ export default function LeadsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-slate-500 hover:text-orange-600"
-                            onClick={() => handleOpenEdit(lead)}
+                            onClick={() => setSelectedLead(lead)}
                             title="Editar Turma"
                           >
                             <Edit2 className="h-4 w-4" />
