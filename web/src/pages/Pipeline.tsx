@@ -491,9 +491,13 @@ export default function Pipeline() {
                     const owner = memberById.get(deal.ownerId)
                     const link = getProposalLink(deal)
                     const showProposal = isProposalStage(deal.stageId)
-                    const stageItems = DEFAULT_CHECKLIST_ITEMS.filter(
-                      (it) => it.stageId === stage.id,
-                    )
+                    // Fechou ou Perdeu: só os 3 itens do resultado que saiu
+                    // (ganho ou perdido) contam — os outros 3 nem se aplicam.
+                    let stageItems = DEFAULT_CHECKLIST_ITEMS.filter((it) => it.stageId === stage.id)
+                    if (stage.id === 'stage-6' && deal.outcome) {
+                      stageItems =
+                        deal.outcome === 'ganho' ? stageItems.slice(0, 3) : stageItems.slice(3)
+                    }
                     const doneCount = stageItems.filter((it) => deal.checklist?.[it.id]).length
                     const days = daysInCurrentStage(deal)
                     const enteredAt = currentStageEnteredAt(deal)
@@ -1640,6 +1644,33 @@ function DealDetailModal({
                   <TrendingDown className="w-3.5 h-3.5" /> Perdeu
                 </button>
               </div>
+              {deal.outcome === 'ganho' && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-[10px] text-slate-400">
+                    O que já foi feito? (marque quantos se aplicarem)
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(itemsByStage.get('stage-6') || []).slice(0, 3).map((it) => {
+                      const checked = !!deal.checklist?.[it.id]
+                      return (
+                        <button
+                          key={it.id}
+                          type="button"
+                          onClick={() => onToggleChecklist(it.id, !checked)}
+                          className={`text-[10px] px-2.5 py-1.5 rounded-full border text-left ${
+                            checked
+                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                              : 'bg-white/[0.04] text-slate-400 border-white/[0.08] hover:text-slate-200'
+                          }`}
+                        >
+                          {checked ? '✓ ' : ''}
+                          {it.label.replace(/^Se Fechou: /i, '')}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
               {deal.outcome === 'perdido' && (
                 <div className="space-y-2 pt-1">
                   <select
@@ -1723,6 +1754,9 @@ function DealDetailModal({
             </div>
             <div className="space-y-3">
               {stages.map((s) => {
+                // Fechou ou Perdeu não entra aqui — a seleção do que foi
+                // feito mora só na seção "Resultado Final" acima.
+                if (s.id === 'stage-6') return null
                 const items = itemsByStage.get(s.id) || []
                 if (items.length === 0) return null
                 const doneCount = items.filter((it) => deal.checklist?.[it.id]).length
