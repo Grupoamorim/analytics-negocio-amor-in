@@ -30,6 +30,7 @@ import {
   Sparkles,
   ClipboardCopy,
   Check,
+  ChevronRight,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import {
@@ -123,6 +124,17 @@ export default function Pipeline() {
   const [highlightDealId, setHighlightDealId] = useState<string | null>(
     () => (window as any).__pipelineHighlightDealId || null,
   )
+  // Checklist no card do Kanban vem sempre minimizado (só a barra de
+  // progresso) — clicar na setinha expande e mostra os itens dessa etapa.
+  const [expandedChecklistDealIds, setExpandedChecklistDealIds] = useState<Set<string>>(new Set())
+  const toggleChecklistExpanded = (dealId: string) => {
+    setExpandedChecklistDealIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(dealId)) next.delete(dealId)
+      else next.add(dealId)
+      return next
+    })
+  }
 
   const leadById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads])
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
@@ -639,17 +651,27 @@ export default function Pipeline() {
                           <span className="text-slate-500">desde {formatBRDate(enteredAt)}</span>
                         </div>
 
-                        {/* Checklist progress */}
+                        {/* Checklist progress — minimizado por padrão, setinha expande só os
+                            itens desta etapa (não de todas). */}
                         {stageItems.length > 0 && (
-                          <div className="mb-2">
-                            <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                          <div className="mb-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => toggleChecklistExpanded(deal.id)}
+                              className="w-full flex items-center justify-between text-[10px] text-slate-400 mb-1 hover:text-slate-300"
+                            >
                               <span className="flex items-center gap-1">
+                                <ChevronRight
+                                  className={`w-3 h-3 transition-transform ${
+                                    expandedChecklistDealIds.has(deal.id) ? 'rotate-90' : ''
+                                  }`}
+                                />
                                 <CheckSquare className="w-3 h-3" /> Checklist
                               </span>
                               <span className="font-semibold text-slate-300">
                                 {doneCount}/{stageItems.length}
                               </span>
-                            </div>
+                            </button>
                             <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
                               <div
                                 className="h-full rounded-full transition-all"
@@ -659,6 +681,30 @@ export default function Pipeline() {
                                 }}
                               />
                             </div>
+                            {expandedChecklistDealIds.has(deal.id) && (
+                              <div className="mt-2 space-y-1">
+                                {stageItems.map((it) => {
+                                  const checked = !!deal.checklist?.[it.id]
+                                  return (
+                                    <button
+                                      key={it.id}
+                                      type="button"
+                                      onClick={() => toggleChecklistItem(deal.id, it.id, !checked)}
+                                      className="w-full flex items-start gap-1.5 text-left text-[10px] text-slate-300 hover:text-white"
+                                    >
+                                      {checked ? (
+                                        <CheckSquare className="w-3 h-3 mt-0.5 flex-shrink-0 text-emerald-400" />
+                                      ) : (
+                                        <Circle className="w-3 h-3 mt-0.5 flex-shrink-0 text-slate-500" />
+                                      )}
+                                      <span className={checked ? 'line-through text-slate-500' : ''}>
+                                        {it.label}
+                                      </span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
 

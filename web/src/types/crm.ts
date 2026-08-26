@@ -214,12 +214,11 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
     defaultProbability: 20,
     description: 'Ainda sem contato direto da comissão — base do Mapa de Mercado.',
     tasks: [
-      'Prospectar contato da turma/comissão (Instagram, presencial, indicação)',
-      'Conseguir nome, telefone e @ do contato',
+      'Conseguir nome, telefone e/ou @ do contato',
       'Cadastrar o contato no Mapa de Mercado (a turma vira Qualificação sozinha)',
     ],
     stagnationAlertDays: 7,
-    suggestedAction: 'Prospectar ativamente até conseguir um contato pra cadastrar.',
+    suggestedAction: 'Conseguir um contato e cadastrar no Mapa de Mercado.',
   },
   {
     id: 'stage-2',
