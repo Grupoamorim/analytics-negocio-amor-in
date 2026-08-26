@@ -53,6 +53,7 @@ import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import LastEditedBy from '@/components/LastEditedBy'
 import { getSGELinkForLead } from '@/utils/sgeIntegration'
 import { fetchMotivosPerdaAtivos } from '@/utils/motivosPerda'
+import { notificarNovoResponsavel } from '@/utils/notificacoes'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -172,7 +173,7 @@ export default function Pipeline() {
         value: lead.potentialValue || 0,
         stageId,
         probability: FUNNEL_STAGE_BY_ID[stageId]?.defaultProbability ?? 20,
-        ownerId: members[0]?.id || 'm-1',
+        ownerId: members[0]?.id || '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
@@ -244,7 +245,7 @@ export default function Pipeline() {
         value: deal.value,
         stageId: 'stage-1',
         probability: FUNNEL_STAGE_BY_ID['stage-1']?.defaultProbability ?? 20,
-        ownerId: deal.ownerId || members[0]?.id || 'm-1',
+        ownerId: deal.ownerId || members[0]?.id || '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
@@ -862,6 +863,19 @@ function DealDetailModal({
 
   const [uploadingFoto, setUploadingFoto] = useState(false)
 
+  const handleAtribuirResponsavel = (novoOwnerId: string) => {
+    onUpdateDeal({ ownerId: novoOwnerId })
+    if (novoOwnerId && novoOwnerId !== deal.ownerId) {
+      const atribuidoPorNome = members.find((m) => m.id === user?.id)?.name
+      notificarNovoResponsavel({
+        novoResponsavelId: novoOwnerId,
+        turmaNome: turmaName,
+        turmaId: lead?.id,
+        atribuidoPorNome,
+      })
+    }
+  }
+
   const handleSelectFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !lead || !user) return
@@ -1115,11 +1129,25 @@ function DealDetailModal({
               label="Cidade"
               value={lead?.cidade || '—'}
             />
-            <DetailCard
-              icon={<User className="w-3.5 h-3.5" />}
-              label="Responsável"
-              value={owner?.name || '—'}
-            />
+            <div className="p-2.5 rounded-lg bg-[#0a0f14] border border-white/[0.06]">
+              <div className="flex items-center gap-1 text-[10px] text-slate-400 mb-0.5">
+                <User className="w-3.5 h-3.5" /> Responsável
+              </div>
+              <select
+                value={deal.ownerId || ''}
+                onChange={(e) => handleAtribuirResponsavel(e.target.value)}
+                className="w-full bg-transparent text-xs font-semibold text-white focus:outline-none"
+              >
+                <option value="" className="bg-[#111820]">
+                  Sem responsável
+                </option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-[#111820]">
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <DetailCard
               icon={<Calendar className="w-3.5 h-3.5" />}
               label="Próx. Ação (checklist)"

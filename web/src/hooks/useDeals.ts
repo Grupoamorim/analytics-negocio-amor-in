@@ -149,7 +149,7 @@ function mapRowToDeal(row: any & { updated_by_profile?: { email: string | null }
     stageId,
     stage: stageRaw as DealStage,
     probability: row.probabilidade ?? row.probability ?? 50,
-    ownerId: row.user_id || 'm-1',
+    ownerId: row.user_id || '',
     expectedCloseDate: row.data_previsao_fechamento || '',
     contractType: (row.tipo_contrato as any) || 'Formatura Completa',
     assignedTo: row.responsavel || '',

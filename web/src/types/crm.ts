@@ -12,7 +12,16 @@ export type LeadSource = 'Indicação' | 'LinkedIn' | 'Website' | 'Eventos' | 'O
 
 export type NoteType = 'Ligação' | 'Email' | 'Reunião' | 'Follow-up' | 'Outro'
 
-export type TeamRole = 'SDR' | 'SDR Líder' | 'Executivo' | 'Diretor'
+// Cargo real do usuário (profiles.role: admin/financeiro/comercial/membro),
+// já traduzido pro rótulo em PT-BR — não é mais um enum fixo de demonstração.
+export type TeamRole = string
+
+export const CARGO_LABEL: Record<string, string> = {
+  admin: 'Administrador',
+  financeiro: 'Financeiro',
+  comercial: 'Comercial',
+  membro: 'Membro',
+}
 
 export type Priority = 'Alta' | 'Média' | 'Baixa'
 
@@ -194,100 +203,105 @@ export interface FunnelStageMeta {
  * nome, cor, descrição, checklist sugerido e alertas de estagnação.
  * O seedData espelha estes ids em INITIAL_STAGES.
  */
+// Checklist por etapa = nosso Playbook de Vendas oficial (6 fases), colado
+// pelo Lucas em 2026-08-26. Cada etapa aqui é uma fase do playbook — ver
+// CLAUDE.md pra o texto completo dos scripts que embasam cada item.
 export const FUNNEL_STAGES: FunnelStageMeta[] = [
   {
     id: 'stage-1',
     name: 'Prospecção',
     color: '#64748b',
     defaultProbability: 20,
-    description: 'Leads novos, sem resposta ainda.',
+    description: 'Ainda sem contato direto da comissão — base do Mapa de Mercado.',
     tasks: [
-      'Prospectar clientes para entrar em contato',
-      'Definir objetivo, faculdade ou curso alvo',
-      'Prospecção ativa no Instagram (turma, atlética, faculdade)',
-      'Prospecção ativa na faculdade (abordagem presencial)',
-      'Preencher mapa de mercado com a turma',
+      'Prospectar contato da turma/comissão (Instagram, presencial, indicação)',
+      'Conseguir nome, telefone e @ do contato',
+      'Cadastrar o contato no Mapa de Mercado (a turma vira Qualificação sozinha)',
     ],
     stagnationAlertDays: 7,
-    suggestedAction: 'Iniciar prospecção ativa no Instagram/presencial.',
+    suggestedAction: 'Prospectar ativamente até conseguir um contato pra cadastrar.',
   },
   {
     id: 'stage-2',
     name: 'Qualificação/Contato',
     color: '#3b82f6',
     defaultProbability: 40,
-    description: 'Respondeu, conversa iniciada, qualificando.',
+    description: 'Fase 1 do Playbook — Aquecimento: primeiro contato e qualificação.',
     tasks: [
-      'Enviar primeira mensagem (WhatsApp ou Instagram)',
-      'Identificar membros da comissão',
-      'Coletar nome completo, telefone, curso, turma, ano, cidade',
-      'Enviar link da proposta (Canva)',
-      'Criar grupo no WhatsApp com a comissão',
+      'Enviar a sequência de Primeiro Contato (texto + áudio + texto do Instagram)',
+      'Marcar Primeiro Contato como concluído ao enviar (mesmo sem resposta)',
+      'Ao responder: perguntar se faz parte da comissão (script de Qualificação)',
+      'Se SIM: lead qualificado — preparar a proposta',
+      'Se NÃO souber quem é a comissão: pedir contato dos responsáveis',
+      'Se ainda NÃO tem comissão: enviar material "Como montar uma comissão" e agendar follow-up',
+      'Se NÃO RESPONDE: qualificar como não interessado, turma volta pra Prospecção',
     ],
     stagnationAlertDays: 5,
-    suggestedAction: 'Enviar primeira mensagem e identificar a comissão.',
+    suggestedAction: 'Enviar o Primeiro Contato e confirmar se é a comissão.',
   },
   {
     id: 'stage-3',
     name: 'Reunião Comissão',
     color: '#f59e0b',
     defaultProbability: 60,
-    description: 'Reunião com a comissão agendada/realizada.',
+    description: 'Fase 2 do Playbook — agendar e realizar a reunião com a comissão.',
     tasks: [
-      'Agendar reunião com a comissão',
-      'Verificar disponibilidade do estúdio',
-      'Realizar reunião com a comissão',
-      'Enviar formulário inicial',
-      'Enviar formulário de contatos',
+      'Agendar reunião com a comissão (só concluir com data e hora confirmadas)',
+      'Criar grupo no WhatsApp com todos os membros da comissão',
+      'Enviar o formulário inicial no grupo e coletar todas as respostas',
+      'Montar a proposta visual no Canva com base nas respostas',
+      'Anexar o link da proposta no card antes da reunião (obrigatório)',
     ],
     stagnationAlertDays: 5,
-    suggestedAction: 'Agendar a reunião com a comissão e o estúdio.',
+    suggestedAction: 'Agendar a reunião e montar a proposta no Canva antes dela.',
   },
   {
     id: 'stage-4',
     name: 'Reunião Turma',
     color: '#f97316',
     defaultProbability: 75,
-    description: 'Reunião com a turma inteira agendada/realizada.',
+    description: 'Fase 3 (Reunião com a Turma) + Fase 4 (Decisão) do Playbook.',
     tasks: [
-      'Agendar apresentação para a turma inteira',
-      'Realizar apresentação para a turma',
-      'Aguardar decisão da comissão pós-reunião com a turma',
-      'Fazer follow-up de prazo (7 dias antes do vencimento)',
+      'Enviar o PDF da proposta/orçamento pra turma',
+      'Sair da reunião com a comissão com a reunião da turma pré-agendada',
+      'Se a turma só puder se reunir em data distante: reforçar contato 3 dias antes',
+      'Realizar a apresentação pra turma inteira',
+      'Follow-up pós-reunião com a comissão (1 a 2 dias depois)',
+      'Lembretes de prazo da proposta (ex: 7 dias antes de vencer)',
+      'Registrar a decisão final da turma (Sim ou Não)',
     ],
     stagnationAlertDays: 7,
-    suggestedAction: 'Agendar e realizar a apresentação para a turma.',
+    suggestedAction: 'Realizar a apresentação e acompanhar até a decisão final.',
   },
   {
     id: 'stage-5',
     name: 'Adesão',
     color: '#FB923C',
     defaultProbability: 90,
-    description: 'Contratos sendo assinados (dura ~3 meses).',
+    description: 'Fase 5 do Playbook (Ganhou) — contrato assinado, adesões individuais em andamento.',
     tasks: [
-      'Solicitar criação do projeto ao gerente',
-      'Ação mês 01: contatar todos os alunos, ajudar na escolha do pacote',
-      'Ação mês 02: acompanhar contratos pendentes',
-      'Ação mês 03: fechar últimos contratos',
-      'Solicitar lista de contatos à comissão',
+      'Enviar o contrato pra comissão assinar',
+      'Acompanhar as adesões individuais por 30 dias',
+      'Contatar cada aluno individualmente pra ajudar na escolha do pacote',
+      'Passar o bastão pra equipe de vendas individuais após os 30 dias',
     ],
     stagnationAlertDays: 10,
-    suggestedAction: 'Contatar alunos pendentes e acelerar os contratos.',
+    suggestedAction: 'Contatar alunos pendentes e acelerar as adesões.',
   },
   {
     id: 'stage-6',
     name: 'Fechou ou Perdeu',
     color: '#22c55e',
     defaultProbability: 100,
-    description: 'Resultado final: fechou (ganho) ou perdeu.',
+    description: 'Fase 5 (Ganhou) e Fase 6 (Perdeu) do Playbook — resultado final registrado.',
     tasks: [
-      'Se Fechou: solicitar criação do projeto',
-      'Se Fechou: enviar confirmação para a turma',
-      'Se Perdeu: identificar motivo da recusa',
-      'Se Perdeu: registrar aprendizado para próximas turmas',
+      'Se Fechou: formalizar contrato e iniciar as adesões individuais',
+      'Se Perdeu: enviar formulário de feedback pra entender o motivo',
+      'Se Perdeu por preço: oferecer proposta mais enxuta (AFF ou SFF), se fizer sentido',
+      'Mesmo perdendo: realizar o ensaio Amor in Two e entregar de presente',
     ],
     stagnationAlertDays: 999,
-    suggestedAction: 'Registrar o resultado final e o aprendizado.',
+    suggestedAction: 'Registrar o resultado final e cumprir o combinado.',
   },
 ]
 

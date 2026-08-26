@@ -1,5 +1,3 @@
-// AVOID UPDATING THIS FILE DIRECTLY. It is automatically generated.
-
 export type Json =
   | string
   | number
@@ -588,6 +586,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notificacoes: {
+        Row: {
+          created_at: string
+          id: string
+          lida: boolean
+          link: string | null
+          mensagem: string | null
+          titulo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lida?: boolean
+          link?: string | null
+          mensagem?: string | null
+          titulo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lida?: boolean
+          link?: string | null
+          mensagem?: string | null
+          titulo?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       notion_atividades: {
         Row: {

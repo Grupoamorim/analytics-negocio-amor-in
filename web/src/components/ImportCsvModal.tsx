@@ -173,7 +173,7 @@ export default function ImportCsvModal({
 
     setTimeout(() => {
       try {
-        const defaultOwner = members[0]?.id || 'm-1'
+        const defaultOwner = members[0]?.id || ''
         const {
           leads: newLeads,
           deals: newDeals,

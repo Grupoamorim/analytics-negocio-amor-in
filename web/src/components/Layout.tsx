@@ -30,19 +30,13 @@ import {
 } from 'lucide-react'
 import { getTurmaDisplayName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { useCRM } from '@/context/CRMContext'
-import { TeamMember } from '@/types/crm'
+import { TeamMember, CARGO_LABEL } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { supabase } from '@/lib/supabase/client'
 import GlobalAIFoatingButton from '@/components/AIInsightsButton'
-
-const CARGO_LABEL: Record<string, string> = {
-  admin: 'Administrador',
-  financeiro: 'Financeiro',
-  comercial: 'Comercial',
-  membro: 'Membro',
-}
+import { listarNotificacoes, marcarNotificacaoLida, type Notificacao } from '@/utils/notificacoes'
 
 type NavItem = { path: string; label: string; icon: typeof LayoutDashboard }
 
@@ -140,7 +134,31 @@ export default function Layout() {
       .sort((a, b) => b.days - a.days)
   }, [deals, leads])
 
-  const totalNotifications = pendingTasksCount + stagnantReminders.length
+  // Notificações reais (ex: "você virou responsável por X") — tabela notificacoes.
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([])
+  const naoLidas = useMemo(() => notificacoes.filter((n) => !n.lida), [notificacoes])
+
+  const refreshNotificacoes = React.useCallback(() => {
+    if (!user) return
+    listarNotificacoes().then(setNotificacoes)
+  }, [user])
+
+  useEffect(() => {
+    refreshNotificacoes()
+    const intervalId = window.setInterval(refreshNotificacoes, 60000)
+    return () => window.clearInterval(intervalId)
+  }, [refreshNotificacoes])
+
+  const handleAbrirNotificacao = (n: Notificacao) => {
+    if (!n.lida) {
+      marcarNotificacaoLida(n.id)
+      setNotificacoes((prev) => prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x)))
+    }
+    setNotificationsOpen(false)
+    if (n.link) navigate(n.link)
+  }
+
+  const totalNotifications = pendingTasksCount + stagnantReminders.length + naoLidas.length
 
   const goToPipelineCard = (dealId: string) => {
     ;(window as any).__pipelineHighlightDealId = dealId
@@ -402,6 +420,36 @@ export default function Layout() {
                   </Link>
                 </div>
                 <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                  {/* Notificações reais (ex: virou responsável por uma turma) */}
+                  {notificacoes.length > 0 && (
+                    <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider px-1 pt-1 flex items-center gap-1">
+                      <Bell className="w-3 h-3" /> Avisos ({naoLidas.length})
+                    </div>
+                  )}
+                  {notificacoes.map((n) => (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => handleAbrirNotificacao(n)}
+                      className={`w-full p-2 rounded-lg border flex items-start gap-2 text-xs text-left transition-colors ${
+                        n.lida
+                          ? 'bg-white/[0.02] border-white/[0.04] hover:border-white/10'
+                          : 'bg-sky-500/[0.06] border-sky-500/20 hover:border-sky-500/40'
+                      }`}
+                    >
+                      {!n.lida && <span className="w-2 h-2 rounded-full bg-sky-400 mt-1.5 flex-shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-200 font-medium leading-snug">{n.titulo}</p>
+                        {n.mensagem && (
+                          <p className="text-[10px] text-slate-400 leading-snug mt-0.5">{n.mensagem}</p>
+                        )}
+                        <p className="text-[10px] text-slate-500 leading-snug mt-0.5">
+                          {new Date(n.createdAt).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+
                   {/* Lembretes de turmas estagnadas */}
                   {stagnantReminders.length > 0 && (
                     <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider px-1 pt-1 flex items-center gap-1">

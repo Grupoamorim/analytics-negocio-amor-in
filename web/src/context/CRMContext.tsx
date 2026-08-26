@@ -11,19 +11,14 @@ import type {
   Task,
   PipelineStage,
 } from '@/types/crm'
-import {
-  INITIAL_ACTIVITIES,
-  INITIAL_MEMBERS,
-  INITIAL_SETTINGS,
-  INITIAL_STAGES,
-  INITIAL_TASKS,
-} from '@/data/seedData'
+import { INITIAL_ACTIVITIES, INITIAL_SETTINGS, INITIAL_STAGES, INITIAL_TASKS } from '@/data/seedData'
 import { useTurmas } from '@/hooks/useTurmas'
 import { useDeals } from '@/hooks/useDeals'
 import { useContatos } from '@/hooks/useContatos'
 import { useTranscricoes } from '@/hooks/useTranscricoes'
 import { useNotas } from '@/hooks/useNotas'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
+import { useMembers } from '@/hooks/useMembers'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
 
@@ -149,8 +144,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const { config, loading: configLoading, saveConfig, refreshConfiguracoes } = useConfiguracoes()
 
-  // Members
-  const [members] = React.useState<TeamMember[]>(INITIAL_MEMBERS)
+  // Members — equipe real (profiles), não mais nomes fictícios
+  const { members } = useMembers()
 
   // Stages
   const [stages] = React.useState<PipelineStage[]>(INITIAL_STAGES)

@@ -26,7 +26,7 @@ function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | n
         : row.funil_status === 'Qualificado'
           ? 48000
           : 35000,
-    ownerId: row.user_id || 'm-1',
+    ownerId: row.user_id || '',
     empresa: row.empresa || 'AFF',
     tipoServico: row.tipo_servico || 'Formatura',
     comoConheceu: row.como_conheceu || 'Passiva',

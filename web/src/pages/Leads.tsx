@@ -1062,7 +1062,6 @@ export default function LeadsPage() {
     } else {
       const created = await addLead({
         ...payload,
-        ownerId: 'm-1',
         createdAt: new Date().toISOString(),
         totalAlunos: 0,
       })

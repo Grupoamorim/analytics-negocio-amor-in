@@ -17,7 +17,7 @@ function mapRowToNote(
     id: row.id,
     leadId: row.turma_id || '',
     dealId: undefined,
-    authorId: 'm-1',
+    authorId: row.updated_by || '',
     author: row.updated_by_profile?.email || 'Usuário',
     content: row.conteudo,
     type: 'Outro',
