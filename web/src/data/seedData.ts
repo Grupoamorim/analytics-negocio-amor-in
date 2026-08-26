@@ -61,7 +61,7 @@ export const INITIAL_STAGES: PipelineStage[] = [
   },
   { id: 'stage-3', name: 'Reunião Comissão', color: '#f59e0b', order: 3, defaultProbability: 60 },
   { id: 'stage-4', name: 'Reunião Turma', color: '#f97316', order: 4, defaultProbability: 75 },
-  { id: 'stage-5', name: 'Adesão', color: '#FB923C', order: 5, defaultProbability: 90 },
+  { id: 'stage-5', name: 'Decisão', color: '#FB923C', order: 5, defaultProbability: 90 },
   { id: 'stage-6', name: 'Fechou ou Perdeu', color: '#22c55e', order: 6, defaultProbability: 100 },
 ]
 

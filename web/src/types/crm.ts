@@ -296,7 +296,18 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
           'mesmo card — escolha um template (Luxo/Moderno/Clássico/Básico) ou marque os ' +
           'itens do catálogo um a um. Isso já vira o Valor automático da turma.',
       },
-      'Enviar orçamento no grupo da turma',
+      {
+        label: 'Enviar o PDF do Orçamento',
+        detalhe:
+          'Envie o PDF do orçamento (gerado a partir do pacote montado) no grupo da turma, ' +
+          'já explicando as condições de pagamento e o prazo de validade da proposta.',
+      },
+      {
+        label: 'Sair com a Reunião da Turma Pré-agendada',
+        detalhe:
+          'Antes de encerrar a reunião com a comissão, já saia com uma data marcada (ou, no ' +
+          'mínimo, as melhores opções de data anotadas) pra reunião com a turma inteira.',
+      },
     ],
     stagnationAlertDays: 5,
     suggestedAction: 'Agendar a reunião, criar o grupo e montar o pacote antes dela.',
@@ -306,33 +317,39 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
     name: 'Reunião Turma',
     color: '#f97316',
     defaultProbability: 75,
-    description: 'Fase 3 (Reunião com a Turma) + Fase 4 (Decisão) do Playbook.',
+    description: 'Fase 3 do Playbook — apresentar a proposta pra turma inteira.',
     tasks: [
-      'Enviar o PDF da proposta/orçamento pra turma',
-      'Sair da reunião com a comissão com a reunião da turma pré-agendada',
-      'Se a turma só puder se reunir em data distante: reforçar contato 3 dias antes',
-      'Realizar a apresentação pra turma inteira',
+      {
+        label: 'Agendar Reunião com a Turma',
+        detalhe:
+          'Confirme de fato a data e hora com a turma (o que saiu da reunião com a comissão ' +
+          'foi só um pré-agendamento). Se a turma só puder se reunir em data distante, ' +
+          'reforce o contato 3 dias antes.',
+      },
+      {
+        label: 'Realizar a Apresentação para a Turma',
+        detalhe:
+          'Envie o PDF/documentos pra comissão e também direto pra turma antes da reunião. ' +
+          'Depois, realize a apresentação pra turma inteira — foco em apresentar a proposta ' +
+          'de valor e o orçamento de forma irresistível.',
+      },
+    ],
+    stagnationAlertDays: 7,
+    suggestedAction: 'Agendar de fato e realizar a apresentação pra turma.',
+  },
+  {
+    id: 'stage-5',
+    name: 'Decisão',
+    color: '#FB923C',
+    defaultProbability: 90,
+    description: 'Fase 4 do Playbook — acompanhar até a turma dar a resposta final.',
+    tasks: [
       'Follow-up pós-reunião com a comissão (1 a 2 dias depois)',
       'Lembretes de prazo da proposta (ex: 7 dias antes de vencer)',
       'Registrar a decisão final da turma (Sim ou Não)',
     ],
-    stagnationAlertDays: 7,
-    suggestedAction: 'Realizar a apresentação e acompanhar até a decisão final.',
-  },
-  {
-    id: 'stage-5',
-    name: 'Adesão',
-    color: '#FB923C',
-    defaultProbability: 90,
-    description: 'Fase 5 do Playbook (Ganhou) — contrato assinado, adesões individuais em andamento.',
-    tasks: [
-      'Enviar o contrato pra comissão assinar',
-      'Acompanhar as adesões individuais por 30 dias',
-      'Contatar cada aluno individualmente pra ajudar na escolha do pacote',
-      'Passar o bastão pra equipe de vendas individuais após os 30 dias',
-    ],
     stagnationAlertDays: 10,
-    suggestedAction: 'Contatar alunos pendentes e acelerar as adesões.',
+    suggestedAction: 'Fazer o follow-up e os lembretes de prazo até sair a decisão.',
   },
   {
     id: 'stage-6',
@@ -341,7 +358,9 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
     defaultProbability: 100,
     description: 'Fase 5 (Ganhou) e Fase 6 (Perdeu) do Playbook — resultado final registrado.',
     tasks: [
-      'Se Fechou: formalizar contrato e iniciar as adesões individuais',
+      'Se Fechou: enviar o contrato pra comissão assinar',
+      'Se Fechou: acompanhar as adesões individuais por 30 dias, contatando cada aluno pra ajudar na escolha do pacote',
+      'Se Fechou: passar o bastão pra equipe de vendas individuais após os 30 dias',
       'Se Perdeu: enviar formulário de feedback pra entender o motivo',
       'Se Perdeu por preço: oferecer proposta mais enxuta (AFF ou SFF), se fizer sentido',
       'Mesmo perdendo: realizar o ensaio Amor in Two e entregar de presente',
