@@ -87,6 +87,7 @@ export default function CaptacaoForm() {
   const [cursos, setCursos] = useState<string[]>([])
   const [duracoes, setDuracoes] = useState<{ curso: string; faculdade: string; duracaoAnos: number }[]>([])
   const [cursoBusca, setCursoBusca] = useState('')
+  const [faculdadeBusca, setFaculdadeBusca] = useState('')
   const [turmasEncontradas, setTurmasEncontradas] = useState<TurmaEncontrada[]>([])
   const [buscando, setBuscando] = useState(false)
   const [turmaEscolhida, setTurmaEscolhida] = useState<TurmaEncontrada | null>(null)
@@ -118,6 +119,10 @@ export default function CaptacaoForm() {
     const generica = duracoes.find((d) => d.curso === curso && d.faculdade === '')
     return generica ? generica.duracaoAnos : null
   }
+
+  useEffect(() => {
+    setFaculdadeBusca('')
+  }, [cursoBusca])
 
   useEffect(() => {
     if (!cursoBusca) {
@@ -159,6 +164,17 @@ export default function CaptacaoForm() {
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursoBusca, duracoes])
+
+  const faculdadesEncontradas = useMemo(() => {
+    const set = new Set<string>()
+    turmasEncontradas.forEach((t) => t.faculdade && set.add(t.faculdade))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [turmasEncontradas])
+
+  const turmasDaFaculdade = useMemo(
+    () => turmasEncontradas.filter((t) => t.faculdade === faculdadeBusca),
+    [turmasEncontradas, faculdadeBusca],
+  )
 
   const cidades = useMemo(
     () => Object.keys(cidadeFaculdades).sort((a, b) => a.localeCompare(b, 'pt-BR')),
@@ -346,16 +362,42 @@ export default function CaptacaoForm() {
               {buscando && <p className="text-xs text-slate-500">Buscando turmas...</p>}
 
               {!buscando && cursoBusca && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Qual é a sua faculdade?
+                  </label>
+                  {faculdadesEncontradas.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic">
+                      Nenhuma turma de {cursoBusca} encontrada ainda.
+                    </p>
+                  ) : (
+                    <select
+                      value={faculdadeBusca}
+                      onChange={(e) => setFaculdadeBusca(e.target.value)}
+                      className="w-full bg-[#0a0f14] border border-white/10 rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/60 transition-colors"
+                    >
+                      <option value="">Selecione sua faculdade</option>
+                      {faculdadesEncontradas.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {!buscando && cursoBusca && faculdadeBusca && (
                 <div className="space-y-2">
                   <p className="text-xs text-slate-400">
                     Encontre a sua turma abaixo e clique nela — se não achar, cadastre manualmente.
                   </p>
-                  {turmasEncontradas.length === 0 && (
+                  {turmasDaFaculdade.length === 0 && (
                     <p className="text-xs text-slate-500 italic">
-                      Nenhuma turma de {cursoBusca} encontrada ainda.
+                      Nenhuma turma de {cursoBusca} na {faculdadeBusca} encontrada ainda.
                     </p>
                   )}
-                  {turmasEncontradas.map((t) => (
+                  {turmasDaFaculdade.map((t) => (
                     <button
                       key={t.id}
                       type="button"
@@ -363,10 +405,10 @@ export default function CaptacaoForm() {
                       className="w-full text-left p-3 rounded-lg bg-[#0a0f14] border border-white/10 hover:border-orange-500/50 hover:bg-orange-500/[0.04] transition-colors"
                     >
                       <div className="text-sm font-semibold text-white">
-                        {t.faculdade} — {t.cidade}
+                        {t.turma} · Formatura {t.anoFormatura}
                       </div>
                       <div className="text-xs text-slate-400 mt-0.5">
-                        {t.turma} · Formatura {t.anoFormatura}
+                        {t.cidade}
                         {t.periodoAtual && ` · ${t.periodoAtual}º período atual`}
                       </div>
                     </button>
