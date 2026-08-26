@@ -296,7 +296,7 @@ export const FUNNEL_STAGES: FunnelStageMeta[] = [
           'mesmo card — escolha um template (Luxo/Moderno/Clássico/Básico) ou marque os ' +
           'itens do catálogo um a um. Isso já vira o Valor automático da turma.',
       },
-      'Anexar o link da proposta no card antes da reunião (obrigatório)',
+      'Enviar orçamento no grupo da turma',
     ],
     stagnationAlertDays: 5,
     suggestedAction: 'Agendar a reunião, criar o grupo e montar o pacote antes dela.',
