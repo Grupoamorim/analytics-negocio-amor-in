@@ -11,6 +11,28 @@ type TranscricaoInsert = Database['public']['Tables']['transcricoes']['Insert']
 const LOCAL_STORAGE_KEY = 'crm_transcripts'
 
 function mapRowToTranscript(row: TranscricaoRow): CallTranscript {
+  // pontos_fortes/pontos_atencao são salvos como texto com um item por linha
+  // (tanto pelo app quanto pela rotina automática do Fathom) — precisa
+  // reconstituir em array pra alimentar a UI (cards de pontos fortes/objeções
+  // e a análise de objeções agregada).
+  const splitLines = (text: string | null | undefined): string[] =>
+    (text || '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+
+  const geminiAnalysis =
+    row.resumo || row.sentimento || row.pontos_fortes || row.pontos_atencao
+      ? {
+          probabilidade: row.probabilidade || 0,
+          sentimento: (row.sentimento as any) || 'neutro',
+          pontosFortes: splitLines(row.pontos_fortes),
+          pontosAtencao: splitLines(row.pontos_atencao),
+          resumo: row.resumo || '',
+          recomendacao: row.proximo_passo || '',
+        }
+      : undefined
+
   return {
     id: row.id,
     title: row.titulo || 'Transcrição de Chamada',
@@ -27,6 +49,7 @@ function mapRowToTranscript(row: TranscricaoRow): CallTranscript {
     content: row.conteudo || '',
     analyzed: !!row.resumo,
     probabilityScore: row.probabilidade || 0,
+    geminiAnalysis,
     signals: [],
     needCoverageScore: 70,
     timingScore: 70,
@@ -47,6 +70,8 @@ function mapTranscriptToInsert(transcript: Partial<CallTranscript>): Transcricao
     sentimento: transcript.geminiAnalysis?.sentimento || null,
     resumo: transcript.geminiAnalysis?.resumo || null,
     proximo_passo: transcript.geminiAnalysis?.recomendacao || null,
+    pontos_fortes: transcript.geminiAnalysis?.pontosFortes?.join('\n') || null,
+    pontos_atencao: transcript.geminiAnalysis?.pontosAtencao?.join('\n') || null,
   }
 
   if (
@@ -209,6 +234,15 @@ export function useTranscricoes() {
         if (updates.meetingType !== undefined) updatePayload.tipo = updates.meetingType
         if (updates.probabilityScore !== undefined)
           updatePayload.probabilidade = updates.probabilityScore
+        if (updates.geminiAnalysis !== undefined) {
+          updatePayload.sentimento = updates.geminiAnalysis?.sentimento || null
+          updatePayload.resumo = updates.geminiAnalysis?.resumo || null
+          updatePayload.proximo_passo = updates.geminiAnalysis?.recomendacao || null
+          updatePayload.pontos_fortes = updates.geminiAnalysis?.pontosFortes?.join('\n') || null
+          updatePayload.pontos_atencao = updates.geminiAnalysis?.pontosAtencao?.join('\n') || null
+          if (updates.geminiAnalysis?.probabilidade !== undefined)
+            updatePayload.probabilidade = updates.geminiAnalysis.probabilidade
+        }
 
         const { error: err } = await supabase
           .from('transcricoes')

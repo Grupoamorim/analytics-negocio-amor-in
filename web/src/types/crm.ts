@@ -71,8 +71,9 @@ export interface Lead {
   createdAt: string
   updatedAt?: string
   updatedByEmail?: string // e-mail de quem fez a última edição neste cadastro
-  totalAlunos: number // derivado de quantos alunos na captacao_leads tem essa mesma turma
-  alunosFechados?: number // número de alunos que já fecharam contrato
+  totalAlunos: number // contagem real de clientes SGE vinculados a essa turma (turmas.total_alunos, atualizado automaticamente pelo sync do SGE)
+  alunosFechados?: number // número de alunos que já fecharam contrato — atualizado automaticamente via SGE (turmas.alunos_fechados); editável manualmente só como exceção
+  codigoSGE?: string // turmas.codigo quando é um código real do SGE (não o placeholder gerado ao criar turma manualmente pelo CRM) — usado para saber se a turma está vinculada ao SGE
   customFields?: Record<string, any>
 
   // Novas propriedades Notion

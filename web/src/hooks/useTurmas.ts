@@ -43,6 +43,7 @@ function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | n
     contatoTelefone: row.contato_telefone || '',
     totalAlunos: row.total_alunos || 0,
     alunosFechados: row.alunos_fechados || 0,
+    codigoSGE: row.codigo && !row.codigo.startsWith('turma-') ? row.codigo : undefined,
     quantidadeComissao: row.quantidade_comissao ?? undefined,
     metaContratos: row.meta_contratos ?? undefined,
     fotoUrl: row.foto_url || undefined,

@@ -33,6 +33,7 @@ import AIInsightsButton from '@/components/AIInsightsButton'
 import { analyzeTranscriptWithGemini, getGeminiApiKey } from '@/utils/geminiApi'
 import { analyzeTranscriptText } from '@/utils/probabilityEngine'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
+import { parseMeetingTitle } from '@/utils/meetingTitleParser'
 
 export default function Transcripts() {
   const { transcripts, leads, settings, addTranscript, updateTranscript, deleteTranscript } =
@@ -53,6 +54,12 @@ export default function Transcripts() {
   const [activeDetailsTranscript, setActiveDetailsTranscript] = useState<Transcript | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
+  // Análise de Objeções (agregada, com filtros por curso/faculdade/mês)
+  const [objecoesOpen, setObjecoesOpen] = useState(false)
+  const [objecoesCurso, setObjecoesCurso] = useState('all')
+  const [objecoesFaculdade, setObjecoesFaculdade] = useState('all')
+  const [objecoesPeriodo, setObjecoesPeriodo] = useState('all')
+
   // Dropdown "Nova Transcrição"
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
@@ -68,6 +75,7 @@ export default function Transcripts() {
 
   // Modal 2: Reunião Online (Fathom)
   const [fathomModalOpen, setFathomModalOpen] = useState(false)
+  const [fathomTituloReuniao, setFathomTituloReuniao] = useState('')
   const [fathomTurmaId, setFathomTurmaId] = useState('')
   const [fathomTurmaSearch, setFathomTurmaSearch] = useState('')
   const [fathomMeetingType, setFathomMeetingType] = useState<MeetingType>('Reunião Comissão')
@@ -97,6 +105,63 @@ export default function Transcripts() {
     return sortByField(base, sortField, sortDirection, (t, f) => (t as any)[f])
   }, [transcripts, searchQuery, filterType, sortField, sortDirection])
 
+  // Opções de curso/faculdade disponíveis pros filtros da análise de objeções
+  // (derivadas das turmas que realmente têm transcrição, não de todas as turmas)
+  const { objecoesCursoOptions, objecoesFaculdadeOptions } = useMemo(() => {
+    const cursos = new Set<string>()
+    const faculdades = new Set<string>()
+    transcripts.forEach((t) => {
+      const lead = leads.find((l) => l.id === t.leadId)
+      if (lead?.curso) cursos.add(lead.curso)
+      if (lead?.faculdade) faculdades.add(lead.faculdade)
+    })
+    return {
+      objecoesCursoOptions: Array.from(cursos).sort(),
+      objecoesFaculdadeOptions: Array.from(faculdades).sort(),
+    }
+  }, [transcripts, leads])
+
+  // Ranking real de objeções mais citadas (texto exato do que o Gemini
+  // extraiu, sem invenção/clusterização por IA) — filtrável por curso,
+  // faculdade e mês de referência da reunião.
+  const objecoesRanking = useMemo(() => {
+    const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').replace(/[.;]+$/, '')
+    const counts = new Map<string, { count: number; label: string }>()
+    let totalTranscritosConsiderados = 0
+
+    transcripts.forEach((t) => {
+      const lead = leads.find((l) => l.id === t.leadId)
+      if (objecoesCurso !== 'all' && lead?.curso !== objecoesCurso) return
+      if (objecoesFaculdade !== 'all' && lead?.faculdade !== objecoesFaculdade) return
+      const mes = t.date ? t.date.slice(0, 7) : ''
+      if (objecoesPeriodo !== 'all' && mes !== objecoesPeriodo) return
+
+      const pontos = t.geminiAnalysis?.pontosAtencao || []
+      if (pontos.length === 0) return
+      totalTranscritosConsiderados += 1
+      pontos.forEach((p) => {
+        const norm = normalize(p)
+        if (!norm) return
+        const key = norm.toLowerCase()
+        const existing = counts.get(key)
+        if (existing) existing.count += 1
+        else counts.set(key, { count: 1, label: norm })
+      })
+    })
+
+    const ranking = Array.from(counts.values()).sort((a, b) => b.count - a.count)
+    return { ranking, totalTranscritosConsiderados }
+  }, [transcripts, leads, objecoesCurso, objecoesFaculdade, objecoesPeriodo])
+
+  // Meses de referência disponíveis (a partir da data das próprias reuniões)
+  const objecoesPeriodoOptions = useMemo(() => {
+    const meses = new Set<string>()
+    transcripts.forEach((t) => {
+      if (t.date) meses.add(t.date.slice(0, 7))
+    })
+    return Array.from(meses).sort().reverse()
+  }, [transcripts])
+
   // Helper para buscar turmas filtradas para autocomplete
   const getFilteredLeads = (searchStr: string) => {
     const q = searchStr.toLowerCase().trim()
@@ -110,13 +175,45 @@ export default function Transcripts() {
       .slice(0, 10)
   }
 
+  // Contexto histórico de reuniões que já tiveram desfecho real (Convertido/Perdido),
+  // pra calibrar a probabilidade do Gemini com casos reais em vez de julgar cada
+  // transcrição isolada do zero. Limitado a poucos exemplos de cada lado pra não
+  // inflar o prompt.
+  const historicalGeminiContext = useMemo(() => {
+    const exemplos: string[] = []
+    const porResultado = (status: 'Convertido' | 'Perdido', label: string, max: number) => {
+      let count = 0
+      for (const t of transcripts) {
+        if (count >= max) break
+        const lead = leads.find((l) => l.id === t.leadId)
+        if (lead?.status !== status) continue
+        if (!t.geminiAnalysis) continue
+        const atencao = (t.geminiAnalysis.pontosAtencao || []).slice(0, 2).join('; ')
+        const fortes = (t.geminiAnalysis.pontosFortes || []).slice(0, 2).join('; ')
+        exemplos.push(
+          `- [${label}] probabilidade registrada na época: ${t.geminiAnalysis.probabilidade}%. Pontos fortes: ${fortes || 'nenhum'}. Objeções: ${atencao || 'nenhuma'}.`,
+        )
+        count += 1
+      }
+    }
+    porResultado('Convertido', 'FECHOU', 5)
+    porResultado('Perdido', 'NÃO FECHOU', 5)
+    return exemplos.length > 0 ? exemplos.join('\n') : undefined
+  }, [transcripts, leads])
+
   // Executa análise com Gemini (ou fallback heurístico se falhar ou sem chave)
   const performAnalysis = async (content: string, turmaName: string) => {
     const apiKey = getGeminiApiKey()
 
     if (apiKey) {
       try {
-        const geminiRes = await analyzeTranscriptWithGemini(content, turmaName, apiKey)
+        const geminiRes = await analyzeTranscriptWithGemini(
+          content,
+          turmaName,
+          apiKey,
+          undefined,
+          historicalGeminiContext,
+        )
         return {
           probabilidade: geminiRes.probabilidade,
           sentimento: geminiRes.sentimento,
@@ -256,6 +353,16 @@ export default function Transcripts() {
     } finally {
       setIsAnalyzingManual(false)
     }
+  }
+
+  // Handler: parseia o título da reunião (convenção "Apresentação - Comissão/Turma - Nome (ON)")
+  // e pré-preenche tipo de reunião + busca de turma, pra não precisar escolher tudo na mão
+  // quando o título já segue o padrão usado pela rotina automática do Fathom.
+  const handleParseFathomTitle = () => {
+    if (!fathomTituloReuniao.trim()) return
+    const parsed = parseMeetingTitle(fathomTituloReuniao)
+    if (parsed.meetingType) setFathomMeetingType(parsed.meetingType)
+    if (parsed.turmaText && !fathomTurmaId) setFathomTurmaSearch(parsed.turmaText)
   }
 
   // Handler: Buscar Transcrição do Fathom (ou Fallback)
@@ -453,6 +560,94 @@ export default function Transcripts() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Análise de Objeções (agregada) */}
+      <div className="rounded-xl border border-white/[0.06] bg-[#111820] overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setObjecoesOpen((v) => !v)}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+        >
+          <div className="flex items-center gap-2 text-sm font-bold text-white">
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            Análise de Objeções
+            <span className="text-[10px] font-semibold text-slate-400">
+              (mais citadas pelo Gemini nas reuniões)
+            </span>
+          </div>
+          <ChevronDown
+            className={`w-4 h-4 text-slate-400 transition-transform ${objecoesOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {objecoesOpen && (
+          <div className="px-4 pb-4 space-y-3 border-t border-white/[0.06] pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={objecoesCurso}
+                onChange={(e) => setObjecoesCurso(e.target.value)}
+                className="bg-[#0a0f14] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white"
+              >
+                <option value="all">Todos os cursos</option>
+                {objecoesCursoOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={objecoesFaculdade}
+                onChange={(e) => setObjecoesFaculdade(e.target.value)}
+                className="bg-[#0a0f14] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white"
+              >
+                <option value="all">Todas as faculdades</option>
+                {objecoesFaculdadeOptions.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={objecoesPeriodo}
+                onChange={(e) => setObjecoesPeriodo(e.target.value)}
+                className="bg-[#0a0f14] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white"
+              >
+                <option value="all">Todo o período</option>
+                {objecoesPeriodoOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[10px] text-slate-500 ml-auto">
+                {objecoesRanking.totalTranscritosConsiderados} reunião(ões) com objeções
+                registradas
+              </span>
+            </div>
+
+            {objecoesRanking.ranking.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">
+                Nenhuma objeção registrada ainda para esse filtro — vai aparecer aqui conforme as
+                reuniões forem analisadas pelo Gemini.
+              </p>
+            ) : (
+              <ul className="space-y-1.5 max-h-80 overflow-y-auto">
+                {objecoesRanking.ranking.slice(0, 15).map((item, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center gap-3 bg-[#0a0f14] border border-white/[0.05] rounded-lg px-3 py-2"
+                  >
+                    <span className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md bg-rose-500/15 text-rose-300 text-[11px] font-bold">
+                      {item.count}x
+                    </span>
+                    <span className="text-slate-300 text-xs">{item.label}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Barra de Filtros e Busca */}
@@ -759,6 +954,26 @@ export default function Transcripts() {
             </div>
 
             <form onSubmit={handleSaveFathom} className="space-y-4 text-xs">
+              {/* Título original da reunião — auto-preenche tipo + turma se seguir o padrão */}
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Título da Reunião (opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder='Ex: Apresentação - Comissão - Direito UNEX Turma 40 2028.2 (ON)'
+                  value={fathomTituloReuniao}
+                  onChange={(e) => setFathomTituloReuniao(e.target.value)}
+                  onBlur={handleParseFathomTitle}
+                  className="w-full bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-white"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Cole o título exato da reunião (calendário/Fathom) — se seguir o padrão
+                  "Apresentação - Comissão/Turma - Nome (ON)", tipo e turma abaixo são preenchidos
+                  automaticamente.
+                </p>
+              </div>
+
               {/* Seleção de Turma com autocomplete */}
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">

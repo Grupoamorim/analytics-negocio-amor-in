@@ -194,10 +194,15 @@ export async function analyzeTranscriptWithGemini(
   turmaContext?: string,
   apiKey?: string,
   model?: string,
+  historicalContext?: string,
 ): Promise<GeminiTranscriptAnalysis> {
   const prompt = `Você é um analista especialista em vendas de formatura e SDR educacional.
 Analise a transcrição de reunião abaixo ${turmaContext ? `referente à turma "${turmaContext}"` : ''}.
-
+${
+  historicalContext
+    ? `\nPara calibrar a probabilidade, use como referência estes padrões reais de reuniões anteriores desta mesma empresa que JÁ TIVERAM DESFECHO (fechou ou não fechou) — compare o tom, objeções e sinais da transcrição atual com esses casos reais, mas não repita esse texto na resposta:\n"""\n${historicalContext}\n"""\n`
+    : ''
+}
 Transcrição:
 """
 ${content.substring(0, 15000)}

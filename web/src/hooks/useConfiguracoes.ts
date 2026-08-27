@@ -9,6 +9,29 @@ type ConfiguracaoUpdate = Database['public']['Tables']['configuracoes']['Update'
 
 const LOCAL_STORAGE_KEY = 'crm_configuracoes'
 
+// Espelha pras chaves de localStorage que os utilitários de integração
+// (geminiApi.ts, sgeIntegration.ts) realmente leem de forma síncrona.
+// Sem isso, um navegador que nunca abriu /admin carrega a config global do
+// Supabase certinho no estado do hook, mas getGeminiApiKey()/token do SGE
+// continuam vazios ali até alguém salvar de novo em Admin — mesmo bug de
+// "não fica vinculado" só que num storage diferente.
+function mirrorToLegacyStorage(config: {
+  sgeCnpj?: string
+  sgeToken?: string
+  geminiApiKey?: string
+}): void {
+  try {
+    if (config.sgeToken) localStorage.setItem('crm_sge_token', config.sgeToken)
+    if (config.sgeCnpj) localStorage.setItem('crm_sge_cnpj', config.sgeCnpj)
+    if (config.geminiApiKey) {
+      localStorage.setItem('crm_gemini_api_key', config.geminiApiKey)
+      localStorage.setItem('gemini_api_key', config.geminiApiKey)
+    }
+  } catch {
+    // ignora
+  }
+}
+
 export interface ConfiguracoesData {
   sgeCnpj: string
   sgeToken: string
@@ -93,6 +116,7 @@ export function useConfiguracoes() {
         const mapped = mapRowToConfig(data)
         setConfig(mapped)
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
+        mirrorToLegacyStorage(mapped)
       } else if (!isMigratingRef.current) {
         isMigratingRef.current = true
         // Primeira vez no sistema inteiro: cria a linha global única.
@@ -125,6 +149,7 @@ export function useConfiguracoes() {
           const mapped = mapRowToConfig(inserted)
           setConfig(mapped)
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
+          mirrorToLegacyStorage(mapped)
         }
         isMigratingRef.current = false
       }
@@ -201,9 +226,7 @@ export function useConfiguracoes() {
     setConfig(updated)
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated))
-      if (updated.sgeToken) localStorage.setItem('crm_sge_token', updated.sgeToken)
-      if (updated.sgeCnpj) localStorage.setItem('crm_sge_cnpj', updated.sgeCnpj)
-      if (updated.geminiApiKey) localStorage.setItem('crm_gemini_api_key', updated.geminiApiKey)
+      mirrorToLegacyStorage(updated)
     } catch {
       // ignora
     }

@@ -2241,6 +2241,11 @@ export default function LeadsPage() {
                   }
                   className="font-bold border-emerald-500/30 focus-visible:ring-emerald-500"
                 />
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {editingLead?.codigoSGE
+                    ? '🔄 Sincronizado automaticamente com o SGE — só edite pra corrigir uma exceção'
+                    : 'Turma ainda não vinculada ao SGE — preencha manualmente por enquanto'}
+                </p>
               </div>
 
               <div>
@@ -2631,7 +2636,7 @@ function SelectedLeadDetail({
             <div>
               <span className="text-slate-500 block">Código SGE</span>
               <span className="font-semibold text-emerald-600 font-mono">
-                {sgeLink?.sgeProjectCode || 'Não vinculado'}
+                {lead.codigoSGE || sgeLink?.sgeProjectCode || 'Não vinculado'}
               </span>
             </div>
             <InlineField
@@ -2658,6 +2663,11 @@ function SelectedLeadDetail({
               type="number"
               defaultValue={String(lead.alunosFechados || 0)}
               onSave={(v) => onPatch({ alunosFechados: Number(v) || 0 })}
+              hint={
+                lead.codigoSGE
+                  ? '🔄 Automático via SGE — editar aqui é sobrescrito no próximo sync'
+                  : 'Turma ainda não vinculada ao SGE — valor manual'
+              }
             />
           </div>
 
@@ -2962,6 +2972,7 @@ function InlineField({
   type = 'text',
   placeholder,
   liveOnChange,
+  hint,
 }: {
   label: string
   defaultValue: string
@@ -2969,6 +2980,7 @@ function InlineField({
   type?: string
   placeholder?: string
   liveOnChange?: boolean
+  hint?: string
 }) {
   if (liveOnChange) {
     return (
@@ -2981,6 +2993,7 @@ function InlineField({
           placeholder={placeholder}
           className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-1 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500"
         />
+        {hint && <p className="text-[10px] text-slate-400 mt-0.5">{hint}</p>}
       </div>
     )
   }
@@ -2994,6 +3007,7 @@ function InlineField({
         placeholder={placeholder}
         className="w-full bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-orange-500 font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none px-0.5"
       />
+      {hint && <p className="text-[10px] text-slate-400 mt-0.5">{hint}</p>}
     </div>
   )
 }
