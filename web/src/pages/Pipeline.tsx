@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   X,
   GraduationCap,
@@ -31,6 +33,8 @@ import {
   ClipboardCopy,
   Check,
   ChevronRight,
+  Filter,
+  BookmarkPlus,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import {
@@ -149,16 +153,114 @@ export default function Pipeline() {
     leads.forEach((l) => l.empresa && set.add(l.empresa))
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [leads])
+
+  // Filtros avançados (Curso, Faculdade, Cidade, Ano de Formatura) + presets
+  // salvos — mesmo padrão já usado no Mapa de Mercado.
+  type FunilFilterKey = 'curso' | 'faculdade' | 'cidade' | 'anoFormatura'
+  const FUNIL_FILTER_DEFS: { key: FunilFilterKey; label: string }[] = [
+    { key: 'curso', label: 'Curso' },
+    { key: 'faculdade', label: 'Faculdade' },
+    { key: 'cidade', label: 'Cidade' },
+    { key: 'anoFormatura', label: 'Ano de Formatura' },
+  ]
+  const [advFilters, setAdvFilters] = useState<Record<FunilFilterKey, string>>({
+    curso: '',
+    faculdade: '',
+    cidade: '',
+    anoFormatura: '',
+  })
+  const advFilterOptions = useMemo(() => {
+    const unique = (key: FunilFilterKey) =>
+      Array.from(new Set(leads.map((l) => l[key]).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      )
+    return {
+      curso: unique('curso'),
+      faculdade: unique('faculdade'),
+      cidade: unique('cidade'),
+      anoFormatura: unique('anoFormatura'),
+    } as Record<FunilFilterKey, string[]>
+  }, [leads])
+
+  interface SavedFunilFilter {
+    id: string
+    name: string
+    empresas: string[]
+    filtros: Record<FunilFilterKey, string>
+  }
+  const FUNIL_SAVED_FILTERS_KEY = 'funil_saved_filters'
+  const [savedFunilFilters, setSavedFunilFilters] = useState<SavedFunilFilter[]>(() => {
+    try {
+      const stored = localStorage.getItem(FUNIL_SAVED_FILTERS_KEY)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  })
+  const [activeSavedFunilFilterId, setActiveSavedFunilFilterId] = useState<string | null>(null)
+  const [saveFunilFilterName, setSaveFunilFilterName] = useState('')
+  const [isSaveFunilPopoverOpen, setIsSaveFunilPopoverOpen] = useState(false)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FUNIL_SAVED_FILTERS_KEY, JSON.stringify(savedFunilFilters))
+    } catch {
+      // ignora
+    }
+  }, [savedFunilFilters])
+
+  const handleSaveFunilFilter = () => {
+    if (!saveFunilFilterName.trim()) return
+    const novo: SavedFunilFilter = {
+      id: `funilfilter-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: saveFunilFilterName.trim(),
+      empresas: selectedEmpresas,
+      filtros: advFilters,
+    }
+    setSavedFunilFilters((prev) => [...prev, novo])
+    setActiveSavedFunilFilterId(novo.id)
+    setSaveFunilFilterName('')
+    setIsSaveFunilPopoverOpen(false)
+  }
+
+  const handleApplySavedFunilFilter = (sf: SavedFunilFilter) => {
+    setActiveSavedFunilFilterId(sf.id)
+    setSelectedEmpresas(sf.empresas || [])
+    setAdvFilters({
+      curso: sf.filtros?.curso || '',
+      faculdade: sf.filtros?.faculdade || '',
+      cidade: sf.filtros?.cidade || '',
+      anoFormatura: sf.filtros?.anoFormatura || '',
+    })
+  }
+
+  const handleRemoveSavedFunilFilter = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setSavedFunilFilters((prev) => prev.filter((f) => f.id !== id))
+    if (activeSavedFunilFilterId === id) setActiveSavedFunilFilterId(null)
+  }
+
+  const hasActiveAdvFilter = Object.values(advFilters).some(Boolean)
+
+  const clearAdvFilters = () => {
+    setAdvFilters({ curso: '', faculdade: '', cidade: '', anoFormatura: '' })
+    setActiveSavedFunilFilterId(null)
+  }
+
   const filteredDeals = useMemo(() => {
     return deals.filter((d) => {
       // Turma já formada (ano de formatura passou) some do Funil — não tem mais
       // o que prospectar/negociar nela.
       const lead = d.leadId ? leadById.get(d.leadId) : null
       if (lead?.concluida) return false
-      if (selectedEmpresas.length === 0) return true
-      return !!lead && selectedEmpresas.includes(lead.empresa || 'AFF')
+      if (selectedEmpresas.length > 0 && (!lead || !selectedEmpresas.includes(lead.empresa || 'AFF')))
+        return false
+      for (const { key } of FUNIL_FILTER_DEFS) {
+        if (advFilters[key] && (!lead || lead[key] !== advFilters[key])) return false
+      }
+      return true
     })
-  }, [deals, leadById, selectedEmpresas])
+  }, [deals, leadById, selectedEmpresas, advFilters])
 
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.order - b.order), [stages])
 
@@ -401,6 +503,127 @@ export default function Pipeline() {
           selected={selectedEmpresas}
           onChange={setSelectedEmpresas}
         />
+      </div>
+
+      {/* Filtros avançados: Curso/Faculdade/Cidade/Ano + presets salvos */}
+      <div className="bg-[rgba(255,255,255,0.03)] border border-white/[0.06] rounded-xl p-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+            <Filter className="w-4 h-4 text-orange-400" />
+            Filtros do Funil
+          </div>
+          <div className="flex items-center gap-2">
+            {savedFunilFilters.length > 0 && (
+              <select
+                value={activeSavedFunilFilterId || ''}
+                onChange={(e) => {
+                  const found = savedFunilFilters.find((f) => f.id === e.target.value)
+                  if (found) handleApplySavedFunilFilter(found)
+                  else setActiveSavedFunilFilterId(null)
+                }}
+                className="bg-[#0a0f14] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+              >
+                <option value="">Filtros Salvos</option>
+                {savedFunilFilters.map((sf) => (
+                  <option key={sf.id} value={sf.id}>
+                    {sf.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {activeSavedFunilFilterId && (
+              <button
+                type="button"
+                onClick={(e) => handleRemoveSavedFunilFilter(activeSavedFunilFilterId, e)}
+                title="Remover filtro salvo"
+                className="text-slate-400 hover:text-rose-400 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <Popover open={isSaveFunilPopoverOpen} onOpenChange={setIsSaveFunilPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-[11px] bg-[#0a0f14] border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.06]"
+                >
+                  <BookmarkPlus className="h-3.5 w-3.5 text-orange-400" />
+                  Salvar Filtro
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-3 space-y-3 z-50 shadow-xl bg-[#111820] border-white/[0.08]" align="end">
+                <div className="space-y-1">
+                  <h4 className="text-xs font-semibold text-white">Salvar esta visualização</h4>
+                  <p className="text-[11px] text-slate-400">
+                    Guarda empresa, curso, faculdade, cidade e ano selecionados.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Ex: Medicina Conquista 2027"
+                    value={saveFunilFilterName}
+                    onChange={(e) => setSaveFunilFilterName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveFunilFilter()}
+                    className="h-8 text-xs bg-[#0a0f14] border-white/[0.08] text-white"
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsSaveFunilPopoverOpen(false)}
+                      className="h-7 text-xs text-slate-300 hover:text-white"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveFunilFilter}
+                      disabled={!saveFunilFilterName.trim()}
+                      className="h-7 text-xs bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            {hasActiveAdvFilter && (
+              <button
+                type="button"
+                onClick={clearAdvFilters}
+                className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-3 h-3" /> Limpar
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {FUNIL_FILTER_DEFS.map(({ key, label }) => (
+            <div key={key}>
+              <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                {label}
+              </label>
+              <select
+                value={advFilters[key]}
+                onChange={(e) => {
+                  setAdvFilters((f) => ({ ...f, [key]: e.target.value }))
+                  setActiveSavedFunilFilterId(null)
+                }}
+                className="w-full bg-[#0a0f14] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+              >
+                <option value="">Todos</option>
+                {advFilterOptions[key].map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Kanban */}
