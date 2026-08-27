@@ -29,7 +29,17 @@ import {
   Presentation,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
-import { Lead, LeadStatus, LeadSource, getTurmaDisplayName, getFullTurmaName } from '@/types/crm'
+import {
+  Lead,
+  LeadStatus,
+  LeadSource,
+  Deal,
+  getTurmaDisplayName,
+  getFullTurmaName,
+  FUNNEL_STAGES,
+  DEFAULT_CHECKLIST_ITEMS,
+  currentStageEnteredAt,
+} from '@/types/crm'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   getSGELinks,
@@ -148,6 +158,50 @@ const EMPRESA_CORES: Record<string, string> = {
 const EMPRESA_COR_PADRAO =
   'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700'
 
+// Mesmo cálculo de "próxima ação" do checklist usado no Funil (Pipeline.tsx):
+// primeiro item não marcado do checklist do estágio atual do deal da turma.
+const ITEMS_BY_STAGE_ID = new Map<string, typeof DEFAULT_CHECKLIST_ITEMS>()
+DEFAULT_CHECKLIST_ITEMS.forEach((item) => {
+  const arr = ITEMS_BY_STAGE_ID.get(item.stageId) || []
+  arr.push(item)
+  ITEMS_BY_STAGE_ID.set(item.stageId, arr)
+})
+
+interface ProximaAcaoInfo {
+  label: string
+  prazoDate: Date
+  diffDias: number
+  vencido: boolean
+  urgente: boolean
+}
+
+// Turmas já fechadas (Convertido/Perdido) ou formadas não precisam de próxima
+// ação. Prazo = data de entrada no estágio atual + stagnationAlertDays do
+// estágio (mesmo limiar de estagnação já usado no Funil).
+function getProximaAcaoInfo(lead: Lead, deal: Deal | undefined): ProximaAcaoInfo | null {
+  if (!deal || lead.concluida) return null
+  if (lead.status === 'Convertido' || lead.status === 'Perdido') return null
+  const stageMeta = FUNNEL_STAGES.find((s) => s.id === deal.stageId)
+  if (!stageMeta) return null
+  const items = ITEMS_BY_STAGE_ID.get(deal.stageId) || []
+  const proximoItem = items.find((it) => !deal.checklist?.[it.id])
+  if (!proximoItem) return null
+
+  const enteredAt = currentStageEnteredAt(deal)
+  const prazoDate = new Date(enteredAt)
+  if (isNaN(prazoDate.getTime())) return null
+  prazoDate.setDate(prazoDate.getDate() + stageMeta.stagnationAlertDays)
+
+  const diffDias = Math.ceil((prazoDate.getTime() - Date.now()) / 86400000)
+  return {
+    label: proximoItem.label,
+    prazoDate,
+    diffDias,
+    vencido: diffDias < 0,
+    urgente: diffDias >= 0 && diffDias <= 2,
+  }
+}
+
 export interface SavedFilter {
   id: string
   name: string
@@ -175,6 +229,18 @@ export default function LeadsPage() {
   // nunca do localStorage — assim, cadastrar uma vez funciona em qualquer dispositivo.
   const { config: sgeAppConfig } = useConfiguracoes()
   const { toast } = useToast()
+
+  // turma_id -> deal, pra saber o estágio/checklist atual de cada turma no
+  // Funil e derivar a próxima ação. Segue o mesmo padrão de `.find` usado em
+  // outros pontos do app (turma_id não tem unicidade garantida no schema,
+  // mas na prática é 1:1).
+  const dealByLeadId = useMemo(() => {
+    const map = new Map<string, Deal>()
+    deals.forEach((d) => {
+      if (d.leadId) map.set(d.leadId, d)
+    })
+    return map
+  }, [deals])
 
   // General Filter State
   const [search, setSearch] = useState('')
@@ -1729,6 +1795,7 @@ export default function LeadsPage() {
                   const statusInfo = STATUS_CONFIG[lead.status] || STATUS_CONFIG.Novo
                   const sgeLink = sgeLinks.find((lnk) => lnk.leadId === lead.id)
                   const isManualMode = manualMode
+                  const proximaAcao = getProximaAcaoInfo(lead, dealByLeadId.get(lead.id))
 
                   return (
                     <tr
@@ -1792,6 +1859,28 @@ export default function LeadsPage() {
                             </Badge>
                           )}
                         </div>
+                        {proximaAcao && (
+                          <div
+                            className={cn(
+                              'mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold',
+                              proximaAcao.vencido
+                                ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                                : proximaAcao.urgente
+                                  ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+                                  : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+                            )}
+                            title={`Próxima ação: ${proximaAcao.label}`}
+                          >
+                            <Sparkles className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{proximaAcao.label}</span>
+                            <span className="opacity-60 shrink-0">•</span>
+                            <span className="shrink-0 whitespace-nowrap">
+                              {proximaAcao.vencido
+                                ? `Atrasado ${Math.abs(proximaAcao.diffDias)}d`
+                                : `Prazo ${proximaAcao.prazoDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`}
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Empresa */}
