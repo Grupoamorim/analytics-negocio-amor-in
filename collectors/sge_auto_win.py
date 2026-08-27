@@ -162,6 +162,208 @@ def build_turma_variations(turma: dict) -> list:
     return [normalize_for_comparison(v) for v in (full1, full2, full3, full4)]
 
 
+RESEND_FROM = "Amor In Formaturas <onboarding@resend.dev>"
+LUCAS_EMAIL = "adm@lucasamorim.com.br"
+
+# Formato padrao da descricao de projeto no SGE (bate com getFullTurmaName()
+# do site): "Empresa Curso Faculdade turma N ANO.SEM Cidade [Turno opcional]".
+# So cria turma automaticamente quando o texto bate 100% com isso - qualquer
+# coisa fora do padrao vai pro e-mail pro Lucas revisar, nunca adivinhamos.
+PADRAO_DESCRICAO_TURMA = re.compile(
+    r"^(?P<empresa>AIF-V|AIF|AFF|SFF)\s+(?P<curso>.+?)\s+(?P<faculdade>\S+)\s+turma\s+"
+    r"(?P<turmanum>\S+)\s+(?P<ano>\d{4}\.[12])\s*(?P<cidade>.*)$",
+    re.IGNORECASE,
+)
+
+
+def parse_descricao_projeto(descricao: str):
+    m = PADRAO_DESCRICAO_TURMA.match((descricao or "").strip())
+    if not m:
+        return None
+    cidade = re.sub(
+        r"\s+(Matutino|Noturno|Vespertino)\s*$", "", m.group("cidade").strip(), flags=re.IGNORECASE
+    ).strip()
+    return {
+        "empresa": m.group("empresa").upper(),
+        "curso": m.group("curso").strip(),
+        "faculdade": m.group("faculdade").strip(),
+        "turma": f"Turma {m.group('turmanum').strip()}",
+        "ano_formatura": m.group("ano"),
+        "cidade": cidade or None,
+    }
+
+
+def buscar_resend_key(sb):
+    resp = (
+        sb.table("configuracoes")
+        .select("resend_api_key")
+        .not_.is_("resend_api_key", "null")
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0].get("resend_api_key") if resp.data else None
+
+
+def enviar_email(sb, destinatario: str, assunto: str, html: str):
+    api_key = buscar_resend_key(sb)
+    if not api_key:
+        log.warning("resend_api_key nao configurado - pulando envio de e-mail.")
+        return
+    try:
+        r = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"from": RESEND_FROM, "to": [destinatario], "subject": assunto, "html": html},
+            timeout=15,
+        )
+        if r.status_code >= 300:
+            log.error(f"Erro ao enviar e-mail via Resend: {r.status_code} {r.text[:200]}")
+    except Exception as e:
+        log.error(f"Erro ao chamar Resend: {e}")
+
+
+def _enviar_email_resumo_sge(sb, criadas, vinculadas_extra, nao_identificadas):
+    partes = []
+    if criadas:
+        itens = "".join(
+            f"<li><b>{d['curso']} {d['faculdade']} {d['turma']} ({d['ano_formatura']})</b> "
+            f"— código SGE {codigo}<br><span style='color:#666'>Descrição original no SGE: "
+            f"\"{desc}\"</span></li>"
+            for codigo, desc, d in criadas
+        )
+        partes.append(
+            f"<h3>✅ Turmas criadas automaticamente ({len(criadas)})</h3><ul>{itens}</ul>"
+            "<p>Essa(s) turma(s) não existia(m) no CRM ainda. Foram criadas em Prospecção, já "
+            "vinculadas ao código do SGE. Confira se os dados batem e ajuste o que precisar.</p>"
+        )
+    if vinculadas_extra:
+        itens = "".join(
+            f"<li>{get_turma_display_name(t.get('curso'), t.get('faculdade'), t.get('turma'))} "
+            f"— vinculada ao código SGE {codigo}</li>"
+            for codigo, _desc, t in vinculadas_extra
+        )
+        partes.append(f"<h3>🔗 Turmas já existentes, vinculadas agora ({len(vinculadas_extra)})</h3><ul>{itens}</ul>")
+    if nao_identificadas:
+        itens = "".join(
+            f"<li>Código {codigo}: \"{' / '.join(descs)}\" <i>({motivo})</i></li>"
+            for codigo, descs, motivo in nao_identificadas
+        )
+        partes.append(
+            f"<h3>⚠️ Não deu pra identificar sozinho ({len(nao_identificadas)})</h3><ul>{itens}</ul>"
+            "<p>Formato de descrição fora do padrão de nomenclatura, ou o mesmo código do SGE apareceu "
+            "com descrições conflitantes. Não inventamos nada aqui - precisa olhar manualmente.</p>"
+        )
+    if not partes:
+        return
+    html = "<div style='font-family:sans-serif;font-size:14px'>" + "".join(partes) + "</div>"
+    enviar_email(sb, LUCAS_EMAIL, "SGE: novidades de turmas detectadas", html)
+
+
+def sincronizar_turmas_novas_do_sge(sb, turmas: list, turma_variacoes: list):
+    """
+    Segunda fase (roda depois do Auto-Win de vendas): olha `sge_contas_receber`
+    - ja sincronizado sozinho por outro coletor 2x/dia, e muito mais completo
+    que o endpoint de vendas (que quase sempre volta so 1 registro) - atras de
+    projetos (turmas) do SGE que a gente ainda nao tem cadastrados aqui.
+
+    Quando a descricao do projeto bate com o formato padrao (mesma convencao
+    de nome completo que o proprio site usa), cria a turma sozinho, ja
+    vinculada (codigo_sge) e em Prospeccao. Quando NAO da pra confiar no
+    parse (formato fora do padrao, ou o mesmo codigo aparece com descricoes
+    conflitantes), NUNCA inventa - so lista no e-mail final pro Lucas
+    revisar manualmente.
+    """
+    linhas = fetch_all_rows(sb, "sge_contas_receber", "raw_data")
+    descricoes_por_codigo: dict = {}
+    for linha in linhas:
+        raw = linha.get("raw_data") or {}
+        codigo = str(raw.get("Projeto") or "").strip()
+        descricao = str(raw.get("DescProjeto") or "").strip()
+        if not codigo or not descricao:
+            continue
+        descricoes_por_codigo.setdefault(codigo, set()).add(descricao)
+
+    codigos_ja_vinculados = {t.get("codigo_sge") for t in turmas if t.get("codigo_sge")}
+
+    criadas = []
+    vinculadas_extra = []
+    nao_identificadas = []
+
+    for codigo, descricoes in sorted(descricoes_por_codigo.items()):
+        if codigo in codigos_ja_vinculados:
+            continue
+
+        # Tenta achar uma turma ja cadastrada pelo nome antes de criar (evita duplicar).
+        matched = None
+        for descricao in descricoes:
+            norm = normalize_for_comparison(descricao)
+            if not norm:
+                continue
+            for turma, variacoes in turma_variacoes:
+                if norm in variacoes or (
+                    len(norm) > 5 and any(v and (v in norm or norm in v) for v in variacoes)
+                ):
+                    matched = turma
+                    break
+            if matched:
+                break
+
+        if matched:
+            if matched.get("codigo_sge") != codigo:
+                sb.table("turmas").update({"codigo_sge": codigo}).eq("id", matched["id"]).execute()
+                matched["codigo_sge"] = codigo
+                vinculadas_extra.append((codigo, next(iter(descricoes)), matched))
+            continue
+
+        # Ninguem bateu por nome - so cria se der pra confiar 100% no parse
+        # (e todas as descricoes desse mesmo codigo concordarem entre si).
+        parses = {}
+        for descricao in descricoes:
+            p = parse_descricao_projeto(descricao)
+            if p:
+                chave = (p["empresa"], p["curso"], p["faculdade"], p["turma"], p["ano_formatura"])
+                parses[chave] = p
+
+        if len(parses) == 1:
+            dados = next(iter(parses.values()))
+            payload = {
+                "codigo": f"turma-sge-{codigo.replace('/', '-')}",
+                "nome": f"{dados['curso']} {dados['faculdade']} {dados['turma']}".strip(),
+                "codigo_sge": codigo,
+                "empresa": dados["empresa"],
+                "curso": dados["curso"],
+                "faculdade": dados["faculdade"],
+                "turma": dados["turma"],
+                "ano_formatura": dados["ano_formatura"],
+                "cidade": dados["cidade"],
+                "funil_status": "Novo",
+                "total_alunos": 0,
+                "alunos_fechados": 0,
+                "observacoes": f'Turma criada automaticamente a partir do projeto {codigo} do SGE '
+                f'("{next(iter(descricoes))}"). Confira se os dados batem.',
+            }
+            try:
+                resp = sb.table("turmas").insert(payload).execute()
+                nova_id = resp.data[0]["id"] if resp.data else None
+                if nova_id:
+                    sb.table("deals").insert(
+                        {"turma_id": nova_id, "titulo": payload["nome"], "stage": "stage-1"}
+                    ).execute()
+                criadas.append((codigo, next(iter(descricoes)), dados))
+                log.info(f"  Turma nova criada a partir do SGE: {payload['nome']} (projeto {codigo})")
+            except Exception as e:
+                log.error(f"Erro criando turma automatica pro projeto {codigo}: {e}")
+                nao_identificadas.append((codigo, list(descricoes), f"erro ao criar: {e}"))
+        else:
+            motivo = "descrições conflitantes pro mesmo código" if len(parses) > 1 else "formato não reconhecido"
+            nao_identificadas.append((codigo, list(descricoes), motivo))
+
+    if criadas or vinculadas_extra or nao_identificadas:
+        _enviar_email_resumo_sge(sb, criadas, vinculadas_extra, nao_identificadas)
+
+    return len(criadas), len(vinculadas_extra), len(nao_identificadas)
+
+
 def main():
     inicio_exec = time.time()
     log.info("=" * 50)
@@ -182,6 +384,9 @@ def main():
     unmatched = 0
     vendas_total = 0
     vinculadas_sge = 0
+    criadas_n = 0
+    vinculadas_extra_n = 0
+    nao_ident_n = 0
 
     try:
         turmas = fetch_all_rows(
@@ -265,10 +470,18 @@ def main():
                 matched["funil_status"] = "Convertido"  # evita reprocessar a mesma turma 2x nesta execucao
                 novas_convertidas += 1
 
+        # Segunda fase: turmas do SGE (via contas a receber, muito mais completo
+        # que o endpoint de vendas) que a gente ainda nao tinha cadastradas.
+        criadas_n, vinculadas_extra_n, nao_ident_n = sincronizar_turmas_novas_do_sge(
+            sb, turmas, turma_variacoes
+        )
+
         msg_final = (
             f"{vendas_total} vendas verificadas | {novas_convertidas} turmas marcadas como Convertido | "
             f"{deals_movidos} negocios movidos para Fechou (Auto-Win) | {vinculadas_sge} turmas vinculadas ao SGE | "
-            f"{unmatched} sem match"
+            f"{unmatched} sem match | "
+            f"{criadas_n} turmas novas criadas do SGE | {vinculadas_extra_n} vinculadas via contas a receber | "
+            f"{nao_ident_n} nao identificadas (e-mail enviado se houver alguma)"
         )
         log.info(f"  {msg_final}")
 
@@ -283,7 +496,10 @@ def main():
             sb.table("sync_log").insert({
                 "fonte": "sge_funil_auto_win",
                 "status": status_final,
-                "registros_atualizados": novas_convertidas + deals_movidos + vinculadas_sge,
+                "registros_atualizados": (
+                    novas_convertidas + deals_movidos + vinculadas_sge
+                    + criadas_n + vinculadas_extra_n
+                ),
                 "mensagem": msg_final,
                 "duracao_segundos": round(duracao, 2),
             }).execute()
