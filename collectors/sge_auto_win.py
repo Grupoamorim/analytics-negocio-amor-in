@@ -146,6 +146,19 @@ def fetch_all_rows(sb, tabela: str, colunas: str, order_col: str = None, desc: b
     return todos
 
 
+def _tokens_contained(a: str, b: str) -> bool:
+    """True se os tokens de `a` aparecem como subsequencia continua dentro de
+    `b` (ou vice-versa). Compara token inteiro, nao substring de caracteres -
+    evita falso positivo tipo "turma 1" casando dentro de "turma 13" (que
+    aconteceria com containment de string cru: "turma 1" in "turma 13")."""
+    ta, tb = a.split(), b.split()
+    if not ta or not tb:
+        return False
+    curto, longo = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    n = len(curto)
+    return any(longo[i:i + n] == curto for i in range(len(longo) - n + 1))
+
+
 def build_turma_variations(turma: dict) -> list:
     curso = turma.get("curso") or ""
     faculdade = turma.get("faculdade") or ""
@@ -301,7 +314,7 @@ def sincronizar_turmas_novas_do_sge(sb, turmas: list, turma_variacoes: list):
                 continue
             for turma, variacoes in turma_variacoes:
                 if norm in variacoes or (
-                    len(norm) > 5 and any(v and (v in norm or norm in v) for v in variacoes)
+                    len(norm) > 5 and any(v and _tokens_contained(v, norm) for v in variacoes)
                 ):
                     matched = turma
                     break
@@ -309,9 +322,18 @@ def sincronizar_turmas_novas_do_sge(sb, turmas: list, turma_variacoes: list):
                 break
 
         if matched:
-            if matched.get("codigo_sge") != codigo:
-                sb.table("turmas").update({"codigo_sge": codigo}).eq("id", matched["id"]).execute()
+            precisa_atualizar = matched.get("codigo_sge") != codigo or matched.get("funil_status") != "Convertido"
+            if precisa_atualizar:
+                # Ter conta a receber real no SGE = já teve pelo menos uma
+                # adesão/contrato assinado - a turma já é Ganhou, não importa
+                # em que estágio do funil ela estivesse antes. O gatilho
+                # sincronizar_deal_com_funil_status() move o deal sozinho
+                # pra Fechou/Ganhou quando funil_status vira Convertido.
+                sb.table("turmas").update(
+                    {"codigo_sge": codigo, "funil_status": "Convertido"}
+                ).eq("id", matched["id"]).execute()
                 matched["codigo_sge"] = codigo
+                matched["funil_status"] = "Convertido"
                 vinculadas_extra.append((codigo, next(iter(descricoes)), matched))
             continue
 
@@ -336,19 +358,18 @@ def sincronizar_turmas_novas_do_sge(sb, turmas: list, turma_variacoes: list):
                 "turma": dados["turma"],
                 "ano_formatura": dados["ano_formatura"],
                 "cidade": dados["cidade"],
-                "funil_status": "Novo",
+                # Só existe conta a receber no SGE se já teve pelo menos uma
+                # adesão/contrato assinado - então essa turma já nasce Ganhou.
+                # O gatilho sincronizar_deal_com_funil_status() cria sozinho o
+                # deal em Fechou/Ganhou (não precisamos inserir o deal aqui).
+                "funil_status": "Convertido",
                 "total_alunos": 0,
                 "alunos_fechados": 0,
                 "observacoes": f'Turma criada automaticamente a partir do projeto {codigo} do SGE '
                 f'("{next(iter(descricoes))}"). Confira se os dados batem.',
             }
             try:
-                resp = sb.table("turmas").insert(payload).execute()
-                nova_id = resp.data[0]["id"] if resp.data else None
-                if nova_id:
-                    sb.table("deals").insert(
-                        {"turma_id": nova_id, "titulo": payload["nome"], "stage": "stage-1"}
-                    ).execute()
+                sb.table("turmas").insert(payload).execute()
                 criadas.append((codigo, next(iter(descricoes)), dados))
                 log.info(f"  Turma nova criada a partir do SGE: {payload['nome']} (projeto {codigo})")
             except Exception as e:
@@ -425,7 +446,7 @@ def main():
                     matched = turma
                     break
                 if len(norm_venda) > 5 and any(
-                    (v and (v in norm_venda or norm_venda in v)) for v in variacoes
+                    v and _tokens_contained(v, norm_venda) for v in variacoes
                 ):
                     matched = turma
                     break
