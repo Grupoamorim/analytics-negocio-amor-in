@@ -44,7 +44,13 @@ import {
   SGELink,
 } from '@/utils/sgeIntegration'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
-import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
+import {
+  MultiSortControl,
+  sortByField,
+  sortByRules,
+  type SortDirection,
+  type SortRule,
+} from '@/components/SortControl'
 import { Button } from '@/components/ui/button'
 import ImportCsvModal from '@/components/ImportCsvModal'
 import { ColumnHeaderWithFilter, ColumnFilterKey } from '@/components/ColumnHeaderWithFilter'
@@ -181,8 +187,16 @@ export default function LeadsPage() {
   const [showConcluidas, setShowConcluidas] = useState(false)
 
   // Ordenação
-  const [sortField, setSortField] = useState<string>('faculdade')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [sortRules, setSortRules] = useState<SortRule[]>([{ field: 'faculdade', direction: 'asc' }])
+  const [manualMode, setManualMode] = useState(false)
+  const sortDirFor = (field: string): SortDirection | false => {
+    const r = sortRules.find((r) => r.field === field)
+    return r ? r.direction : false
+  }
+  const setSingleSort = (field: string, direction: SortDirection) => {
+    setManualMode(false)
+    setSortRules([{ field, direction }])
+  }
 
   // Largura ajustável da coluna "Turma / Curso" — arraste a borda direita do
   // cabeçalho pra ver o nome completo sem quebra, ou encolher pra compactar.
@@ -507,10 +521,9 @@ export default function LeadsPage() {
 
   // Opções de ordenação disponíveis para a tabela de turmas
   const SORT_OPTIONS = [
-    { value: 'manual', label: 'Manual (arrastar) ✋' },
-    { value: 'curso', label: 'Curso (A-Z)' },
+    { value: 'curso', label: 'Curso' },
     { value: 'empresa', label: 'Empresa' },
-    { value: 'faculdade', label: 'Faculdade + Ano Formatura' },
+    { value: 'faculdade', label: 'Faculdade' },
     { value: 'cidade', label: 'Cidade' },
     { value: 'anoFormatura', label: 'Ano de Formatura' },
     { value: 'status', label: 'Funil / Status' },
@@ -549,28 +562,29 @@ export default function LeadsPage() {
         return lead.alunosFechados || 0
       case 'potentialValue':
         return lead.potentialValue || 0
-      // Ordenar por Faculdade agrupa por faculdade e, dentro de cada uma,
-      // ordena por Ano de Formatura — a ordem que o Lucas pediu.
-      case 'faculdade':
-        return [lead.faculdade, lead.anoFormatura]
       default:
         return (lead as any)[field]
     }
   }
 
-  // Sorted list (aplicada sobre os resultados já filtrados)
-  const sortedLeads = useMemo(
-    () => sortByField(filteredLeads, sortField, sortDirection, extractSortValue),
-    [filteredLeads, sortField, sortDirection, manualOrder],
-  )
+  // Sorted list (aplicada sobre os resultados já filtrados) — em modo manual usa a
+  // ordem arrastada pelo Lucas; senão, aplica os critérios de ordenação em cascata
+  // (o primeiro manda, os seguintes só desempatam).
+  const sortedLeads = useMemo(() => {
+    if (manualMode) return sortByField(filteredLeads, 'manual', 'asc', extractSortValue)
+    return sortByRules(filteredLeads, sortRules, extractSortValue)
+  }, [filteredLeads, sortRules, manualMode, manualOrder])
 
   // Ao entrar no modo manual pela primeira vez, congela a ordem atualmente
   // exibida como ponto de partida pra arrastar.
-  const handleSortFieldChange = (field: string) => {
-    if (field === 'manual' && manualOrder.length === 0) {
-      setManualOrder(sortedLeads.map((l) => l.id))
-    }
-    setSortField(field)
+  const toggleManualMode = () => {
+    setManualMode((prev) => {
+      const next = !prev
+      if (next && manualOrder.length === 0) {
+        setManualOrder(sortedLeads.map((l) => l.id))
+      }
+      return next
+    })
   }
 
   const handleDragStartRow = (id: string) => setDraggedId(id)
@@ -1302,14 +1316,18 @@ export default function LeadsPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Ordenação */}
-              <SortControl
-                options={SORT_OPTIONS}
-                field={sortField}
-                direction={sortDirection}
-                onFieldChange={handleSortFieldChange}
-                onDirectionToggle={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
-              />
+              {/* Ordenação — vários critérios em cascata, estilo Notion (o 1º manda, os seguintes só desempatam) */}
+              <MultiSortControl options={SORT_OPTIONS} rules={sortRules} onRulesChange={setSortRules} />
+              <Button
+                type="button"
+                variant={manualMode ? 'default' : 'outline'}
+                size="sm"
+                className="h-9 text-xs gap-1.5"
+                onClick={toggleManualMode}
+                title="Arrastar linhas manualmente pra reordenar"
+              >
+                <GripVertical className="h-3.5 w-3.5" /> Manual
+              </Button>
 
               {/* Dropdown Filtros Salvos */}
               {savedFilters.length > 0 && (
@@ -1501,7 +1519,7 @@ export default function LeadsPage() {
                   {activeColFiltersCount} filtro(s) de coluna ativo(s)
                 </Badge>
               )}
-              {sortField === 'manual' && (
+              {manualMode && (
                 <Badge
                   variant="secondary"
                   className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 gap-1"
@@ -1572,11 +1590,8 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('curso', v)}
                     onSelectAll={() => handleSelectAllColumn('curso')}
                     onClear={() => handleClearColumn('curso')}
-                    onSort={(dir) => {
-                      setSortField('curso')
-                      setSortDirection(dir)
-                    }}
-                    isSorted={sortField === 'curso' ? sortDirection : false}
+                    onSort={(dir) => setSingleSort('curso', dir)}
+                    isSorted={sortDirFor('curso')}
                   />
                   <div
                     onMouseDown={handleResizeStart}
@@ -1593,11 +1608,8 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('empresa', v)}
                     onSelectAll={() => handleSelectAllColumn('empresa')}
                     onClear={() => handleClearColumn('empresa')}
-                    onSort={(dir) => {
-                      setSortField('empresa')
-                      setSortDirection(dir)
-                    }}
-                    isSorted={sortField === 'empresa' ? sortDirection : false}
+                    onSort={(dir) => setSingleSort('empresa', dir)}
+                    isSorted={sortDirFor('empresa')}
                   />
                 </th>
                 <th className="py-3 px-3">
@@ -1609,11 +1621,8 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('faculdade', v)}
                     onSelectAll={() => handleSelectAllColumn('faculdade')}
                     onClear={() => handleClearColumn('faculdade')}
-                    onSort={(dir) => {
-                      setSortField('faculdade')
-                      setSortDirection(dir)
-                    }}
-                    isSorted={sortField === 'faculdade' ? sortDirection : false}
+                    onSort={(dir) => setSingleSort('faculdade', dir)}
+                    isSorted={sortDirFor('faculdade')}
                   />
                 </th>
                 <th className="py-3 px-3">
@@ -1625,11 +1634,8 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('cidade', v)}
                     onSelectAll={() => handleSelectAllColumn('cidade')}
                     onClear={() => handleClearColumn('cidade')}
-                    onSort={(dir) => {
-                      setSortField('cidade')
-                      setSortDirection(dir)
-                    }}
-                    isSorted={sortField === 'cidade' ? sortDirection : false}
+                    onSort={(dir) => setSingleSort('cidade', dir)}
+                    isSorted={sortDirFor('cidade')}
                   />
                 </th>
                 <th className="py-3 px-3">
@@ -1641,11 +1647,8 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('anoFormatura', v)}
                     onSelectAll={() => handleSelectAllColumn('anoFormatura')}
                     onClear={() => handleClearColumn('anoFormatura')}
-                    onSort={(dir) => {
-                      setSortField('anoFormatura')
-                      setSortDirection(dir)
-                    }}
-                    isSorted={sortField === 'anoFormatura' ? sortDirection : false}
+                    onSort={(dir) => setSingleSort('anoFormatura', dir)}
+                    isSorted={sortDirFor('anoFormatura')}
                   />
                 </th>
                 <th className="py-3 px-3">Serviço</th>
@@ -1659,11 +1662,8 @@ export default function LeadsPage() {
                     onToggleValue={(v) => handleToggleColumnValue('status', v)}
                     onSelectAll={() => handleSelectAllColumn('status')}
                     onClear={() => handleClearColumn('status')}
-                    onSort={(dir) => {
-                      setSortField('status')
-                      setSortDirection(dir)
-                    }}
-                    isSorted={sortField === 'status' ? sortDirection : false}
+                    onSort={(dir) => setSingleSort('status', dir)}
+                    isSorted={sortDirFor('status')}
                   />
                 </th>
                 <th className="py-3 px-3 text-center">SGE</th>
@@ -1683,7 +1683,7 @@ export default function LeadsPage() {
                 paginatedLeads.map((lead) => {
                   const statusInfo = STATUS_CONFIG[lead.status] || STATUS_CONFIG.Novo
                   const sgeLink = sgeLinks.find((lnk) => lnk.leadId === lead.id)
-                  const isManualMode = sortField === 'manual'
+                  const isManualMode = manualMode
 
                   return (
                     <tr
