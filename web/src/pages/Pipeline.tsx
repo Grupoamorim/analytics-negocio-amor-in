@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { MultiSortControl, sortByRules, type SortRule } from '@/components/SortControl'
 import {
   X,
   GraduationCap,
@@ -264,6 +265,29 @@ export default function Pipeline() {
 
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.order - b.order), [stages])
 
+  // Ordenação dos cards dentro de cada coluna do Kanban (inclusive Fechou/
+  // Perdeu) - mesmo componente e mesma ordem padrão da tela de Turmas:
+  // Empresa > Faculdade > Curso > Ano de Formatura, em cascata.
+  const PIPELINE_SORT_OPTIONS = [
+    { value: 'empresa', label: 'Empresa' },
+    { value: 'faculdade', label: 'Faculdade' },
+    { value: 'curso', label: 'Curso' },
+    { value: 'cidade', label: 'Cidade' },
+    { value: 'anoFormatura', label: 'Ano de Formatura' },
+    { value: 'value', label: 'Valor' },
+  ]
+  const [sortRules, setSortRules] = useState<SortRule[]>([
+    { field: 'empresa', direction: 'asc' },
+    { field: 'faculdade', direction: 'asc' },
+    { field: 'curso', direction: 'asc' },
+    { field: 'anoFormatura', direction: 'asc' },
+  ])
+  const extractDealSortValue = (deal: Deal, field: string): unknown => {
+    if (field === 'value') return deal.value || 0
+    const lead = deal.leadId ? leadById.get(deal.leadId) : undefined
+    return (lead as any)?.[field] ?? ''
+  }
+
   // Turmas que ainda não têm nenhuma oportunidade criada em NENHUM estágio do
   // funil, e que também não estão fechadas (ganhas ou perdidas) - essas não
   // fazem sentido pra (re)adicionar via o botão "+" de uma coluna.
@@ -517,6 +541,12 @@ export default function Pipeline() {
             Filtros do Funil
           </div>
           <div className="flex items-center gap-2">
+            <MultiSortControl
+              options={PIPELINE_SORT_OPTIONS}
+              rules={sortRules}
+              onRulesChange={setSortRules}
+              className="bg-[#0a0f14] border-white/[0.08] text-slate-300 hover:text-white hover:bg-white/[0.06]"
+            />
             {savedFunilFilters.length > 0 && (
               <select
                 value={activeSavedFunilFilterId || ''}
@@ -634,21 +664,25 @@ export default function Pipeline() {
       <div className="overflow-x-auto pb-4 -mx-2 px-2">
         <div className="flex gap-4 min-w-max">
           {sortedStages.map((stage) => {
-            const stageDeals = filteredDeals.filter((d) => {
-              if (d.stageId !== stage.id) return false
-              if (stage.id === 'stage-1') {
-                // Prospecção nunca mostra turma que já tem resultado (ganhou/perdeu).
-                if (d.outcome === 'ganho' || d.outcome === 'perdido') return false
-                // Prospecção só mostra turma SEM nenhum contato vinculado — assim
-                // que tem contato, ela é de Qualificação (o gatilho no banco já
-                // move sozinho). Única exceção: voltou pra cá porque um contato
-                // bateu 3x "não respondeu".
-                const contatosDaTurma = d.leadId ? contacts.filter((c) => c.leadId === d.leadId) : []
-                const voltouPorNaoResponde = contatosDaTurma.some((c) => (c.naoRespondeCount || 0) >= 3)
-                if (contatosDaTurma.length > 0 && !voltouPorNaoResponde) return false
-              }
-              return true
-            })
+            const stageDeals = sortByRules(
+              filteredDeals.filter((d) => {
+                if (d.stageId !== stage.id) return false
+                if (stage.id === 'stage-1') {
+                  // Prospecção nunca mostra turma que já tem resultado (ganhou/perdeu).
+                  if (d.outcome === 'ganho' || d.outcome === 'perdido') return false
+                  // Prospecção só mostra turma SEM nenhum contato vinculado — assim
+                  // que tem contato, ela é de Qualificação (o gatilho no banco já
+                  // move sozinho). Única exceção: voltou pra cá porque um contato
+                  // bateu 3x "não respondeu".
+                  const contatosDaTurma = d.leadId ? contacts.filter((c) => c.leadId === d.leadId) : []
+                  const voltouPorNaoResponde = contatosDaTurma.some((c) => (c.naoRespondeCount || 0) >= 3)
+                  if (contatosDaTurma.length > 0 && !voltouPorNaoResponde) return false
+                }
+                return true
+              }),
+              sortRules,
+              extractDealSortValue,
+            )
             const stageTotalVal = stageDeals.reduce((acc, d) => acc + (d.value || 0), 0)
             const isDragOver = dragOverStageId === stage.id
             const meta = FUNNEL_STAGE_BY_ID[stage.id]
@@ -1121,8 +1155,11 @@ export default function Pipeline() {
               </button>
             </div>
             <div className="p-4 overflow-y-auto space-y-2">
-              {deals
-                .filter((d) => d.stageId === 'stage-6' && d.outcome === resultPopup)
+              {sortByRules(
+                filteredDeals.filter((d) => d.stageId === 'stage-6' && d.outcome === resultPopup),
+                sortRules,
+                extractDealSortValue,
+              )
                 .map((deal) => {
                   const lead = deal.leadId ? leadById.get(deal.leadId) : undefined
                   const owner = memberById.get(deal.ownerId)
@@ -1152,8 +1189,8 @@ export default function Pipeline() {
                     </button>
                   )
                 })}
-              {deals.filter((d) => d.stageId === 'stage-6' && d.outcome === resultPopup).length ===
-                0 && (
+              {filteredDeals.filter((d) => d.stageId === 'stage-6' && d.outcome === resultPopup)
+                .length === 0 && (
                 <p className="text-xs text-slate-500 text-center py-6">Nenhuma turma aqui ainda.</p>
               )}
             </div>
