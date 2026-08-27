@@ -1,0 +1,34 @@
+name: Backup diario (Supabase + codigo -> Drive)
+
+on:
+  schedule:
+    - cron: '5 9 * * *'   # ~06h05 em Brasilia - mesmo horario da antiga rotina no Claude
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # necessario para autenticar no Google Cloud via OIDC (Workload Identity Federation)
+
+jobs:
+  backup-diario:
+    name: Supabase + codigo -> Google Drive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install supabase google-api-python-client google-auth
+      - id: auth
+        name: Autenticar no Google Cloud (Workload Identity Federation - sem chave JSON)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: analytics-amor-in-backup
+          workload_identity_provider: projects/524628045427/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: backup-diario@analytics-amor-in-backup.iam.gserviceaccount.com
+      - name: Executar backup
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python collectors/backup_diario.py
