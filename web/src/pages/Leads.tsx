@@ -1858,29 +1858,41 @@ export default function LeadsPage() {
                               Formado
                             </Badge>
                           )}
+                          {proximaAcao && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span
+                                    className={cn(
+                                      'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full',
+                                      proximaAcao.vencido
+                                        ? 'bg-rose-500/20 text-rose-500 dark:text-rose-400'
+                                        : proximaAcao.urgente
+                                          ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400'
+                                          : 'bg-blue-500/20 text-blue-500 dark:text-blue-400',
+                                    )}
+                                  >
+                                    <Sparkles className="h-2.5 w-2.5" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs p-2.5 max-w-xs space-y-1 bg-[#0a0f14] border-white/10 text-white">
+                                  <div className="font-semibold text-slate-200">Próxima ação</div>
+                                  <div>{proximaAcao.label}</div>
+                                  <div
+                                    className={cn(
+                                      'text-[10px]',
+                                      proximaAcao.vencido ? 'text-rose-400' : 'text-slate-500',
+                                    )}
+                                  >
+                                    {proximaAcao.vencido
+                                      ? `Atrasado ${Math.abs(proximaAcao.diffDias)} dia(s)`
+                                      : `Prazo ${proximaAcao.prazoDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </div>
-                        {proximaAcao && (
-                          <div
-                            className={cn(
-                              'mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold',
-                              proximaAcao.vencido
-                                ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800'
-                                : proximaAcao.urgente
-                                  ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
-                                  : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800',
-                            )}
-                            title={`Próxima ação: ${proximaAcao.label}`}
-                          >
-                            <Sparkles className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{proximaAcao.label}</span>
-                            <span className="opacity-60 shrink-0">•</span>
-                            <span className="shrink-0 whitespace-nowrap">
-                              {proximaAcao.vencido
-                                ? `Atrasado ${Math.abs(proximaAcao.diffDias)}d`
-                                : `Prazo ${proximaAcao.prazoDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`}
-                            </span>
-                          </div>
-                        )}
                       </td>
 
                       {/* Empresa */}

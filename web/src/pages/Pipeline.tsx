@@ -1025,6 +1025,22 @@ export default function Pipeline() {
                           <span className="text-slate-500">desde {formatBRDate(enteredAt)}</span>
                         </div>
 
+                        {/* Próxima ação: primeiro item não marcado do checklist desta etapa,
+                            sempre visível no card (sem precisar expandir o checklist). */}
+                        {(() => {
+                          const proximoItem = stageItems.find((it) => !deal.checklist?.[it.id])
+                          if (!proximoItem) return null
+                          return (
+                            <div className="mb-2 flex items-start gap-1.5 text-[10px] px-2 py-1 rounded bg-orange-500/[0.08] border border-orange-500/20 text-orange-300">
+                              <Sparkles className="w-3 h-3 mt-0.5 shrink-0" />
+                              <span>
+                                <span className="text-slate-500">Fazer agora: </span>
+                                {proximoItem.label}
+                              </span>
+                            </div>
+                          )
+                        })()}
+
                         {/* Checklist progress — minimizado por padrão, setinha expande só os
                             itens desta etapa (não de todas). */}
                         {stageItems.length > 0 && (
