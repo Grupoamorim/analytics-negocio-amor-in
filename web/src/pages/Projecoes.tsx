@@ -229,6 +229,7 @@ export default function Projecoes() {
     }
     return Object.entries(porMes)
       .map(([mes, v]) => ({ mes, ...v }))
+      .filter((h) => h.mes >= '2025-01')
       .sort((a, b) => a.mes.localeCompare(b.mes))
   }, [pagamentos, selectedEmpresas])
 
