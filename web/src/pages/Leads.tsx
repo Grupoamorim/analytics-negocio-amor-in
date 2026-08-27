@@ -187,7 +187,12 @@ export default function LeadsPage() {
   const [showConcluidas, setShowConcluidas] = useState(false)
 
   // Ordenação
-  const [sortRules, setSortRules] = useState<SortRule[]>([{ field: 'faculdade', direction: 'asc' }])
+  const [sortRules, setSortRules] = useState<SortRule[]>([
+    { field: 'empresa', direction: 'asc' },
+    { field: 'faculdade', direction: 'asc' },
+    { field: 'curso', direction: 'asc' },
+    { field: 'anoFormatura', direction: 'asc' },
+  ])
   const [manualMode, setManualMode] = useState(false)
   const sortDirFor = (field: string): SortDirection | false => {
     const r = sortRules.find((r) => r.field === field)
@@ -1409,6 +1414,37 @@ export default function LeadsPage() {
                 </PopoverContent>
               </Popover>
             </div>
+          </div>
+
+          {/* Visões rápidas por Empresa — um clique, sem precisar abrir o dropdown */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFilterEmpresa('all')}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-semibold border transition-colors',
+                filterEmpresa === 'all'
+                  ? 'bg-orange-600 text-white border-transparent shadow-sm'
+                  : 'text-slate-400 border-white/[0.08] bg-[#0a0f14] hover:text-white hover:border-white/20',
+              )}
+            >
+              Todos
+            </button>
+            {empresas.map((emp) => (
+              <button
+                key={emp}
+                type="button"
+                onClick={() => setFilterEmpresa(emp)}
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-semibold border transition-colors',
+                  filterEmpresa === emp
+                    ? 'bg-orange-600 text-white border-transparent shadow-sm'
+                    : 'text-slate-400 border-white/[0.08] bg-[#0a0f14] hover:text-white hover:border-white/20',
+                )}
+              >
+                {emp}
+              </button>
+            ))}
           </div>
 
           {/* Filter Selects Grid */}
