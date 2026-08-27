@@ -50,6 +50,7 @@ function mapRowToConfig(row: ConfiguracaoRow): ConfiguracoesData {
 export function useConfiguracoes() {
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const [config, setConfig] = useState<ConfiguracoesData>(DEFAULT_CONFIG)
+  const [configId, setConfigId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,6 +59,10 @@ export function useConfiguracoes() {
   }
   const isMigratingRef = useRef(false)
 
+  // Configuração é ÚNICA e GLOBAL (SGE/Gemini valem pro site inteiro) — não
+  // é mais uma linha por usuário, senão cada login via login enxergava
+  // tudo vazio e parecia que "não salvava". Sempre pega a primeira (e
+  // única) linha da tabela, independente de quem está logado.
   const fetchConfig = useCallback(async () => {
     if (!isAuthenticated || !user) {
       try {
@@ -77,18 +82,20 @@ export function useConfiguracoes() {
       const { data, error: err } = await supabase
         .from('configuracoes')
         .select('*')
-        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle()
 
       if (err) throw err
 
       if (data) {
+        setConfigId(data.id)
         const mapped = mapRowToConfig(data)
         setConfig(mapped)
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
       } else if (!isMigratingRef.current) {
         isMigratingRef.current = true
-        // Criar registro inicial para este usuário
+        // Primeira vez no sistema inteiro: cria a linha global única.
         let localToMigrate: ConfiguracoesData = DEFAULT_CONFIG
         try {
           const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
@@ -114,6 +121,7 @@ export function useConfiguracoes() {
           .single()
 
         if (!insertErr && inserted) {
+          setConfigId(inserted.id)
           const mapped = mapRowToConfig(inserted)
           setConfig(mapped)
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
@@ -164,13 +172,26 @@ export function useConfiguracoes() {
           logo_url: updated.logoUrl,
           filtros_salvos: updated.filtrosSalvos,
           preferencias: updated.preferencias,
+          user_id: user.id,
         }
 
-        const { error: err } = await supabase
-          .from('configuracoes')
-          .upsert({ user_id: user.id, ...updatePayload }, { onConflict: 'user_id' })
-
-        if (err) throw err
+        if (configId) {
+          // Atualiza a linha global única — nunca cria uma nova por usuário.
+          const { error: err } = await supabase
+            .from('configuracoes')
+            .update(updatePayload)
+            .eq('id', configId)
+          if (err) throw err
+        } else {
+          const insertPayload: ConfiguracaoInsert = { ...updatePayload, user_id: user.id }
+          const { data: inserted, error: err } = await supabase
+            .from('configuracoes')
+            .insert(insertPayload)
+            .select()
+            .single()
+          if (err) throw err
+          if (inserted) setConfigId(inserted.id)
+        }
       } catch (e: any) {
         console.warn('Erro ao salvar configurações no Supabase:', e)
         setError(e.message)
