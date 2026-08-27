@@ -98,6 +98,7 @@ export interface Lead {
   concluida?: boolean // true quando a turma passou do semestre de formatura (job automático)
   concluidaEm?: string // data em que foi marcada como concluída
   turmaOrigemId?: string // id da turma que originou esta (quando criada automaticamente)
+  mesmaTurmaFisicaDe?: string // id de outra turma que é a mesma turma física (pacote/venda separado no SGE) - não contar como turma adicional
 }
 
 /**

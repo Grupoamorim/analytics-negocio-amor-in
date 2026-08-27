@@ -264,10 +264,14 @@ export default function Pipeline() {
 
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.order - b.order), [stages])
 
-  // Turmas que ainda não têm nenhuma oportunidade criada no funil
+  // Turmas que ainda não têm nenhuma oportunidade criada em NENHUM estágio do
+  // funil, e que também não estão fechadas (ganhas ou perdidas) - essas não
+  // fazem sentido pra (re)adicionar via o botão "+" de uma coluna.
   const leadsSemFunil = useMemo(() => {
     const usados = new Set(deals.map((d) => d.leadId).filter(Boolean))
-    return leads.filter((l) => !usados.has(l.id))
+    return leads.filter(
+      (l) => !usados.has(l.id) && l.status !== 'Convertido' && l.status !== 'Perdido',
+    )
   }, [leads, deals])
 
   const leadsFiltradosParaCriar = useMemo(() => {
@@ -895,9 +899,25 @@ export default function Pipeline() {
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                            <span className="font-bold text-emerald-400 text-xs">
-                              R$ {(deal.value / 1000).toFixed(0)}k
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="font-bold text-emerald-400 text-xs">
+                                R$ {(deal.value / 1000).toFixed(0)}k
+                              </span>
+                              {stage.id === 'stage-1' && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDeleteDealAndLead(deal, lead)
+                                  }}
+                                  title="Apagar esta turma da Prospecção"
+                                  aria-label="Apagar esta turma"
+                                  className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-opacity"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                             {stage.id === 'stage-6' && (
                               <span
                                 className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5 ${

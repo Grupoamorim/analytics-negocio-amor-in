@@ -1657,6 +1657,7 @@ export type Database = {
           funil_status: string | null
           id: string
           instituicao: string | null
+          mesma_turma_fisica_de: string | null
           meta_contratos: number | null
           meta_vendas: number | null
           nome: string
@@ -1698,6 +1699,7 @@ export type Database = {
           funil_status?: string | null
           id?: string
           instituicao?: string | null
+          mesma_turma_fisica_de?: string | null
           meta_contratos?: number | null
           meta_vendas?: number | null
           nome: string
@@ -1739,6 +1741,7 @@ export type Database = {
           funil_status?: string | null
           id?: string
           instituicao?: string | null
+          mesma_turma_fisica_de?: string | null
           meta_contratos?: number | null
           meta_vendas?: number | null
           nome?: string
@@ -1757,6 +1760,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "turmas_mesma_turma_fisica_de_fkey"
+            columns: ["mesma_turma_fisica_de"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "turmas_turma_origem_id_fkey"
             columns: ["turma_origem_id"]

@@ -709,13 +709,22 @@ export default function LeadsPage() {
 
   // Stats rápidos
   const stats = useMemo(() => {
-    const total = leads.length
-    const ganhas = leads.filter((l) => l.status === 'Convertido').length
-    const perdidas = leads.filter((l) => l.status === 'Perdido').length
+    // Turmas com mesmaTurmaFisicaDe preenchido são a mesma turma física de outra
+    // linha (pacote/venda separado no SGE) - não contam como turma adicional aqui,
+    // embora seus alunos/pagamentos continuem reais e contados normalmente em
+    // Financeiro/DRE (que somam por cliente/pagamento, não por linha de turma).
+    const contaveis = leads.filter((l) => !l.mesmaTurmaFisicaDe)
+    const total = contaveis.length
+    const ganhas = contaveis.filter((l) => l.status === 'Convertido').length
+    const perdidas = contaveis.filter((l) => l.status === 'Perdido').length
     const abertas = total - ganhas - perdidas
-    const linkedCount = sgeLinks.length
+    // Vinculada ao SGE = turmas.codigo já é o código real do SGE, ou o
+    // Auto-Win (roda sozinho 3x/dia) já achou o match e gravou em
+    // turmas.codigo_sge. Vem do banco, não do localStorage deste navegador -
+    // por isso é igual pra qualquer pessoa que abrir o site.
+    const linkedCount = contaveis.filter((l) => !!l.codigoSGE).length
     return { total, ganhas, perdidas, abertas, linkedCount }
-  }, [leads, sgeLinks])
+  }, [leads])
 
   // Market Share por Empresa: participação de cada marca (AIF, AFF, SFF, AIM...)
   // sobre o total de turmas visíveis com os filtros atuais aplicados.

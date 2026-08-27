@@ -160,6 +160,11 @@ export default function Index() {
     .filter((d) => (d.stageId || 'stage-1') !== 'stage-6')
     .reduce((acc, d) => acc + (d.value || 0), 0)
 
+  // Turmas que são a mesma turma física de outra (pacote/venda separado no SGE)
+  // não contam como turma adicional aqui - alunos/pagamentos continuam reais e
+  // contados normalmente em Financeiro/DRE, que somam por cliente, não por turma.
+  const turmasContaveis = useMemo(() => (leads || []).filter((l) => !l.mesmaTurmaFisicaDe), [leads])
+
   // Turmas Ativas: leads com status !== 'Perdido' OU com deals ativos (stageId !== 'stage-6')
   const activeTurmasCount = useMemo(() => {
     const activeLeadIdsFromDeals = new Set(
@@ -167,12 +172,12 @@ export default function Index() {
         .filter((d) => (d.stageId || 'stage-1') !== 'stage-6' && d.leadId)
         .map((d) => d.leadId!),
     )
-    return (leads || []).filter((l) => l.status !== 'Perdido' || activeLeadIdsFromDeals.has(l.id))
+    return turmasContaveis.filter((l) => l.status !== 'Perdido' || activeLeadIdsFromDeals.has(l.id))
       .length
-  }, [leads, deals])
+  }, [turmasContaveis, deals])
 
-  const totalLeadsCount = (leads || []).length
-  const convertedLeadsCount = (leads || []).filter((l) => l.status === 'Convertido').length
+  const totalLeadsCount = turmasContaveis.length
+  const convertedLeadsCount = turmasContaveis.filter((l) => l.status === 'Convertido').length
   const conversionRate =
     totalLeadsCount > 0 ? ((convertedLeadsCount / totalLeadsCount) * 100).toFixed(1) : '0.0'
 

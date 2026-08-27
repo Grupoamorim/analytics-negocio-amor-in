@@ -42,7 +42,7 @@ SGE_BASE_URL = "https://e-api.sge.com.br"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
-STAGE_FECHOU = "fechou-ou-perdeu"  # mesmo valor usado por STAGE_NAME_TO_ID['stage-6'] no front
+STAGE_FECHOU = "stage-6"  # id real do estágio "Fechou ou Perdeu" no front (FUNNEL_STAGES)
 
 
 def get_headers():
@@ -181,11 +181,12 @@ def main():
     deals_movidos = 0
     unmatched = 0
     vendas_total = 0
+    vinculadas_sge = 0
 
     try:
         turmas = fetch_all_rows(
             sb, "turmas",
-            "id,curso,faculdade,turma,ano_formatura,cidade,empresa,funil_status,fechamento_contrato",
+            "id,curso,faculdade,turma,ano_formatura,cidade,empresa,funil_status,fechamento_contrato,codigo_sge",
             order_col="created_at", desc=True,
         )
         deals = fetch_all_rows(sb, "deals", "id,turma_id,stage")
@@ -228,6 +229,16 @@ def main():
                 unmatched += 1
                 continue
 
+            # Toda turma que a gente acha de verdade numa venda do SGE fica
+            # vinculada (turmas.codigo_sge) - independente de já estar
+            # Convertido ou não. É esse campo que o site usa pra mostrar
+            # "vinculada ao SGE", então precisa ficar em dia sozinho, sem
+            # depender de alguém clicar em "Sincronizar SGE".
+            if matched.get("codigo_sge") != sge_code:
+                sb.table("turmas").update({"codigo_sge": sge_code}).eq("id", matched["id"]).execute()
+                matched["codigo_sge"] = sge_code
+                vinculadas_sge += 1
+
             precisa_atualizar_turma = matched.get("funil_status") != "Convertido"
             deal = deal_por_turma.get(matched["id"])
 
@@ -256,7 +267,8 @@ def main():
 
         msg_final = (
             f"{vendas_total} vendas verificadas | {novas_convertidas} turmas marcadas como Convertido | "
-            f"{deals_movidos} negocios movidos para Fechou (Auto-Win) | {unmatched} sem match"
+            f"{deals_movidos} negocios movidos para Fechou (Auto-Win) | {vinculadas_sge} turmas vinculadas ao SGE | "
+            f"{unmatched} sem match"
         )
         log.info(f"  {msg_final}")
 
@@ -271,7 +283,7 @@ def main():
             sb.table("sync_log").insert({
                 "fonte": "sge_funil_auto_win",
                 "status": status_final,
-                "registros_atualizados": novas_convertidas + deals_movidos,
+                "registros_atualizados": novas_convertidas + deals_movidos + vinculadas_sge,
                 "mensagem": msg_final,
                 "duracao_segundos": round(duracao, 2),
             }).execute()
