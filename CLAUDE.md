@@ -98,6 +98,8 @@ Reúne em abas: Usuários e Cargos, Vendedores/SDR, Turmas (duração de curso),
 
 **Convite de usuário por e-mail (implementado)**: aba Usuários → formulário de convite (e-mail, nome, cargo) chama a Edge Function `invite-user` (`web/supabase/functions/invite-user/index.ts`, deployada no projeto Supabase), que usa a service role key pra chamar `auth.admin.inviteUserByEmail`. O convidado recebe e-mail, clica no link e cai em `/redefinir-senha` (mesma página do fluxo de esqueci-minha-senha) pra definir a própria senha — o admin nunca vê nem define senha de ninguém. Reset de senha de um usuário existente já funciona sem Edge Function (`supabase.auth.resetPasswordForEmail`, não precisa de service role).
 
+**Configuração (SGE/Gemini) é GLOBAL, não por usuário (implementado)**: a tabela `configuracoes` tem uma ÚNICA linha pra todo o site (não mais uma por `user_id`) — RLS permite leitura pra qualquer autenticado e escrita só pra admin (`is_admin()`). Isso resolve o bug de "a API não fica salva": antes, cada login só enxergava a própria linha e via tudo vazio. `useConfiguracoes.ts` sempre busca a primeira linha da tabela; `mirrorToLegacyStorage()` nesse mesmo hook espelha SGE token/CNPJ e chave do Gemini pro localStorage assim que a config carrega (não só quando alguém salva de novo em Admin), pra `geminiApi.ts`/`sgeIntegration.ts` funcionarem em qualquer navegador sem precisar abrir `/admin` primeiro.
+
 ---
 
 ## Pendências abertas / dúvidas em aberto com o Lucas
@@ -113,6 +115,21 @@ Turma com `funil_status = 'Convertido'` cujo Ano de Formatura já passou (ex: "2
 Ao concluir, o job tenta criar a turma seguinte (mesmo curso/faculdade/cidade/empresa) usando a duração do curso cadastrada em Administração → Turmas (tabela `duracao_cursos`, curso [+ faculdade opcional] → anos). **Fórmula confirmada com o Lucas**: `ano_formatura_nova = ano_formatura_antiga + duração_do_curso + 1`, mesmo semestre (ex: Odontologia 5 anos, turma que forma em 2026.2 → gera turma que forma em 2032.2). Se a duração não estiver cadastrada pro curso, a turma só é marcada concluída — a turma nova **não** é criada (não inventamos duração de curso). Duração já cadastrada de fábrica: Odontologia = 5 anos, Direito = 5 anos, Medicina = 6 anos (demais cursos ficam por conta do Lucas cadastrar em Administração → Turmas).
 
 Na tela de Turmas (`Leads.tsx`), turmas formadas ficam ocultas da visualização principal por padrão (checkbox "Mostrar formados" na barra de filtros — o dado nunca é perdido, só sai da visão de trabalho) e exibem uma badge verde "Formado" ao lado do Ano de Formatura. Campo interno no banco continua se chamando `concluida`/`concluida_em` — só o texto exibido pro usuário é "Formado".
+
+## Alunos Fechados automático via SGE (implementado)
+
+`turmas.alunos_fechados` deixou de ser só um número digitado na mão: a função `sync_normalized_from_sge()` no Supabase agora também calcula `alunos_fechados` (= contagem de `clientes` ativos com `turma_id` daquela turma, ou seja, todo mundo que já tem registro financeiro — venda/adesão/conta a receber — no SGE), atualizando sozinha toda vez que chega dado novo do SGE. Isso só funciona pra turmas cujo `turmas.codigo` é o código real do SGE — turmas criadas manualmente pelo CRM recebem um `codigo` placeholder (`turma-<timestamp>-...`) que nunca bate com o SGE, então continuam com o campo editável manualmente (a tela avisa isso com uma nota "ainda não vinculada ao SGE"). `lead.codigoSGE` (mapeado de `turmas.codigo` só quando não é o placeholder) é o jeito de saber se uma turma está de fato vinculada.
+
+**Não tratado ainda**: unificar turmas duplicadas (uma criada manualmente no CRM com dados de funil/contato, outra auto-criada pelo trigger do SGE só com o código financeiro) — isso exigiria migrar `clientes`/`vendas`/`pagamentos` de uma turma pra outra e é arriscado o suficiente pra não fazer sem confirmar com o Lucas caso a caso.
+
+## Transcrições — automação via Fathom, análise de objeções e aprendizado (implementado)
+
+- **Rotina automática na nuvem** ("Fathom -> Transcrições (Amor In)", criada via `RemoteTrigger`/skill `schedule`, roda de hora em hora): lê e-mails do Fathom no Gmail (`Recap for "..."`), casa o título com a convenção `Apresentação - Comissão|Turma - <Nome da turma> (ON)` contra a tabela `turmas` (nunca chuta — pula e reporta se achar 0 ou mais de 1 turma candidata), puxa a transcrição completa via Fathom, analisa com Gemini e grava em `transcricoes`. Reuniões presenciais `(PR-S)`/`(PR-F)` não passam por essa rotina (fluxo manual à parte). Consultar runs/logs via `RemoteTrigger` (`list_runs`/`get_run_log`).
+- **Bug corrigido**: `useTranscricoes.ts` carregava transcrições do Supabase sem reconstruir `geminiAnalysis` (pontos fortes/atenção, resumo, sentimento ficavam sempre vazios na tela mesmo com dado salvo no banco). Corrigido em `mapRowToTranscript`/`mapTranscriptToInsert`/`updateTranscript`.
+- **Painel "Análise de Objeções"** (`Transcripts.tsx`): ranking real (sem clusterização por IA, só contagem de texto exato) das objeções mais citadas pelo Gemini, filtrável por curso/faculdade/mês.
+- **Aprendizado com histórico real**: `analyzeTranscriptWithGemini()` (`geminiApi.ts`) aceita um `historicalContext` opcional — `Transcripts.tsx` monta isso com exemplos reais de reuniões de turmas que já `Convertido`/`Perdido`, pra calibrar a probabilidade com desfecho real em vez de julgar cada transcrição isolada. A rotina automática do Fathom (que roda na nuvem, fora do app) ainda não usa esse contexto histórico — só o fluxo dentro do app.
+- **Auto-parse de título** no upload manual (modal "Reunião Online (Fathom)"): campo opcional de título que, se seguir a convenção acima, preenche tipo de reunião e busca de turma sozinho (`web/src/utils/meetingTitleParser.ts`).
+- **Plaud**: conector MCP existe mas não estava autenticado (só tinha `authenticate`/`complete_authentication`, nenhuma ferramenta real). Pendente o Lucas rodar `/mcp` e autenticar pra saber se dá pra puxar gravações presenciais por data/horário automaticamente.
 
 ---
 
