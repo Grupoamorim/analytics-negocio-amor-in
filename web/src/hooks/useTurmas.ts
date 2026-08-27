@@ -43,14 +43,12 @@ function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | n
     contatoTelefone: row.contato_telefone || '',
     totalAlunos: row.total_alunos || 0,
     alunosFechados: row.alunos_fechados || 0,
-    // Turma está vinculada ao SGE se o próprio código dela já é o código real
-    // do SGE (turmas.codigo, quando não é placeholder) OU se o Auto-Win já
-    // achou e gravou o match em turmas.codigo_sge (turma criada manualmente
-    // no CRM, mas que o SGE já reconhece numa venda).
-    codigoSGE:
-      (row.codigo && !row.codigo.startsWith('turma-') ? row.codigo : undefined) ||
-      row.codigo_sge ||
-      undefined,
+    // Vinculada ao SGE = o Auto-Win (roda sozinho 3x/dia) já achou essa turma
+    // numa venda/conta a receber real do SGE e gravou o código em
+    // turmas.codigo_sge. NÃO usamos turmas.codigo pra isso - ele foi digitado
+    // manualmente num import antigo e nunca foi verificado contra o SGE de
+    // verdade (várias dessas "0017/2024" etc. podem nem existir lá).
+    codigoSGE: row.codigo_sge || undefined,
     quantidadeComissao: row.quantidade_comissao ?? undefined,
     metaContratos: row.meta_contratos ?? undefined,
     fotoUrl: row.foto_url || undefined,
