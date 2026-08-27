@@ -13,8 +13,8 @@ const LOCAL_STORAGE_KEY = 'crm_leads'
 function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | null } | null }): Lead {
   return {
     id: row.id,
-    curso: row.curso,
-    faculdade: row.faculdade,
+    curso: row.curso || '',
+    faculdade: row.faculdade || '',
     turma: row.turma || 'Turma 0',
     anoFormatura: row.ano_formatura || '2027.1',
     cidade: row.cidade || '',

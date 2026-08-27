@@ -45,6 +45,14 @@ const FILTER_DEFS: { key: FilterKey; label: string }[] = [
 const SEM_PIPELINE_ID = 'sem-pipeline'
 
 /**
+ * Curso/faculdade só entra no Market Share se já tiver pelo menos essa
+ * quantidade de turmas cadastradas — abaixo disso não representa presença
+ * real naquele mercado (foi só uma turma que apareceu e fechou, não um
+ * mercado que a gente ataca de fato).
+ */
+const MIN_TURMAS_MARKET_SHARE = 8
+
+/**
  * Lista de opções do filtro "Status do Funil": os 6 estágios oficiais
  * + "Sem pipeline" (turmas sem deal associado).
  */
@@ -179,6 +187,18 @@ export default function MarketMap() {
     })
   }, [leads, filters, selectedStages, stageByLeadId])
 
+  // Leads filtrados só pelos dropdowns (curso/faculdade/cidade/ano), sem o filtro de
+  // estágio do funil - é o universo certo pro Market Share, que precisa de TODAS as
+  // turmas do segmento (fechadas ou não) pra calcular participação real.
+  const filteredForShare = useMemo(() => {
+    return leads.filter((l) => {
+      for (const key of FILTER_DEFS.map((d) => d.key)) {
+        if (filters[key] && l[key] !== filters[key]) return false
+      }
+      return true
+    })
+  }, [leads, filters])
+
   const hasActiveFilter = Object.values(filters).some(Boolean) || selectedStages.length > 0
 
   const toggleStage = (stageId: string) => {
@@ -195,21 +215,37 @@ export default function MarketMap() {
   const totalFaculdades = new Set(filtered.map((l) => l.faculdade)).size
   const totalCidades = new Set(filtered.map((l) => l.cidade)).size
 
-  // ---- Market Share por Curso (leads por curso / total de leads) ----
+  // ---- Market Share por Curso (turmas convertidas / total de turmas daquele curso) ----
   const shareCurso = useMemo(() => {
-    const m = countBy(filtered, (l) => l.curso)
-    return Array.from(m.entries())
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'))
-  }, [filtered])
+    const totalPorCurso = countBy(filteredForShare, (l) => l.curso || 'Não informado')
+    const ganhasPorCurso = countBy(
+      filteredForShare.filter((l) => l.status === 'Convertido'),
+      (l) => l.curso || 'Não informado',
+    )
+    return Array.from(totalPorCurso.entries())
+      .map(([label, totalCount]) => {
+        const count = ganhasPorCurso.get(label) ?? 0
+        return { label, count, totalCount, pct: totalCount > 0 ? (count / totalCount) * 100 : 0 }
+      })
+      .filter((it) => it.totalCount >= MIN_TURMAS_MARKET_SHARE)
+      .sort((a, b) => b.totalCount - a.totalCount || b.pct - a.pct || a.label.localeCompare(b.label, 'pt-BR'))
+  }, [filteredForShare])
 
-  // ---- Market Share por Faculdade (leads por faculdade / total de leads) ----
+  // ---- Market Share por Faculdade (turmas convertidas / total de turmas daquela faculdade) ----
   const shareFaculdade = useMemo(() => {
-    const m = countBy(filtered, (l) => l.faculdade)
-    return Array.from(m.entries())
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'))
-  }, [filtered])
+    const totalPorFaculdade = countBy(filteredForShare, (l) => l.faculdade || 'Não informado')
+    const ganhasPorFaculdade = countBy(
+      filteredForShare.filter((l) => l.status === 'Convertido'),
+      (l) => l.faculdade || 'Não informado',
+    )
+    return Array.from(totalPorFaculdade.entries())
+      .map(([label, totalCount]) => {
+        const count = ganhasPorFaculdade.get(label) ?? 0
+        return { label, count, totalCount, pct: totalCount > 0 ? (count / totalCount) * 100 : 0 }
+      })
+      .filter((it) => it.totalCount >= MIN_TURMAS_MARKET_SHARE)
+      .sort((a, b) => b.totalCount - a.totalCount || b.pct - a.pct || a.label.localeCompare(b.label, 'pt-BR'))
+  }, [filteredForShare])
 
   // ---- Grade Cidade × Curso (contagem de TURMAS distintas) ----
   const cidadeCurso = useMemo(() => {
@@ -480,17 +516,17 @@ export default function MarketMap() {
             <Section
               icon={<BarChart3 className="w-4 h-4" />}
               title="Market Share por Curso"
-              subtitle={`Participação de mercado — leads por curso sobre o total de ${totalLeads} leads.`}
+              subtitle={`Participação de mercado — turmas convertidas (fechadas com a gente) sobre o total de turmas conhecidas daquele curso. Ordenado por volume; só entram cursos com ${MIN_TURMAS_MARKET_SHARE}+ turmas cadastradas.`}
             >
-              <ShareBarList items={shareCurso} total={totalLeads} accent />
+              <ShareBarList items={shareCurso} accent />
             </Section>
 
             <Section
               icon={<Building2 className="w-4 h-4" />}
               title="Market Share por Faculdade"
-              subtitle={`Participação de mercado — leads por faculdade sobre o total de ${totalLeads} leads.`}
+              subtitle={`Participação de mercado — turmas convertidas sobre o total de turmas conhecidas daquela faculdade. Ordenado por volume; só entram faculdades com ${MIN_TURMAS_MARKET_SHARE}+ turmas cadastradas.`}
             >
-              <ShareBarList items={shareFaculdade} total={totalLeads} />
+              <ShareBarList items={shareFaculdade} />
             </Section>
           </div>
 
@@ -623,44 +659,39 @@ function Section({
  */
 function ShareBarList({
   items,
-  total,
   accent,
 }: {
-  items: { label: string; count: number }[]
-  total: number
+  items: { label: string; count: number; totalCount: number; pct: number }[]
   accent?: boolean
 }) {
   if (items.length === 0) {
     return <p className="text-xs text-slate-500 py-4 text-center">Sem dados.</p>
   }
-  const maxCount = items.length ? items[0].count : 0
   return (
     <div className="space-y-2.5">
-      {items.map((it) => {
-        const pct = total > 0 ? (it.count / total) * 100 : 0
-        const barWidth = maxCount > 0 ? (it.count / maxCount) * 100 : 0
-        return (
-          <div key={it.label} className="flex items-center gap-3">
-            <div className="w-28 sm:w-36 shrink-0 text-xs text-slate-300 truncate" title={it.label}>
-              {it.label}
-            </div>
-            <div className="flex-1 h-6 rounded-md bg-[#0a0f14] overflow-hidden border border-white/[0.04]">
-              <div
-                className={`h-full rounded-md ${
-                  accent
-                    ? 'bg-gradient-to-r from-orange-600 to-orange-500'
-                    : 'bg-gradient-to-r from-orange-600 to-orange-500'
-                }`}
-                style={{ width: `${Math.max(barWidth, 4)}%` }}
-              />
-            </div>
-            <div className="shrink-0 w-24 text-right">
-              <span className="text-xs font-semibold text-white">{it.count}</span>
-              <span className="text-[11px] text-slate-400 ml-1.5">({pct.toFixed(1)}%)</span>
-            </div>
+      {items.map((it) => (
+        <div key={it.label} className="flex items-center gap-3">
+          <div className="w-28 sm:w-36 shrink-0 text-xs text-slate-300 truncate" title={it.label}>
+            {it.label}
           </div>
-        )
-      })}
+          <div className="flex-1 h-6 rounded-md bg-[#0a0f14] overflow-hidden border border-white/[0.04]">
+            <div
+              className={`h-full rounded-md ${
+                accent
+                  ? 'bg-gradient-to-r from-orange-600 to-orange-500'
+                  : 'bg-gradient-to-r from-orange-600 to-orange-500'
+              }`}
+              style={{ width: `${it.pct > 0 ? Math.max(it.pct, 4) : 0}%` }}
+            />
+          </div>
+          <div className="shrink-0 w-24 text-right">
+            <span className="text-xs font-semibold text-white">{it.pct.toFixed(1)}%</span>
+            <span className="text-[11px] text-slate-400 ml-1.5">
+              ({it.count}/{it.totalCount})
+            </span>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
