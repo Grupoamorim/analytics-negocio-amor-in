@@ -46,19 +46,22 @@ type NavItem = { path: string; label: string; icon: typeof LayoutDashboard }
 const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
   {
     section: null,
-    items: [{ path: '/', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [
+      { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+      // Adesões é aba híbrida (comercial + financeiro) — fica solta abaixo do Dashboard.
+      { path: '/adesoes', label: 'Adesões', icon: UserPlus },
+    ],
   },
   {
     section: 'Comercial',
     items: [
+      { path: '/captacao', label: 'Mapa de Mercado', icon: QrCode },
       { path: '/pipeline', label: 'Funil Amor In', icon: Kanban },
       { path: '/leads', label: 'Turmas', icon: GraduationCap },
       { path: '/contatos', label: 'Contatos', icon: Users },
       { path: '/probabilidade', label: 'Probabilidade', icon: BrainCircuit },
       { path: '/transcricoes', label: 'Transcrições', icon: FileText },
       { path: '/notas', label: 'Notas', icon: StickyNote },
-      { path: '/captacao', label: 'Captação e Mapa de Mercado', icon: QrCode },
-      { path: '/adesoes', label: 'Adesões', icon: UserPlus },
     ],
   },
   {
