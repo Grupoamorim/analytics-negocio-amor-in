@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { useAuth } from '@/hooks/useAuth'
+import { useAcesso } from '@/context/AcessoContext'
+import { PAGINAS, PAGINAS_PADRAO_COMERCIAL } from '@/utils/paginas'
 import { translateAuthError } from '@/lib/authErrors'
 import {
   saveGeminiApiKey,
@@ -104,10 +106,17 @@ export default function Admin() {
   const [carregandoPerfis, setCarregandoPerfis] = useState(true)
   const [salvandoId, setSalvandoId] = useState<string | null>(null)
 
+  // Acessos por usuário (quais abas do menu cada não-admin vê)
+  const { acessosPorUsuario, salvarAcessoUsuario, recarregar: recarregarAcesso } = useAcesso()
+  const [editandoAcessoId, setEditandoAcessoId] = useState<string | null>(null)
+  const [rascunhoAcesso, setRascunhoAcesso] = useState<string[]>([])
+  const [salvandoAcessoId, setSalvandoAcessoId] = useState<string | null>(null)
+
   // Convite de usuário por e-mail
   const [conviteEmail, setConviteEmail] = useState('')
   const [conviteNome, setConviteNome] = useState('')
   const [conviteRole, setConviteRole] = useState<Perfil['role']>('membro')
+  const [convitePaginas, setConvitePaginas] = useState<string[]>(PAGINAS_PADRAO_COMERCIAL)
   const [enviandoConvite, setEnviandoConvite] = useState(false)
   const [resetandoSenhaId, setResetandoSenhaId] = useState<string | null>(null)
 
@@ -187,6 +196,38 @@ export default function Admin() {
     setSalvandoId(null)
   }
 
+  function abrirEditorAcesso(p: Perfil) {
+    const atual = acessosPorUsuario[p.id]
+    setRascunhoAcesso(atual && atual.length ? atual : PAGINAS_PADRAO_COMERCIAL)
+    setEditandoAcessoId((cur) => (cur === p.id ? null : p.id))
+  }
+
+  function toggleRascunhoPagina(path: string) {
+    setRascunhoAcesso((prev) =>
+      prev.includes(path) ? prev.filter((x) => x !== path) : [...prev, path],
+    )
+  }
+
+  async function salvarAcesso(p: Perfil) {
+    setSalvandoAcessoId(p.id)
+    try {
+      await salvarAcessoUsuario(p.id, rascunhoAcesso)
+      toast({
+        title: 'Acessos atualizados',
+        description: `${p.nome || p.email} agora vê ${rascunhoAcesso.length} aba(s) do menu.`,
+      })
+      setEditandoAcessoId(null)
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao salvar acessos',
+        description: err.message || 'Tente de novo.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSalvandoAcessoId(null)
+    }
+  }
+
   async function handleResetarSenha(p: Perfil) {
     if (!confirm(`Enviar e-mail de redefinição de senha pra ${p.email}?`)) return
     setResetandoSenhaId(p.id)
@@ -221,7 +262,12 @@ export default function Admin() {
       if (!token) throw new Error('Sessão expirada, faça login novamente.')
 
       const { data, error } = await supabase.functions.invoke('invite-user', {
-        body: { email, nome: conviteNome.trim(), role: conviteRole },
+        body: {
+          email,
+          nome: conviteNome.trim(),
+          role: conviteRole,
+          paginas: conviteRole === 'admin' ? [] : convitePaginas,
+        },
         headers: { Authorization: `Bearer ${token}` },
       })
       if (error) throw error
@@ -234,8 +280,10 @@ export default function Admin() {
       setConviteEmail('')
       setConviteNome('')
       setConviteRole('membro')
+      setConvitePaginas(PAGINAS_PADRAO_COMERCIAL)
       const { data: perfisAtualizados } = await supabase.from('profiles').select('*').order('created_at')
       setPerfis((perfisAtualizados || []) as Perfil[])
+      recarregarAcesso()
     } catch (err: any) {
       toast({
         title: 'Erro ao convidar',
@@ -754,6 +802,37 @@ export default function Admin() {
               >
                 {enviandoConvite ? 'Enviando...' : 'Convidar'}
               </Button>
+
+              {conviteRole === 'admin' ? (
+                <p className="w-full text-[11px] text-slate-500">
+                  Administrador vê todas as abas e o Modo Administrador.
+                </p>
+              ) : (
+                <div className="w-full">
+                  <p className="text-[11px] text-slate-400 mb-1.5">
+                    Abas do menu que essa pessoa vai poder ver (dá pra mudar depois):
+                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                    {PAGINAS.map((pg) => (
+                      <label key={pg.path} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={convitePaginas.includes(pg.path)}
+                          onChange={() =>
+                            setConvitePaginas((prev) =>
+                              prev.includes(pg.path)
+                                ? prev.filter((x) => x !== pg.path)
+                                : [...prev, pg.path],
+                            )
+                          }
+                          className="accent-orange-500"
+                        />
+                        {pg.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </form>
 
             {carregandoPerfis ? (
@@ -769,38 +848,104 @@ export default function Admin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {perfis.map((p) => (
-                    <tr key={p.id} className="border-b border-white/[0.04]">
-                      <td className="py-2.5 text-slate-200">
-                        {p.nome} {p.id === user?.id && <span className="text-orange-400 text-xs">(você)</span>}
-                      </td>
-                      <td className="py-2.5 text-slate-400">{p.email}</td>
-                      <td className="py-2.5">
-                        <select
-                          value={p.role}
-                          disabled={salvandoId === p.id}
-                          onChange={(e) => mudarCargo(p.id, e.target.value as Perfil['role'])}
-                          className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1 text-slate-200 text-xs"
-                        >
-                          {CARGOS.map((c) => (
-                            <option key={c.value} value={c.value}>
-                              {c.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleResetarSenha(p)}
-                          disabled={resetandoSenhaId === p.id}
-                          className="text-[11px] text-slate-400 hover:text-orange-400 underline decoration-dotted"
-                        >
-                          {resetandoSenhaId === p.id ? 'Enviando...' : 'Resetar senha'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {perfis.map((p) => {
+                    const ehAdmin = p.role === 'admin'
+                    const acessoAtual = acessosPorUsuario[p.id]
+                    const resumoAcesso = ehAdmin
+                      ? 'Todas as abas'
+                      : `${(acessoAtual && acessoAtual.length ? acessoAtual : PAGINAS_PADRAO_COMERCIAL).length} de ${PAGINAS.length} abas`
+                    return (
+                      <Fragment key={p.id}>
+                        <tr className="border-b border-white/[0.04]">
+                          <td className="py-2.5 text-slate-200">
+                            {p.nome} {p.id === user?.id && <span className="text-orange-400 text-xs">(você)</span>}
+                          </td>
+                          <td className="py-2.5 text-slate-400">{p.email}</td>
+                          <td className="py-2.5">
+                            <select
+                              value={p.role}
+                              disabled={salvandoId === p.id}
+                              onChange={(e) => mudarCargo(p.id, e.target.value as Perfil['role'])}
+                              className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1 text-slate-200 text-xs"
+                            >
+                              {CARGOS.map((c) => (
+                                <option key={c.value} value={c.value}>
+                                  {c.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="py-2.5 text-right space-x-3 whitespace-nowrap">
+                            {!ehAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => abrirEditorAcesso(p)}
+                                className="text-[11px] text-slate-400 hover:text-orange-400 underline decoration-dotted"
+                              >
+                                {editandoAcessoId === p.id ? 'Fechar acessos' : `Acessos (${resumoAcesso})`}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleResetarSenha(p)}
+                              disabled={resetandoSenhaId === p.id}
+                              className="text-[11px] text-slate-400 hover:text-orange-400 underline decoration-dotted"
+                            >
+                              {resetandoSenhaId === p.id ? 'Enviando...' : 'Resetar senha'}
+                            </button>
+                          </td>
+                        </tr>
+                        {!ehAdmin && editandoAcessoId === p.id && (
+                          <tr className="border-b border-white/[0.04] bg-[#0a0f14]/60">
+                            <td colSpan={4} className="py-3 px-1">
+                              <p className="text-[11px] text-slate-400 mb-2">
+                                Marque as abas que <strong className="text-slate-200">{p.nome || p.email}</strong> pode ver.
+                                Nas telas comerciais ele começa vendo só o que é dele — pode tirar o filtro, mas volta ao dele a cada atualização.
+                              </p>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
+                                {PAGINAS.map((pg) => (
+                                  <label key={pg.path} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                                    <input
+                                      type="checkbox"
+                                      checked={rascunhoAcesso.includes(pg.path)}
+                                      onChange={() => toggleRascunhoPagina(pg.path)}
+                                      className="accent-orange-500"
+                                    />
+                                    {pg.label}
+                                    <span className="text-slate-600">· {pg.grupo}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  onClick={() => salvarAcesso(p)}
+                                  disabled={salvandoAcessoId === p.id}
+                                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs h-8"
+                                >
+                                  {salvandoAcessoId === p.id ? 'Salvando...' : 'Salvar acessos'}
+                                </Button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRascunhoAcesso(PAGINAS.map((x) => x.path))}
+                                  className="text-[11px] text-slate-400 hover:text-white underline decoration-dotted"
+                                >
+                                  Marcar todas
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRascunhoAcesso(PAGINAS_PADRAO_COMERCIAL)}
+                                  className="text-[11px] text-slate-400 hover:text-white underline decoration-dotted"
+                                >
+                                  Padrão comercial
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             )}

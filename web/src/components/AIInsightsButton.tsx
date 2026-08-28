@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Sparkles, X, Loader2, Key, Bot, Send, Download, FileSpreadsheet, User } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
+import { useAcesso } from '@/context/AcessoContext'
 import {
   getGeminiApiKey,
   getGeminiModel,
@@ -253,6 +254,7 @@ function buildInlineSuggestions(
 export default function AIInsightsButton({ context, data, className = '' }: AIInsightsButtonProps) {
   const location = useLocation()
   const crm = useCRM()
+  const { podeVer } = useAcesso()
 
   // Se context foi passado, renderiza o botão inline clássico
   const isInline = Boolean(context)
@@ -456,14 +458,17 @@ acadêmico), e sugira uma ação para os próximos meses.`,
     if (snapshot === null && !snapshotLoading) {
       setSnapshotLoading(true)
       try {
-        const snap = await buildBusinessDataSnapshot({
-          leads: crm.leads,
-          deals: crm.deals,
-          contacts: crm.contacts,
-          notes: crm.notes,
-          transcripts: crm.transcripts,
-          tasks: crm.tasks,
-        })
+        const snap = await buildBusinessDataSnapshot(
+          {
+            leads: crm.leads,
+            deals: crm.deals,
+            contacts: crm.contacts,
+            notes: crm.notes,
+            transcripts: crm.transcripts,
+            tasks: crm.tasks,
+          },
+          podeVer('/financeiro'),
+        )
         setSnapshot(snap)
       } catch {
         setSnapshot('Falha ao carregar dados do negócio.')

@@ -49,7 +49,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Só administradores podem convidar usuários' }, 403)
   }
 
-  let body: { email?: string; nome?: string; role?: string }
+  let body: { email?: string; nome?: string; role?: string; paginas?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -59,6 +59,9 @@ Deno.serve(async (req: Request) => {
   const email = (body.email || '').trim().toLowerCase()
   const nome = (body.nome || '').trim()
   const role = (body.role || 'membro').trim()
+  const paginas = Array.isArray(body.paginas)
+    ? (body.paginas as unknown[]).filter((p): p is string => typeof p === 'string')
+    : null
   const CARGOS_VALIDOS = ['admin', 'financeiro', 'comercial', 'membro']
 
   if (!email || !email.includes('@')) return json({ error: 'E-mail inválido' }, 400)
@@ -81,6 +84,13 @@ Deno.serve(async (req: Request) => {
   // aqui em cima.
   if (role !== 'membro') {
     await adminClient.from('profiles').update({ role }).eq('id', invited.user.id)
+  }
+
+  // Abas do menu que o admin liberou pra esse usuário (não se aplica a admin).
+  if (role !== 'admin' && paginas) {
+    await adminClient
+      .from('acesso_paginas')
+      .upsert({ user_id: invited.user.id, paginas, updated_at: new Date().toISOString() })
   }
 
   return json({ ok: true, userId: invited.user.id })

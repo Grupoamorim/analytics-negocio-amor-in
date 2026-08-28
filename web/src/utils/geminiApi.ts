@@ -97,37 +97,58 @@ interface GeminiRequestBody {
   }
 }
 
-/** Chamada de baixo nível ao endpoint generateContent do Gemini. */
-async function postGemini(body: GeminiRequestBody, apiKey?: string, model?: string): Promise<string> {
-  const key = (apiKey || getGeminiApiKey()).trim()
-  if (!key) {
-    throw new Error('Chave API Gemini não configurada. Configure em Configurações.')
+/** Tempo máximo (ms) que esperamos o Gemini responder antes de abortar a chamada. */
+const GEMINI_TIMEOUT_MS = 30000
+/** Quantas vezes tentar de novo em erro transitório (429/500/503/timeout/rede). */
+const GEMINI_MAX_RETRIES = 2
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Uma tentativa de chamada ao endpoint generateContent, com timeout via AbortController. */
+async function postGeminiOnce(
+  endpoint: string,
+  body: GeminiRequestBody,
+): Promise<string> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
+
+  let response: Response
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      const e: any = new Error(
+        `A IA demorou mais de ${Math.round(GEMINI_TIMEOUT_MS / 1000)}s para responder e a chamada foi cancelada. Tente de novo.`,
+      )
+      e.retryable = true
+      throw e
+    }
+    const e: any = new Error('Falha de conexão ao consultar a IA. Verifique a internet e tente de novo.')
+    e.retryable = true
+    throw e
+  } finally {
+    clearTimeout(timer)
   }
-  const modelId = model || getGeminiModel()
-
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(
-    key,
-  )}`
-
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
 
   if (!response.ok) {
     let errorMsg = `Erro na API Gemini (${response.status})`
     try {
       const errJson = await response.json()
-      if (errJson.error?.message) {
-        errorMsg = errJson.error.message
-      }
+      if (errJson.error?.message) errorMsg = errJson.error.message
     } catch {
       // ignore
     }
-    throw new Error(errorMsg)
+    const e: any = new Error(errorMsg)
+    // 429 (limite) e 5xx (instabilidade do Google) valem uma nova tentativa.
+    e.retryable = response.status === 429 || response.status >= 500
+    throw e
   }
 
   const data = await response.json()
@@ -140,6 +161,31 @@ async function postGemini(body: GeminiRequestBody, apiKey?: string, model?: stri
   }
 
   return candidate
+}
+
+/** Chamada de baixo nível ao endpoint generateContent do Gemini, com timeout e retry. */
+async function postGemini(body: GeminiRequestBody, apiKey?: string, model?: string): Promise<string> {
+  const key = (apiKey || getGeminiApiKey()).trim()
+  if (!key) {
+    throw new Error('Chave API Gemini não configurada. Configure em Configurações.')
+  }
+  const modelId = model || getGeminiModel()
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(
+    key,
+  )}`
+
+  let lastErr: any
+  for (let tentativa = 0; tentativa <= GEMINI_MAX_RETRIES; tentativa++) {
+    try {
+      return await postGeminiOnce(endpoint, body)
+    } catch (err: any) {
+      lastErr = err
+      if (!err?.retryable || tentativa === GEMINI_MAX_RETRIES) break
+      // Backoff curto e crescente (0.8s, 1.6s) antes de tentar de novo.
+      await sleep(800 * (tentativa + 1))
+    }
+  }
+  throw lastErr
 }
 
 /**
@@ -179,7 +225,14 @@ export async function callGeminiChat(
     {
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: messages.map((m) => ({ role: m.role, parts: [{ text: m.content }] })),
-      generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+      // thinkingBudget: 0 desliga o "raciocínio" interno dos modelos 2.5 — no chat
+      // isso é o que mais pesava no tempo de resposta (a IA "pensava" por vários
+      // segundos antes de escrever). Sem ele o AMOR IN IA responde muito mais rápido.
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 2048,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     },
     apiKey,
     model,

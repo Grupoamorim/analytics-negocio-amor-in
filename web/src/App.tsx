@@ -1,12 +1,11 @@
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CRMProvider } from '@/context/CRMContext'
+import { AcessoProvider, useAcesso } from '@/context/AcessoContext'
 import { useAuth } from '@/hooks/useAuth'
-import { supabase } from '@/lib/supabase/client'
 import Layout from '@/components/Layout'
 
 // Páginas reais e funcionais
@@ -29,94 +28,88 @@ import Projecoes from '@/pages/Projecoes'
 import Relatorios from '@/pages/Relatorios'
 import Admin from '@/pages/Admin'
 
+const TELA_CARREGANDO = (
+  <div className="min-h-screen bg-[#0a0f14] flex items-center justify-center text-slate-400 text-sm">
+    Carregando...
+  </div>
+)
+
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0f14] flex items-center justify-center text-slate-400 text-sm">
-        Carregando...
-      </div>
-    )
-  }
+  if (loading) return TELA_CARREGANDO
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
+/** Bloqueia acesso direto (inclusive digitando a URL) a abas que o admin não liberou pro usuário. */
+function RotaComPermissao({ path, children }: { path: string; children: ReactNode }) {
+  const { carregando, podeVer, primeiraPaginaPermitida } = useAcesso()
+  if (carregando) return TELA_CARREGANDO
+  if (!podeVer(path)) return <Navigate to={primeiraPaginaPermitida} replace />
+  return <>{children}</>
+}
+
 function AdminRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth()
-  const [checando, setChecando] = useState(true)
-  const [ehAdmin, setEhAdmin] = useState(false)
-
-  useEffect(() => {
-    if (!user) return
-    supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-      .then(({ data }) => {
-        setEhAdmin(data?.role === 'admin')
-        setChecando(false)
-      })
-  }, [user])
-
-  if (loading || checando) {
+  const { carregando, isAdmin, primeiraPaginaPermitida } = useAcesso()
+  if (carregando) {
     return (
       <div className="min-h-screen bg-[#0a0f14] flex items-center justify-center text-slate-400 text-sm">
         Verificando permissões...
       </div>
     )
   }
-  if (!ehAdmin) return <Navigate to="/" replace />
+  if (!isAdmin) return <Navigate to={primeiraPaginaPermitida} replace />
   return <>{children}</>
 }
 
 const App = () => (
-  <CRMProvider>
-    <BrowserRouter>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/redefinir-senha" element={<RedefinirSenha />} />
-          <Route
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/" element={<Index />} />
-            <Route path="/pipeline" element={<Pipeline />} />
-            <Route path="/leads" element={<Leads />} />
-            <Route path="/contatos" element={<Contatos />} />
-            <Route path="/probabilidade" element={<Probability />} />
-            <Route path="/transcricoes" element={<Transcripts />} />
-            <Route path="/notas" element={<Notes />} />
-            <Route path="/captacao" element={<Captacao />} />
-            <Route path="/mapa-mercado" element={<Navigate to="/captacao?tab=mapa" replace />} />
-            <Route path="/adesoes" element={<Adesoes />} />
-            <Route path="/financeiro" element={<Financeiro />} />
-            <Route path="/dre" element={<DRE />} />
-            <Route path="/projecoes" element={<Projecoes />} />
-            <Route path="/relatorios" element={<Relatorios />} />
-            <Route path="/configuracoes" element={<Navigate to="/admin" replace />} />
+  <AcessoProvider>
+    <CRMProvider>
+      <BrowserRouter>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/redefinir-senha" element={<RedefinirSenha />} />
             <Route
-              path="/admin"
               element={
-                <AdminRoute>
-                  <Admin />
-                </AdminRoute>
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
               }
-            />
-          </Route>
-          <Route path="/captacao/form" element={<CaptacaoForm />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </TooltipProvider>
-    </BrowserRouter>
-  </CRMProvider>
+            >
+              <Route path="/" element={<RotaComPermissao path="/"><Index /></RotaComPermissao>} />
+              <Route path="/pipeline" element={<RotaComPermissao path="/pipeline"><Pipeline /></RotaComPermissao>} />
+              <Route path="/leads" element={<RotaComPermissao path="/leads"><Leads /></RotaComPermissao>} />
+              <Route path="/contatos" element={<RotaComPermissao path="/contatos"><Contatos /></RotaComPermissao>} />
+              <Route path="/probabilidade" element={<RotaComPermissao path="/probabilidade"><Probability /></RotaComPermissao>} />
+              <Route path="/transcricoes" element={<RotaComPermissao path="/transcricoes"><Transcripts /></RotaComPermissao>} />
+              <Route path="/notas" element={<RotaComPermissao path="/notas"><Notes /></RotaComPermissao>} />
+              <Route path="/captacao" element={<RotaComPermissao path="/captacao"><Captacao /></RotaComPermissao>} />
+              <Route path="/mapa-mercado" element={<Navigate to="/captacao?tab=mapa" replace />} />
+              <Route path="/adesoes" element={<RotaComPermissao path="/adesoes"><Adesoes /></RotaComPermissao>} />
+              <Route path="/financeiro" element={<RotaComPermissao path="/financeiro"><Financeiro /></RotaComPermissao>} />
+              <Route path="/dre" element={<RotaComPermissao path="/dre"><DRE /></RotaComPermissao>} />
+              <Route path="/projecoes" element={<RotaComPermissao path="/projecoes"><Projecoes /></RotaComPermissao>} />
+              <Route path="/relatorios" element={<RotaComPermissao path="/relatorios"><Relatorios /></RotaComPermissao>} />
+              <Route path="/configuracoes" element={<Navigate to="/admin" replace />} />
+              <Route
+                path="/admin"
+                element={
+                  <AdminRoute>
+                    <Admin />
+                  </AdminRoute>
+                }
+              />
+            </Route>
+            <Route path="/captacao/form" element={<CaptacaoForm />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </TooltipProvider>
+      </BrowserRouter>
+    </CRMProvider>
+  </AcessoProvider>
 )
 
 export default App

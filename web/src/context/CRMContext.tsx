@@ -25,6 +25,7 @@ import { useMembers } from '@/hooks/useMembers'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useAprendizadoEstudo } from '@/hooks/useAprendizadoEstudo'
 import { useAuth } from '@/hooks/useAuth'
+import { useAcesso } from '@/context/AcessoContext'
 import { supabase } from '@/lib/supabase/client'
 import {
   computeDealProbability,
@@ -809,12 +810,52 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     configLoading
   const error = turmasError || dealsError || contatosError || notasError || transcricoesError
 
+  // --- Filtro pessoal "Responsável" ---------------------------------------
+  // Recorta o que cada usuário enxerga (padrão: só as coisas dele). O motor de
+  // probabilidade e demais cálculos acima continuam rodando sobre as listas
+  // completas — aqui só filtramos o que sai para as telas.
+  const { minhaVisao, filtroPessoalAtivo } = useAcesso()
+
+  const leadsVisiveis = useMemo(() => {
+    if (!filtroPessoalAtivo) return leads
+    return leads.filter((l) => minhaVisao({ nomes: [l.closer, l.sdr], ownerId: l.ownerId }))
+  }, [leads, filtroPessoalAtivo, minhaVisao])
+
+  const idsLeadsVisiveis = useMemo(() => new Set(leadsVisiveis.map((l) => l.id)), [leadsVisiveis])
+
+  const dealsVisiveis = useMemo(() => {
+    if (!filtroPessoalAtivo) return deals
+    return deals.filter(
+      (d) =>
+        (d.leadId && idsLeadsVisiveis.has(d.leadId)) ||
+        minhaVisao({
+          nomes: [d.assignedTo, (d as unknown as { closer?: string }).closer, (d as unknown as { sdr?: string }).sdr],
+          ownerId: d.ownerId,
+        }),
+    )
+  }, [deals, filtroPessoalAtivo, idsLeadsVisiveis, minhaVisao])
+
+  const contactsVisiveis = useMemo(() => {
+    if (!filtroPessoalAtivo) return contacts
+    return contacts.filter((c) => !c.leadId || idsLeadsVisiveis.has(c.leadId))
+  }, [contacts, filtroPessoalAtivo, idsLeadsVisiveis])
+
+  const notesVisiveis = useMemo(() => {
+    if (!filtroPessoalAtivo) return notes
+    return notes.filter((n) => !n.leadId || idsLeadsVisiveis.has(n.leadId))
+  }, [notes, filtroPessoalAtivo, idsLeadsVisiveis])
+
+  const transcriptsVisiveis = useMemo(() => {
+    if (!filtroPessoalAtivo) return transcripts
+    return transcripts.filter((t) => !t.leadId || idsLeadsVisiveis.has(t.leadId))
+  }, [transcripts, filtroPessoalAtivo, idsLeadsVisiveis])
+
   const value: CRMContextType = {
-    leads,
-    deals,
-    contacts,
-    notes,
-    transcripts,
+    leads: leadsVisiveis,
+    deals: dealsVisiveis,
+    contacts: contactsVisiveis,
+    notes: notesVisiveis,
+    transcripts: transcriptsVisiveis,
     activities,
     settings,
     members,

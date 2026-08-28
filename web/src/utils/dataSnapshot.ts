@@ -130,16 +130,25 @@ ${turmasLines || '  - nenhuma turma cadastrada'}
 }
 
 /**
- * Monta o snapshot completo (CRM + financeiro) usado como base factual para o chat "AMOR IN IA".
- * Sempre busca o financeiro fresco do Supabase; o CRM vem do contexto já carregado (evita duplicar rede).
+ * Monta o snapshot completo usado como base factual para o chat "AMOR IN IA".
+ * O CRM vem do contexto já carregado (evita duplicar rede). O bloco financeiro
+ * (4 consultas paginadas no Supabase) só é montado quando `incluirFinanceiro`
+ * é true — para usuários não-admin ele é pulado, o que deixa a IA bem mais
+ * rápida e mantém os números da empresa fora da visão de quem não tem acesso.
  */
-export async function buildBusinessDataSnapshot(crm: CrmSnapshotInput): Promise<string> {
+export async function buildBusinessDataSnapshot(
+  crm: CrmSnapshotInput,
+  incluirFinanceiro = true,
+): Promise<string> {
+  const crmSnapshot = buildCrmSnapshot(crm)
+  if (!incluirFinanceiro) {
+    return `${crmSnapshot}\n\n## Financeiro\n  - Você não tem acesso aos dados financeiros da empresa.`
+  }
   let financeiro = '## Financeiro\n  - Não foi possível carregar os dados financeiros agora.'
   try {
     financeiro = await buildFinanceiroSnapshot()
   } catch (e) {
     console.error('Erro ao buscar snapshot financeiro:', e)
   }
-  const crmSnapshot = buildCrmSnapshot(crm)
   return `${crmSnapshot}\n\n${financeiro}`
 }

@@ -33,9 +33,10 @@ import { useCRM } from '@/context/CRMContext'
 import { TeamMember, CARGO_LABEL } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/useAuth'
+import { useAcesso } from '@/context/AcessoContext'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
-import { supabase } from '@/lib/supabase/client'
 import GlobalAIFoatingButton from '@/components/AIInsightsButton'
+import ResponsavelFilterBar from '@/components/ResponsavelFilterBar'
 import { listarNotificacoes, marcarNotificacaoLida, type Notificacao } from '@/utils/notificacoes'
 
 type NavItem = { path: string; label: string; icon: typeof LayoutDashboard }
@@ -80,6 +81,18 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
 
 const NAVIGATION_ITEMS: NavItem[] = NAVIGATION_SECTIONS.flatMap((s) => s.items)
 
+// Telas onde o filtro pessoal "Responsável" faz sentido (comercial + adesões).
+const PATHS_COM_FILTRO_RESPONSAVEL = new Set([
+  '/',
+  '/adesoes',
+  '/pipeline',
+  '/leads',
+  '/contatos',
+  '/probabilidade',
+  '/transcricoes',
+  '/notas',
+])
+
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -87,19 +100,8 @@ export default function Layout() {
   const { toast } = useToast()
   const { user, signOut } = useAuth()
   const { config: configuracoes } = useConfiguracoes()
-  const [perfil, setPerfil] = useState<{ nome: string; role: string } | null>(null)
-
-  useEffect(() => {
-    if (!user) return
-    supabase
-      .from('profiles')
-      .select('nome, role')
-      .eq('id', user.id)
-      .single()
-      .then(({ data }) => {
-        if (data) setPerfil(data)
-      })
-  }, [user])
+  const { nome: nomeAcesso, role: roleAcesso, isAdmin, podeVer } = useAcesso()
+  const perfil = { nome: nomeAcesso, role: roleAcesso }
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -113,6 +115,18 @@ export default function Layout() {
     const current = NAVIGATION_ITEMS.find((item) => item.path === location.pathname)
     return current ? current.label : 'Amor In Formaturas'
   }, [location.pathname])
+
+  // Menu recortado pelas abas que o usuário pode ver (admin vê tudo).
+  const visibleSections = React.useMemo(
+    () =>
+      NAVIGATION_SECTIONS.map((sec) => ({
+        ...sec,
+        items: sec.items.filter((item) => podeVer(item.path)),
+      })).filter((sec) => sec.items.length > 0),
+    [podeVer],
+  )
+
+  const mostrarFiltroResponsavel = PATHS_COM_FILTRO_RESPONSAVEL.has(location.pathname)
 
   // Contagem de tarefas pendentes
   const pendingTasksCount = tasks.filter((t) => !t.completed).length
@@ -561,7 +575,7 @@ export default function Layout() {
 
         {/* Menu de Navegação Vertical, setorizado por módulo */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAVIGATION_SECTIONS.map((sec, idx) => (
+          {visibleSections.map((sec, idx) => (
             <div key={sec.section ?? `sec-${idx}`} className={idx > 0 ? 'pt-3' : ''}>
               {sec.section && (
                 <div className="px-3.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -662,7 +676,7 @@ export default function Layout() {
 
             {/* Menu Mobile, setorizado por módulo */}
             <nav className="flex-1 py-4 space-y-1.5 overflow-y-auto">
-              {NAVIGATION_SECTIONS.map((sec, idx) => (
+              {visibleSections.map((sec, idx) => (
                 <div key={sec.section ?? `msec-${idx}`} className={idx > 0 ? 'pt-2' : ''}>
                   {sec.section && (
                     <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -717,6 +731,13 @@ export default function Layout() {
 
       {/* Área de Conteúdo Principal (padding 32px desktop, 24px tablet, 16px mobile) */}
       <main className="flex-1 md:pl-[260px] pt-[60px] flex flex-col">
+        {mostrarFiltroResponsavel && (
+          <div className="border-b border-white/[0.06] bg-[#0a0f14]/60 px-4 sm:px-6 lg:px-8 py-2">
+            <div className="max-w-7xl w-full mx-auto">
+              <ResponsavelFilterBar />
+            </div>
+          </div>
+        )}
         <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in-up">
           <Outlet />
         </div>
@@ -724,13 +745,17 @@ export default function Layout() {
         {/* Footer Discreto 48px */}
         <footer className="h-12 border-t border-white/[0.04] flex items-center justify-center gap-3 text-xs text-[#64748b] px-4">
           <span>Amor In Formaturas — Gestão do Negócio</span>
-          <span className="text-white/10">·</span>
-          <Link
-            to="/admin"
-            className="flex items-center gap-1 text-[#64748b] hover:text-orange-400 transition-colors"
-          >
-            <ShieldCheck className="w-3 h-3" /> Modo Administrador
-          </Link>
+          {isAdmin && (
+            <>
+              <span className="text-white/10">·</span>
+              <Link
+                to="/admin"
+                className="flex items-center gap-1 text-[#64748b] hover:text-orange-400 transition-colors"
+              >
+                <ShieldCheck className="w-3 h-3" /> Modo Administrador
+              </Link>
+            </>
+          )}
         </footer>
       </main>
 
