@@ -30,6 +30,7 @@ import {
   Filter,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
+import { useAcesso } from '@/context/AcessoContext'
 import {
   Lead,
   LeadStatus,
@@ -291,6 +292,7 @@ const MANUAL_ORDER_KEY = 'turmas_manual_order'
 
 export default function LeadsPage() {
   const { leads, deals, members, addLead, updateLead, deleteLead, updateDeal } = useCRM()
+  const { usuarios: usuariosSistema } = useAcesso()
   // Credenciais do SGE vêm sempre do Supabase (mesma fonte usada em Configurações),
   // nunca do localStorage — assim, cadastrar uma vez funciona em qualquer dispositivo.
   const { config: sgeAppConfig } = useConfiguracoes()
@@ -2333,11 +2335,17 @@ export default function LeadsPage() {
             </div>
 
             {/* Linha 4: Closer, SDR, Concorrentes */}
+            <datalist id="usuarios-sistema-lista">
+              {usuariosSistema.map((u) => (
+                <option key={u.id} value={u.nome} />
+              ))}
+            </datalist>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label htmlFor="closer">Closer Responsável</Label>
                 <Input
                   id="closer"
+                  list="usuarios-sistema-lista"
                   placeholder="Nome do closer"
                   value={formData.closer}
                   onChange={(e) => setFormData({ ...formData, closer: e.target.value })}
@@ -2348,6 +2356,7 @@ export default function LeadsPage() {
                 <Label htmlFor="sdr">SDR Responsável</Label>
                 <Input
                   id="sdr"
+                  list="usuarios-sistema-lista"
                   placeholder="Nome do SDR"
                   value={formData.sdr}
                   onChange={(e) => setFormData({ ...formData, sdr: e.target.value })}
