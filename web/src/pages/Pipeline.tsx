@@ -1834,6 +1834,102 @@ function DealDetailModal({
             </div>
           )}
 
+          {/* Contatos da turma — cada um com seu próprio contador de "não respondeu".
+              Ao chegar em 3, a turma volta sozinha pra Prospecção (automação no banco). */}
+          <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-2">
+            <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-orange-400" /> Contatos
+            </div>
+            {contatos.length === 0 && (
+              <p className="text-[11px] text-slate-500">Nenhum contato cadastrado ainda.</p>
+            )}
+            {contatos.map((c) => {
+              const naoResponde = c.naoRespondeCount || 0
+              const alertado = naoResponde >= 3
+              return (
+                <div
+                  key={c.id}
+                  className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 ${
+                    alertado
+                      ? 'bg-red-500/10 border-red-500/30'
+                      : 'bg-white/[0.02] border-white/[0.06]'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-slate-200 truncate flex items-center gap-1.5">
+                      {c.nome}
+                      {alertado && (
+                        <span className="text-[10px] font-semibold text-red-400">
+                          ⚠️ não responde
+                        </span>
+                      )}
+                    </div>
+                    {c.telefone && (
+                      <div className="text-[10px] text-slate-400">{c.telefone}</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {alertado ? (
+                      <button
+                        type="button"
+                        onClick={() => onMarcarRespondeu(c.id)}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
+                      >
+                        Respondeu
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onMarcarNaoResponde(c.id)}
+                        className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white/[0.04] text-slate-400 border border-white/[0.08] hover:text-red-400 hover:border-red-500/30"
+                        title="Marcar que não respondeu"
+                      >
+                        Não respondeu ({naoResponde}/3)
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onDeleteContato(c.id)}
+                      className="p-1 text-slate-500 hover:text-red-400 rounded"
+                      title="Remover contato"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+            <div className="flex items-center gap-1.5 pt-1">
+              <input
+                type="text"
+                placeholder="Nome"
+                value={novoContatoNome}
+                onChange={(e) => setNovoContatoNome(e.target.value)}
+                className="flex-1 min-w-0 bg-[#111820] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <input
+                type="text"
+                placeholder="Telefone"
+                value={novoContatoTelefone}
+                onChange={(e) => setNovoContatoTelefone(e.target.value)}
+                className="w-28 shrink-0 bg-[#111820] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!novoContatoNome.trim()}
+                onClick={() => {
+                  onAddContato(novoContatoNome.trim(), novoContatoTelefone.trim())
+                  setNovoContatoNome('')
+                  setNovoContatoTelefone('')
+                }}
+                className="h-7 px-2 bg-orange-500 hover:bg-orange-600 text-white text-[11px] shrink-0"
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+
           {/* Pacotes de Fotografia + Mensagem de WhatsApp */}
           {lead && (
             <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-3">
@@ -2145,6 +2241,44 @@ function DealDetailModal({
             </div>
           )}
 
+          {/* Link da proposta — a partir de Qualificação/Contato */}
+          {showProposal && (
+            <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-slate-200">
+                <Link2 className="w-3.5 h-3.5 text-orange-400" /> Link da Proposta
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  placeholder="Cole o link do Canva (ou qualquer URL)..."
+                  value={linkInput}
+                  onChange={(e) => setLinkInput(e.target.value)}
+                  className="flex-1 bg-[#111820] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    onProposalLinkChange(linkInput.trim())
+                    toast({ title: 'Link da proposta salvo' })
+                  }}
+                  className="px-3 py-2 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-500 rounded-lg whitespace-nowrap"
+                >
+                  Salvar
+                </button>
+              </div>
+              {proposalLink && (
+                <a
+                  href={proposalLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-orange-300 hover:text-orange-200 bg-orange-500/10 border border-orange-500/20 rounded px-3 py-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Ver Proposta
+                </a>
+              )}
+            </div>
+          )}
+
           {/* Tempo no estágio atual */}
           <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2168,101 +2302,6 @@ function DealDetailModal({
             )}
           </div>
 
-          {/* Contatos da turma — cada um com seu próprio contador de "não respondeu".
-              Ao chegar em 3, a turma volta sozinha pra Prospecção (automação no banco). */}
-          <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-2">
-            <div className="font-semibold text-slate-200 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-orange-400" /> Contatos
-            </div>
-            {contatos.length === 0 && (
-              <p className="text-[11px] text-slate-500">Nenhum contato cadastrado ainda.</p>
-            )}
-            {contatos.map((c) => {
-              const naoResponde = c.naoRespondeCount || 0
-              const alertado = naoResponde >= 3
-              return (
-                <div
-                  key={c.id}
-                  className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 ${
-                    alertado
-                      ? 'bg-red-500/10 border-red-500/30'
-                      : 'bg-white/[0.02] border-white/[0.06]'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium text-slate-200 truncate flex items-center gap-1.5">
-                      {c.nome}
-                      {alertado && (
-                        <span className="text-[10px] font-semibold text-red-400">
-                          ⚠️ não responde
-                        </span>
-                      )}
-                    </div>
-                    {c.telefone && (
-                      <div className="text-[10px] text-slate-400">{c.telefone}</div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {alertado ? (
-                      <button
-                        type="button"
-                        onClick={() => onMarcarRespondeu(c.id)}
-                        className="text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
-                      >
-                        Respondeu
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onMarcarNaoResponde(c.id)}
-                        className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white/[0.04] text-slate-400 border border-white/[0.08] hover:text-red-400 hover:border-red-500/30"
-                        title="Marcar que não respondeu"
-                      >
-                        Não respondeu ({naoResponde}/3)
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onDeleteContato(c.id)}
-                      className="p-1 text-slate-500 hover:text-red-400 rounded"
-                      title="Remover contato"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-            <div className="flex items-center gap-1.5 pt-1">
-              <input
-                type="text"
-                placeholder="Nome"
-                value={novoContatoNome}
-                onChange={(e) => setNovoContatoNome(e.target.value)}
-                className="flex-1 min-w-0 bg-[#111820] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
-              <input
-                type="text"
-                placeholder="Telefone"
-                value={novoContatoTelefone}
-                onChange={(e) => setNovoContatoTelefone(e.target.value)}
-                className="w-28 shrink-0 bg-[#111820] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-              />
-              <Button
-                type="button"
-                size="sm"
-                disabled={!novoContatoNome.trim()}
-                onClick={() => {
-                  onAddContato(novoContatoNome.trim(), novoContatoTelefone.trim())
-                  setNovoContatoNome('')
-                  setNovoContatoTelefone('')
-                }}
-                className="h-7 px-2 bg-orange-500 hover:bg-orange-600 text-white text-[11px] shrink-0"
-              >
-                Add
-              </Button>
-            </div>
-          </div>
 
           {/* Decisão (stage-5): decidir aqui já move pra Fechou ou Perdeu */}
           {deal.stageId === 'stage-5' && (
@@ -2380,43 +2419,6 @@ function DealDetailModal({
             </div>
           )}
 
-          {/* Link da proposta — a partir de Qualificação/Contato */}
-          {showProposal && (
-            <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] space-y-2">
-              <div className="flex items-center gap-2 font-semibold text-slate-200">
-                <Link2 className="w-3.5 h-3.5 text-orange-400" /> Link da Proposta
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="url"
-                  placeholder="Cole o link do Canva (ou qualquer URL)..."
-                  value={linkInput}
-                  onChange={(e) => setLinkInput(e.target.value)}
-                  className="flex-1 bg-[#111820] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    onProposalLinkChange(linkInput.trim())
-                    toast({ title: 'Link da proposta salvo' })
-                  }}
-                  className="px-3 py-2 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-500 rounded-lg whitespace-nowrap"
-                >
-                  Salvar
-                </button>
-              </div>
-              {proposalLink && (
-                <a
-                  href={proposalLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-orange-300 hover:text-orange-200 bg-orange-500/10 border border-orange-500/20 rounded px-3 py-1.5"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Ver Proposta
-                </a>
-              )}
-            </div>
-          )}
 
           {/* Checklist por estágio */}
           <div>
