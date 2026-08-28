@@ -2,6 +2,7 @@
 // reais do banco (nunca inventados). Combina o CRM já carregado em memória com uma consulta
 // direta ao Supabase para os números financeiros/SGE, que não ficam no contexto do CRM.
 import { supabase } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/utils/fetchAllRows'
 import { Lead, Deal, Contact, Note, CallTranscript, Task, getTurmaDisplayName } from '@/types/crm'
 
 function fmtBRL(v: number): string {
@@ -40,17 +41,14 @@ interface CrmSnapshotInput {
 async function buildFinanceiroSnapshot(): Promise<string> {
   // Tabelas fora do type gerado do Supabase (schema legado do dashboard) — cast necessário.
   const db = supabase as any
-  const [pagamentosRes, contasPagarRes, vendasRes, adesoesRes] = await Promise.all([
-    db.from('pagamentos').select('valor, valor_pago, status, data_vencimento'),
-    db.from('contas_pagar').select('valor, categoria, fornecedor, status, data_vencimento'),
-    db.from('vendas').select('valor_total, status, data_venda'),
-    db.from('sge_adesoes').select('valor, status, data_adesao'),
+  // PostgREST corta cada resposta em 1000 linhas — essas tabelas passam disso,
+  // então precisa paginar pra IA não receber totais truncados.
+  const [pagamentos, contasPagar, vendas, adesoes] = await Promise.all([
+    fetchAllRows<any>(() => db.from('pagamentos').select('valor, valor_pago, status, data_vencimento').order('id')),
+    fetchAllRows<any>(() => db.from('contas_pagar').select('valor, categoria, fornecedor, status, data_vencimento').order('id')),
+    fetchAllRows<any>(() => db.from('vendas').select('valor_total, status, data_venda').order('id')),
+    fetchAllRows<any>(() => db.from('sge_adesoes').select('valor, status, data_adesao').order('id')),
   ])
-
-  const pagamentos = (pagamentosRes.data as any[]) || []
-  const contasPagar = (contasPagarRes.data as any[]) || []
-  const vendas = (vendasRes.data as any[]) || []
-  const adesoes = (adesoesRes.data as any[]) || []
 
   const totalReceber = sumBy(pagamentos, (p) => p.valor)
   const totalRecebido = sumBy(pagamentos, (p) => p.valor_pago)

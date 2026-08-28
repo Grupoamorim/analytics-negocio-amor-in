@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { supabase } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/utils/fetchAllRows'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 
@@ -218,12 +219,17 @@ export default function Adesoes() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await supabase
-        .from('sge_adesoes')
-        .select('id, codigo_sge, data_adesao, cliente, plano, valor, status, turma')
-        .not('data_adesao', 'is', null)
-        .order('data_adesao', { ascending: true })
-      setAdesoes((data || []) as Adesao[])
+      // PostgREST corta em 1000 linhas por resposta — com o histórico de 2025
+      // importado a tabela passa disso, então precisa paginar pra não perder
+      // as adesões mais recentes (que ficam no fim da ordenação ascendente).
+      const data = await fetchAllRows<Adesao>(() =>
+        supabase
+          .from('sge_adesoes')
+          .select('id, codigo_sge, data_adesao, cliente, plano, valor, status, turma')
+          .not('data_adesao', 'is', null)
+          .order('data_adesao', { ascending: true }),
+      )
+      setAdesoes(data)
       setLoading(false)
     }
     load()
