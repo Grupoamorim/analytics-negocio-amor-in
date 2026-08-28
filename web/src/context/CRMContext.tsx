@@ -13,7 +13,7 @@ import type {
   FunilEvento,
   AprendizadoEstudo,
 } from '@/types/crm'
-import { FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
+import { FUNNEL_STAGE_BY_ID, daysInCurrentStage, DEFAULT_CHECKLIST_ITEMS } from '@/types/crm'
 import { INITIAL_ACTIVITIES, INITIAL_SETTINGS, INITIAL_STAGES, INITIAL_TASKS } from '@/data/seedData'
 import { useTurmas } from '@/hooks/useTurmas'
 import { useDeals } from '@/hooks/useDeals'
@@ -535,6 +535,25 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : {}
 
     await updateDeal(dealId, { checklist: { ...current, [checklistKey]: checked } })
+
+    // Auditoria: registra cada clique de checklist (quem + quando) pro banco.
+    if (isAuthenticated && user) {
+      const itemMeta = DEFAULT_CHECKLIST_ITEMS.find((it) => it.id === checklistKey)
+      supabase
+        .from('checklist_eventos')
+        .insert({
+          deal_id: dealId,
+          turma_id: targetDeal.leadId || null,
+          item_id: checklistKey,
+          item_label: itemMeta?.label || null,
+          stage: itemMeta?.stageId || targetDeal.stageId || null,
+          checked,
+          changed_by: user.id,
+        })
+        .then(({ error }) => {
+          if (error) console.warn('Erro ao registrar evento de checklist:', error)
+        })
+    }
   }
 
   // Importação CSV em Lote

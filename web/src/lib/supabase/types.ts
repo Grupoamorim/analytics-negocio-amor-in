@@ -185,6 +185,64 @@ export type Database = {
         }
         Relationships: []
       }
+      checklist_eventos: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          checked: boolean
+          deal_id: string | null
+          id: string
+          item_id: string
+          item_label: string | null
+          stage: string | null
+          turma_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          checked: boolean
+          deal_id?: string | null
+          id?: string
+          item_id: string
+          item_label?: string | null
+          stage?: string | null
+          turma_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          checked?: boolean
+          deal_id?: string | null
+          id?: string
+          item_id?: string
+          item_label?: string | null
+          stage?: string | null
+          turma_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_eventos_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_eventos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_eventos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           codigo_sge: string | null
@@ -1733,6 +1791,7 @@ export type Database = {
       stage_transitions: {
         Row: {
           changed_at: string
+          changed_by: string | null
           deal_id: string
           from_stage: string | null
           id: string
@@ -1740,6 +1799,7 @@ export type Database = {
         }
         Insert: {
           changed_at?: string
+          changed_by?: string | null
           deal_id: string
           from_stage?: string | null
           id?: string
@@ -1747,6 +1807,7 @@ export type Database = {
         }
         Update: {
           changed_at?: string
+          changed_by?: string | null
           deal_id?: string
           from_stage?: string | null
           id?: string

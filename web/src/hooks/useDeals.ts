@@ -352,6 +352,7 @@ export function useDeals() {
             from_stage: oldStage,
             to_stage: newStage,
             changed_at: new Date().toISOString(),
+            changed_by: user.id,
           })
         }
       } catch (e: any) {
