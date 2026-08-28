@@ -34,11 +34,14 @@ import { analyzeTranscriptWithGemini, getGeminiApiKey } from '@/utils/geminiApi'
 import { analyzeTranscriptText } from '@/utils/probabilityEngine'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import { parseMeetingTitle } from '@/utils/meetingTitleParser'
+import AprendizadoMaterialPanel from '@/components/AprendizadoMaterialPanel'
 
 export default function Transcripts() {
   const { transcripts, leads, settings, addTranscript, updateTranscript, deleteTranscript } =
     useCRM()
   const { toast } = useToast()
+
+  const [aba, setAba] = useState<'reunioes' | 'aprendizado'>('reunioes')
 
   // Estados de busca e filtros
   const [searchQuery, setSearchQuery] = useState('')
@@ -562,6 +565,33 @@ export default function Transcripts() {
         </div>
       </div>
 
+      {/* Abas */}
+      <div className="flex gap-1 border-b border-white/[0.06]">
+        {(
+          [
+            ['reunioes', 'Reuniões'],
+            ['aprendizado', 'Aprendizado'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setAba(id)}
+            className={`px-4 py-2.5 text-sm font-semibold -mb-px border-b-2 transition-colors ${
+              aba === id
+                ? 'border-orange-500 text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {aba === 'aprendizado' && <AprendizadoMaterialPanel />}
+
+      {aba === 'reunioes' && (
+        <>
       {/* Análise de Objeções (agregada) */}
       <div className="rounded-xl border border-white/[0.06] bg-[#111820] overflow-hidden">
         <button
@@ -799,6 +829,8 @@ export default function Transcripts() {
           </table>
         </div>
       </div>
+        </>
+      )}
 
       {/* MODAL 1: Upload Manual */}
       {manualModalOpen && (

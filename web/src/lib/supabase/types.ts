@@ -14,6 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
+      aprendizado_estudo: {
+        Row: {
+          amostra_reunioes: number | null
+          amostra_turmas: number | null
+          created_at: string
+          curso: string
+          escopo: string
+          estrutura_apresentacao: string | null
+          faculdade: string
+          gerado_em: string | null
+          gerado_por: string | null
+          id: string
+          motivos_perda_comuns: Json | null
+          o_que_evitar: string | null
+          o_que_funciona: string | null
+          objecoes_comuns: Json | null
+          pitch_recomendado: string | null
+          pontos_fortes_comuns: Json | null
+          preferencias_formandos: string | null
+          taxa_avanco_por_portao: Json | null
+          taxa_fechamento: number | null
+          tempo_medio_por_estagio: Json | null
+          updated_at: string
+        }
+        Insert: {
+          amostra_reunioes?: number | null
+          amostra_turmas?: number | null
+          created_at?: string
+          curso?: string
+          escopo: string
+          estrutura_apresentacao?: string | null
+          faculdade?: string
+          gerado_em?: string | null
+          gerado_por?: string | null
+          id?: string
+          motivos_perda_comuns?: Json | null
+          o_que_evitar?: string | null
+          o_que_funciona?: string | null
+          objecoes_comuns?: Json | null
+          pitch_recomendado?: string | null
+          pontos_fortes_comuns?: Json | null
+          preferencias_formandos?: string | null
+          taxa_avanco_por_portao?: Json | null
+          taxa_fechamento?: number | null
+          tempo_medio_por_estagio?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          amostra_reunioes?: number | null
+          amostra_turmas?: number | null
+          created_at?: string
+          curso?: string
+          escopo?: string
+          estrutura_apresentacao?: string | null
+          faculdade?: string
+          gerado_em?: string | null
+          gerado_por?: string | null
+          id?: string
+          motivos_perda_comuns?: Json | null
+          o_que_evitar?: string | null
+          o_que_funciona?: string | null
+          objecoes_comuns?: Json | null
+          pitch_recomendado?: string | null
+          pontos_fortes_comuns?: Json | null
+          preferencias_formandos?: string | null
+          taxa_avanco_por_portao?: Json | null
+          taxa_fechamento?: number | null
+          tempo_medio_por_estagio?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      aprendizado_material: {
+        Row: {
+          analisado_em: string | null
+          categoria: string
+          conteudo: string | null
+          created_at: string
+          curso: string | null
+          faculdade: string | null
+          id: string
+          licoes: string | null
+          pontos_atencao: string | null
+          pontos_fortes: string | null
+          resumo: string | null
+          sentimento: string | null
+          taticas: string | null
+          titulo: string
+          updated_by: string | null
+          url: string | null
+        }
+        Insert: {
+          analisado_em?: string | null
+          categoria: string
+          conteudo?: string | null
+          created_at?: string
+          curso?: string | null
+          faculdade?: string | null
+          id?: string
+          licoes?: string | null
+          pontos_atencao?: string | null
+          pontos_fortes?: string | null
+          resumo?: string | null
+          sentimento?: string | null
+          taticas?: string | null
+          titulo: string
+          updated_by?: string | null
+          url?: string | null
+        }
+        Update: {
+          analisado_em?: string | null
+          categoria?: string
+          conteudo?: string | null
+          created_at?: string
+          curso?: string | null
+          faculdade?: string | null
+          id?: string
+          licoes?: string | null
+          pontos_atencao?: string | null
+          pontos_fortes?: string | null
+          resumo?: string | null
+          sentimento?: string | null
+          taticas?: string | null
+          titulo?: string
+          updated_by?: string | null
+          url?: string | null
+        }
+        Relationships: []
+      }
       captacao_leads: {
         Row: {
           ano_formatura: string
@@ -333,9 +462,12 @@ export type Database = {
           created_at: string
           data_previsao_fechamento: string | null
           id: string
+          lost_reason: string | null
           notas: string | null
           outcome: string | null
           prioridade: string | null
+          prob_atualizada_em: string | null
+          prob_breakdown: Json | null
           probabilidade: number | null
           probability: number | null
           responsavel: string | null
@@ -354,9 +486,12 @@ export type Database = {
           created_at?: string
           data_previsao_fechamento?: string | null
           id?: string
+          lost_reason?: string | null
           notas?: string | null
           outcome?: string | null
           prioridade?: string | null
+          prob_atualizada_em?: string | null
+          prob_breakdown?: Json | null
           probabilidade?: number | null
           probability?: number | null
           responsavel?: string | null
@@ -375,9 +510,12 @@ export type Database = {
           created_at?: string
           data_previsao_fechamento?: string | null
           id?: string
+          lost_reason?: string | null
           notas?: string | null
           outcome?: string | null
           prioridade?: string | null
+          prob_atualizada_em?: string | null
+          prob_breakdown?: Json | null
           probabilidade?: number | null
           probability?: number | null
           responsavel?: string | null
@@ -444,6 +582,91 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      funil_eventos: {
+        Row: {
+          avancou_apesar_prob_baixa: boolean | null
+          cidade: string | null
+          created_at: string
+          curso: string | null
+          deal_id: string | null
+          dias_no_estagio_origem: number | null
+          empresa: string | null
+          faculdade: string | null
+          from_stage: string | null
+          id: string
+          motivo_perda: string | null
+          observacao: string | null
+          outcome: string | null
+          prob_motor_no_momento: number | null
+          tipo: string
+          to_stage: string | null
+          transcript_prob_no_momento: number | null
+          turma_id: string | null
+        }
+        Insert: {
+          avancou_apesar_prob_baixa?: boolean | null
+          cidade?: string | null
+          created_at?: string
+          curso?: string | null
+          deal_id?: string | null
+          dias_no_estagio_origem?: number | null
+          empresa?: string | null
+          faculdade?: string | null
+          from_stage?: string | null
+          id?: string
+          motivo_perda?: string | null
+          observacao?: string | null
+          outcome?: string | null
+          prob_motor_no_momento?: number | null
+          tipo: string
+          to_stage?: string | null
+          transcript_prob_no_momento?: number | null
+          turma_id?: string | null
+        }
+        Update: {
+          avancou_apesar_prob_baixa?: boolean | null
+          cidade?: string | null
+          created_at?: string
+          curso?: string | null
+          deal_id?: string | null
+          dias_no_estagio_origem?: number | null
+          empresa?: string | null
+          faculdade?: string | null
+          from_stage?: string | null
+          id?: string
+          motivo_perda?: string | null
+          observacao?: string | null
+          outcome?: string | null
+          prob_motor_no_momento?: number | null
+          tipo?: string
+          to_stage?: string | null
+          transcript_prob_no_momento?: number | null
+          turma_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funil_eventos_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funil_eventos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funil_eventos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mercado_faculdades: {
         Row: {
@@ -1765,6 +1988,13 @@ export type Database = {
             columns: ["mesma_turma_fisica_de"]
             isOneToOne: false
             referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turmas_mesma_turma_fisica_de_fkey"
+            columns: ["mesma_turma_fisica_de"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
           {

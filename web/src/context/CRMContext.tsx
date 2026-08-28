@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useEffect, useCallback, useMemo } from 'react'
 import type {
   Lead,
   Deal,
@@ -10,7 +10,10 @@ import type {
   TeamMember,
   Task,
   PipelineStage,
+  FunilEvento,
+  AprendizadoEstudo,
 } from '@/types/crm'
+import { FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { INITIAL_ACTIVITIES, INITIAL_SETTINGS, INITIAL_STAGES, INITIAL_TASKS } from '@/data/seedData'
 import { useTurmas } from '@/hooks/useTurmas'
 import { useDeals } from '@/hooks/useDeals'
@@ -19,8 +22,15 @@ import { useTranscricoes } from '@/hooks/useTranscricoes'
 import { useNotas } from '@/hooks/useNotas'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { useMembers } from '@/hooks/useMembers'
+import { useFunilEventos } from '@/hooks/useFunilEventos'
+import { useAprendizadoEstudo } from '@/hooks/useAprendizadoEstudo'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
+import {
+  computeDealProbability,
+  transcriptProbabilidade,
+  type CursoFacRate,
+} from '@/utils/funnelProbability'
 
 interface CRMContextType {
   leads: Lead[]
@@ -33,6 +43,8 @@ interface CRMContextType {
   members: TeamMember[]
   tasks: Task[]
   stages: PipelineStage[]
+  funilEventos: FunilEvento[]
+  estudos: AprendizadoEstudo[]
   loading: boolean
   error: string | null
 
@@ -83,6 +95,14 @@ interface CRMContextType {
   addActivity: (activity: Omit<Activity, 'id' | 'timestamp'>) => void
   syncWithSGE: () => Promise<{ success: boolean; message: string; data?: any }>
   refreshAll: () => Promise<void>
+
+  // Motor de probabilidade / aprendizado
+  dealProbById: Map<string, { score: number; breakdown: import('@/types/crm').ProbBreakdown }>
+  recomputeAllProbabilities: () => Promise<void>
+  closeRateFor: (curso?: string, faculdade?: string) => CursoFacRate | null
+  upsertEstudo: (estudo: AprendizadoEstudo) => Promise<void>
+  refreshFunilEventos: () => Promise<void>
+  refreshEstudos: () => Promise<void>
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined)
@@ -106,7 +126,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loading: dealsLoading,
     error: dealsError,
     addDeal,
-    updateDeal,
+    updateDeal: updateDealRaw,
     deleteDeal,
     refreshDeals,
   } = useDeals()
@@ -136,13 +156,16 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     transcripts,
     loading: transcricoesLoading,
     error: transcricoesError,
-    addTranscript,
-    updateTranscript,
+    addTranscript: addTranscriptRaw,
+    updateTranscript: updateTranscriptRaw,
     deleteTranscript,
     refreshTranscricoes,
   } = useTranscricoes()
 
   const { config, loading: configLoading, saveConfig, refreshConfiguracoes } = useConfiguracoes()
+
+  const { funilEventos, addFunilEvento, refreshFunilEventos } = useFunilEventos()
+  const { estudos, upsertEstudo, refreshEstudos } = useAprendizadoEstudo()
 
   // Members — equipe real (profiles), não mais nomes fictícios
   const { members } = useMembers()
@@ -289,44 +312,210 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     })
   }
 
+  // ---------------------------------------------------------------------------
+  // Motor de probabilidade única + registro de aprendizado do funil
+  // ---------------------------------------------------------------------------
+  const leadById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads])
+
+  const normTxt = (s?: string) =>
+    (s || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+
+  /**
+   * Taxa histórica de fechamento do recorte mais específico com amostra:
+   * curso+faculdade (se N>=3) > curso > faculdade. Base pro tempero do motor.
+   */
+  const closeRateFor = useCallback(
+    (curso?: string, faculdade?: string): CursoFacRate | null => {
+      const tally = (pred: (l?: Lead) => boolean): CursoFacRate | null => {
+        let g = 0
+        let p = 0
+        for (const d of deals) {
+          if (d.outcome !== 'ganho' && d.outcome !== 'perdido') continue
+          if (!pred(d.leadId ? leadById.get(d.leadId) : undefined)) continue
+          if (d.outcome === 'ganho') g++
+          else p++
+        }
+        return g + p > 0 ? { rate: g / (g + p), n: g + p } : null
+      }
+      if (curso && faculdade) {
+        const r = tally(
+          (l) => !!l && normTxt(l.curso) === normTxt(curso) && normTxt(l.faculdade) === normTxt(faculdade),
+        )
+        if (r && r.n >= 3) return r
+      }
+      if (curso) {
+        const r = tally((l) => !!l && normTxt(l.curso) === normTxt(curso))
+        if (r) return r
+      }
+      if (faculdade) {
+        const r = tally((l) => !!l && normTxt(l.faculdade) === normTxt(faculdade))
+        if (r) return r
+      }
+      return null
+    },
+    [deals, leadById],
+  )
+
+  const latestTranscriptForDeal = useCallback(
+    (deal: Deal): CallTranscript | undefined => {
+      if (!deal.leadId) return undefined
+      return transcripts
+        .filter((t) => t.leadId === deal.leadId)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+    },
+    [transcripts],
+  )
+
+  /**
+   * Probabilidade ÚNICA de fechamento de cada turma, calculada AO VIVO (reunião +
+   * portão de fase + velocidade + curso/faculdade). É a fonte de verdade da UI —
+   * a coluna `deals.probabilidade` no banco é só cache/histórico pro job semanal.
+   */
+  const dealProbById = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof computeDealProbability>>()
+    for (const d of deals) {
+      const lead = d.leadId ? leadById.get(d.leadId) : undefined
+      m.set(
+        d.id,
+        computeDealProbability({
+          deal: d,
+          latestTranscript: latestTranscriptForDeal(d) as any,
+          cursoFacRate: closeRateFor(lead?.curso, lead?.faculdade),
+        }),
+      )
+    }
+    return m
+  }, [deals, leadById, latestTranscriptForDeal, closeRateFor])
+
+  /** Recalcula e persiste a probabilidade única de uma turma. */
+  const recomputeDealProbability = useCallback(
+    async (
+      deal: Deal,
+      opts?: { overrideTranscript?: CallTranscript },
+    ): Promise<{ score: number } | null> => {
+      const lead = deal.leadId ? leadById.get(deal.leadId) : undefined
+      const override =
+        opts?.overrideTranscript && opts.overrideTranscript.leadId === deal.leadId
+          ? opts.overrideTranscript
+          : undefined
+      const { score, breakdown } = computeDealProbability({
+        deal,
+        latestTranscript: (override || latestTranscriptForDeal(deal)) as any,
+        cursoFacRate: closeRateFor(lead?.curso, lead?.faculdade),
+      })
+      if (deal.probability === score && deal.probBreakdown?.final === breakdown.final) {
+        return { score }
+      }
+      await updateDealRaw(deal.id, { probability: score, probBreakdown: breakdown })
+      return { score }
+    },
+    [leadById, latestTranscriptForDeal, closeRateFor, updateDealRaw],
+  )
+
+  const recomputeAllProbabilities = useCallback(async (): Promise<void> => {
+    for (const deal of deals) {
+      await recomputeDealProbability(deal)
+    }
+    addActivity({
+      type: 'ia',
+      title: 'Probabilidades recalculadas',
+      description: `${deals.length} turmas reprocessadas pelo motor.`,
+      actorName: 'Motor de Probabilidade',
+    })
+  }, [deals, recomputeDealProbability])
+
   // Pipeline stage movement and checklist
   const moveDealStage = async (dealId: string, targetStageId: string): Promise<void> => {
     const targetDeal = deals.find((d) => d.id === dealId)
-    const fromStage = targetDeal?.stage || (targetDeal as any)?.stageId || 'prospeccao'
+    const fromStage = targetDeal?.stageId || targetDeal?.stage || 'stage-1'
+    const lead = targetDeal?.leadId ? leadById.get(targetDeal.leadId) : undefined
 
-    const updates: Partial<Deal> = {
-      stage: targetStageId as any,
-      stageId: targetStageId,
+    await updateDealRaw(dealId, { stage: targetStageId as any, stageId: targetStageId })
+
+    // Registro de aprendizado: transição de fase
+    if (targetDeal) {
+      const tProb = transcriptProbabilidade(latestTranscriptForDeal(targetDeal) as any)
+      const fromMeta = FUNNEL_STAGE_BY_ID[fromStage]
+      const alerta = fromMeta?.stagnationAlertDays || 7
+      const diasNoEstagio = daysInCurrentStage(targetDeal)
+      const targetIdx = Object.keys(FUNNEL_STAGE_BY_ID).indexOf(targetStageId)
+      const fromIdx = Object.keys(FUNNEL_STAGE_BY_ID).indexOf(fromStage)
+      await addFunilEvento({
+        deal_id: dealId,
+        turma_id: targetDeal.leadId || null,
+        curso: lead?.curso || null,
+        faculdade: lead?.faculdade || null,
+        empresa: lead?.empresa || targetDeal.company || null,
+        cidade: lead?.cidade || null,
+        tipo: 'transicao',
+        from_stage: fromStage,
+        to_stage: targetStageId,
+        dias_no_estagio_origem: alerta < 999 ? diasNoEstagio : null,
+        transcript_prob_no_momento: tProb ?? null,
+        prob_motor_no_momento: targetDeal.probability ?? null,
+        avancou_apesar_prob_baixa: targetIdx > fromIdx && tProb !== undefined && tProb < 50,
+      })
     }
 
-    // Cálculo oficial de probabilidade por estágio:
-    // prospeccao = 10%, qualificacao-contato = 25%, reuniao-comissao = 40%,
-    // reuniao-turma = 60%, adesao = 80%, fechou-ou-perdeu = 100%
-    if (targetStageId === 'prospeccao' || targetStageId === 'stage-1') {
-      updates.probability = 10
-    } else if (targetStageId === 'qualificacao-contato' || targetStageId === 'stage-2') {
-      updates.probability = 25
-    } else if (targetStageId === 'reuniao-comissao' || targetStageId === 'stage-3') {
-      updates.probability = 40
-    } else if (targetStageId === 'reuniao-turma' || targetStageId === 'stage-4') {
-      updates.probability = 60
-    } else if (targetStageId === 'adesao' || targetStageId === 'stage-5') {
-      updates.probability = 80
-    } else if (targetStageId === 'fechou-ou-perdeu' || targetStageId === 'stage-6') {
-      updates.probability = 100
-    } else {
-      updates.probability = 10
-    }
-
-    await updateDeal(dealId, updates)
+    // Recalcula a probabilidade única com a nova posição
+    const moved = { ...(targetDeal as Deal), stageId: targetStageId, stage: targetStageId as any }
+    if (targetDeal) await recomputeDealProbability(moved)
 
     addActivity({
       type: 'estagio',
-      title: `Negócio movido para ${targetStageId}`,
+      title: `Turma movida para ${FUNNEL_STAGE_BY_ID[targetStageId]?.name || targetStageId}`,
       description: targetDeal?.title || 'Negócio',
       actorName: 'Usuário',
     })
   }
+
+  /**
+   * Wrapper de `updateDeal`: além de gravar, registra desfecho no aprendizado
+   * quando `outcome` é definido e recalcula a probabilidade da turma.
+   */
+  const updateDeal = useCallback(
+    async (id: string, updates: Partial<Deal>): Promise<void> => {
+      const before = deals.find((d) => d.id === id)
+      await updateDealRaw(id, updates)
+
+      const outcomeChanged =
+        updates.outcome !== undefined && updates.outcome !== (before?.outcome || null)
+      if (outcomeChanged && before && (updates.outcome === 'ganho' || updates.outcome === 'perdido')) {
+        const lead = before.leadId ? leadById.get(before.leadId) : undefined
+        const tProb = transcriptProbabilidade(latestTranscriptForDeal(before) as any)
+        const probAntes = before.probability ?? before.probBreakdown?.final
+        let observacao: string | null = null
+        if (updates.outcome === 'ganho' && typeof probAntes === 'number' && probAntes < 50) {
+          observacao = `Fechou com probabilidade ${probAntes}% — motor/reunião subestimou.`
+        } else if (updates.outcome === 'perdido' && typeof probAntes === 'number' && probAntes >= 60) {
+          observacao = `Perdeu com probabilidade ${probAntes}% — motor/reunião superestimou.`
+        }
+        await addFunilEvento({
+          deal_id: id,
+          turma_id: before.leadId || null,
+          curso: lead?.curso || null,
+          faculdade: lead?.faculdade || null,
+          empresa: lead?.empresa || before.company || null,
+          cidade: lead?.cidade || null,
+          tipo: 'desfecho',
+          from_stage: before.stageId || null,
+          outcome: updates.outcome,
+          motivo_perda: updates.lostReason || before.lostReason || null,
+          transcript_prob_no_momento: tProb ?? null,
+          prob_motor_no_momento: typeof probAntes === 'number' ? probAntes : null,
+          observacao,
+        })
+      }
+
+      const merged = { ...(before as Deal), ...updates }
+      if (before) await recomputeDealProbability(merged)
+    },
+    [deals, updateDealRaw, leadById, latestTranscriptForDeal, addFunilEvento, recomputeDealProbability],
+  )
 
   const toggleChecklistItem = async (
     dealId: string,
@@ -497,7 +686,32 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       description: `ID: ${id}`,
       actorName: 'Gemini AI',
     })
+    const tr = transcripts.find((t) => t.id === id)
+    const deal = tr?.leadId ? deals.find((d) => d.leadId === tr.leadId) : undefined
+    if (deal) await recomputeDealProbability(deal, { overrideTranscript: tr })
   }
+
+  /** Cria transcrição e já recalcula a probabilidade da turma vinculada. */
+  const addTranscript = useCallback(
+    async (transcript: Omit<CallTranscript, 'id'>): Promise<CallTranscript> => {
+      const created = await addTranscriptRaw(transcript)
+      const deal = created.leadId ? deals.find((d) => d.leadId === created.leadId) : undefined
+      if (deal) await recomputeDealProbability(deal, { overrideTranscript: created })
+      return created
+    },
+    [addTranscriptRaw, deals, recomputeDealProbability],
+  )
+
+  const updateTranscript = useCallback(
+    async (id: string, updates: Partial<CallTranscript>): Promise<void> => {
+      await updateTranscriptRaw(id, updates)
+      const tr = transcripts.find((t) => t.id === id)
+      const merged = { ...(tr as CallTranscript), ...updates }
+      const deal = merged?.leadId ? deals.find((d) => d.leadId === merged.leadId) : undefined
+      if (deal) await recomputeDealProbability(deal, { overrideTranscript: merged })
+    },
+    [updateTranscriptRaw, transcripts, deals, recomputeDealProbability],
+  )
 
   // Sincronização SGE via Edge Function do Supabase
   const syncWithSGE = async (): Promise<{ success: boolean; message: string; data?: any }> => {
@@ -562,6 +776,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshNotas(),
       refreshTranscricoes(),
       refreshConfiguracoes(),
+      refreshFunilEventos(),
+      refreshEstudos(),
     ])
   }
 
@@ -585,6 +801,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     members,
     tasks,
     stages,
+    funilEventos,
+    estudos,
     loading,
     error,
 
@@ -623,6 +841,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addActivity,
     syncWithSGE,
     refreshAll,
+
+    dealProbById,
+    recomputeAllProbabilities,
+    closeRateFor,
+    upsertEstudo,
+    refreshFunilEventos,
+    refreshEstudos,
   }
 
   return <CRMContext.Provider value={value}>{children}</CRMContext.Provider>

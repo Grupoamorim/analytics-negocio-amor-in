@@ -170,6 +170,10 @@ export interface Deal {
   checklist?: Record<string, boolean> // mapa checklistKey -> concluído
   /** Histórico de estágios por onde a turma passou (ordenado por enteredAt). */
   stageHistory?: StageHistoryEntry[]
+  /** Fatores que produziram a probabilidade atual (motor único). Ver `ProbBreakdown`. */
+  probBreakdown?: ProbBreakdown
+  /** Quando a probabilidade foi recalculada pela última vez (ISO). */
+  probAtualizadaEm?: string
   /** Resultado final quando a turma está no estágio "Fechou ou Perdeu". */
   outcome?: DealOutcome | null
   /** Motivo da recusa, preenchido quando outcome === 'perdido'. */
@@ -587,6 +591,104 @@ export interface AnalysisKeyword {
   word: string
   weight: number // 1 to 5
   type: 'positive' | 'negative'
+}
+
+// ---------------------------------------------------------------------------
+// Motor de probabilidade único + aprendizado (Funil / Probabilidade)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fatores que produziram a probabilidade de fechamento de uma turma.
+ * `final = clamp(base + ajustePortao + ajusteVelocidade + ajusteCursoFac)`.
+ * A análise da reunião (base) manda no número; o funil só tempera.
+ */
+export interface ProbBreakdown {
+  /** Probabilidade da reunião mais recente (Gemini) — o alicerce do número. */
+  base: number
+  /** Sem reunião analisada: `base` veio do padrão do estágio, é chute. */
+  semReuniao: boolean
+  /** Bônus pequeno por portões de fase já vencidos (proporcional à seletividade). */
+  ajustePortao: number
+  /** Ajuste por velocidade/estagnação na coluna atual (o pedaço que morde). */
+  ajusteVelocidade: number
+  /** Ajuste pela taxa histórica de fechamento do curso/faculdade da turma. */
+  ajusteCursoFac: number
+  /** Nº de turmas resolvidas que embasam `ajusteCursoFac` (amostra). */
+  cursoFacN: number
+  /** Rótulo curto do estado de velocidade: 'rápida' | 'saudável' | 'lenta' | 'estagnada'. */
+  velocidadeLabel: string
+  final: number
+}
+
+/** Uma transição de fase ou um desfecho registrado no funil (dataset de aprendizado). */
+export interface FunilEvento {
+  id: string
+  dealId?: string
+  turmaId?: string
+  curso?: string
+  faculdade?: string
+  empresa?: string
+  cidade?: string
+  tipo: 'transicao' | 'desfecho'
+  fromStage?: string
+  toStage?: string
+  diasNoEstagioOrigem?: number
+  transcriptProbNoMomento?: number
+  probMotorNoMomento?: number
+  avancouApesarProbBaixa: boolean
+  outcome?: 'ganho' | 'perdido'
+  motivoPerda?: string
+  observacao?: string
+  createdAt: string
+}
+
+export type AprendizadoCategoria = 'turma_ganha' | 'turma_perdida' | 'treinamento'
+
+/** Material de estudo solto — não vinculado a nenhuma turma do funil. */
+export interface AprendizadoMaterial {
+  id: string
+  categoria: AprendizadoCategoria
+  titulo: string
+  curso?: string
+  faculdade?: string
+  conteudo?: string
+  url?: string
+  resumo?: string
+  licoes?: string
+  pontosFortes?: string
+  pontosAtencao?: string
+  taticas?: string
+  sentimento?: string
+  analisadoEm?: string
+  createdAt: string
+}
+
+export interface ObjecaoContagem {
+  texto: string
+  n: number
+}
+
+/** Estudo consolidado por curso / faculdade — o "banco de dados" da aba Probabilidade. */
+export interface AprendizadoEstudo {
+  id?: string
+  escopo: 'curso' | 'faculdade' | 'curso_faculdade' | 'geral'
+  curso?: string
+  faculdade?: string
+  amostraTurmas: number
+  amostraReunioes: number
+  taxaFechamento?: number
+  taxaAvancoPorPortao?: Record<string, number>
+  tempoMedioPorEstagio?: Record<string, number>
+  objecoesComuns?: ObjecaoContagem[]
+  pontosFortesComuns?: ObjecaoContagem[]
+  motivosPerdaComuns?: ObjecaoContagem[]
+  oQueFunciona?: string
+  oQueEvitar?: string
+  pitchRecomendado?: string
+  estruturaApresentacao?: string
+  preferenciasFormandos?: string
+  geradoEm?: string
+  geradoPor?: 'regras' | 'gemini'
 }
 
 export interface AppSettings {

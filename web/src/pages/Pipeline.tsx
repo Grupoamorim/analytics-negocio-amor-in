@@ -34,6 +34,7 @@ import {
   ClipboardCopy,
   Check,
   ChevronRight,
+  ChevronDown,
   Filter,
   BookmarkPlus,
 } from 'lucide-react'
@@ -99,7 +100,7 @@ export default function Pipeline() {
     leads,
     members,
     stages,
-    transcripts,
+    dealProbById,
     moveDealStage,
     updateDeal,
     deleteDeal,
@@ -118,6 +119,7 @@ export default function Pipeline() {
 
   const [draggingDealId, setDraggingDealId] = useState<string | null>(null)
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
+  const [probWhyDealId, setProbWhyDealId] = useState<string | null>(null)
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
   const [creatingForStageId, setCreatingForStageId] = useState<string | null>(null)
   const [creatingSearch, setCreatingSearch] = useState('')
@@ -865,18 +867,11 @@ export default function Pipeline() {
                             : stage.color
                         : stage.color
 
-                    // Buscar transcrição mais recente para obter a probabilidade da IA
-                    const latestTranscript = deal.leadId
-                      ? transcripts
-                          .filter((t) => t.leadId === deal.leadId)
-                          .sort(
-                            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-                          )[0]
-                      : undefined
-
-                    const transcriptProb =
-                      latestTranscript?.geminiAnalysis?.probabilidade ??
-                      latestTranscript?.probabilityScore
+                    // Probabilidade ÚNICA de fechamento (motor, ao vivo): reunião
+                    // manda, funil só tempera (portão vencido + velocidade na coluna).
+                    const probInfo = dealProbById.get(deal.id)
+                    const bd = probInfo?.breakdown
+                    const motorProb = probInfo?.score ?? deal.probability
 
                     return (
                       <div
@@ -990,28 +985,97 @@ export default function Pipeline() {
                           )}
                         </div>
 
-                        {/* Probabilidade calculada por Transcrição */}
-                        <div className="mb-2 flex items-center justify-between text-[10px] px-2 py-1 rounded bg-white/[0.03] border border-white/[0.05]">
-                          <span className="text-slate-400 flex items-center gap-1">
-                            <TrendingUp className="w-3 h-3 text-orange-400" />
-                            Probabilidade:
-                          </span>
-                          {transcriptProb !== undefined ? (
-                            <span
-                              className={`font-bold ${
-                                transcriptProb >= 70
-                                  ? 'text-emerald-400'
-                                  : transcriptProb >= 45
-                                    ? 'text-amber-400'
-                                    : 'text-rose-400'
-                              }`}
+                        {/* Probabilidade ÚNICA de fechamento (motor) */}
+                        {stage.id !== 'stage-6' && (
+                          <div className="mb-2 rounded bg-white/[0.03] border border-white/[0.05]">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setProbWhyDealId(probWhyDealId === deal.id ? null : deal.id)
+                              }}
+                              className="w-full flex items-center justify-between text-[10px] px-2 py-1"
+                              title="Ver por que esse número"
                             >
-                              {transcriptProb}% de chance de avançar
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 italic">Sem análise</span>
-                          )}
-                        </div>
+                              <span className="text-slate-400 flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3 text-orange-400" />
+                                Prob. de fechar:
+                              </span>
+                              <span
+                                className={`font-bold flex items-center gap-1 ${
+                                  motorProb >= 70
+                                    ? 'text-emerald-400'
+                                    : motorProb >= 45
+                                      ? 'text-amber-400'
+                                      : 'text-rose-400'
+                                }`}
+                              >
+                                {motorProb}%
+                                {bd?.semReuniao && (
+                                  <span className="text-slate-500 font-normal">(sem reunião)</span>
+                                )}
+                                <ChevronDown
+                                  className={`w-3 h-3 text-slate-500 transition-transform ${
+                                    probWhyDealId === deal.id ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </span>
+                            </button>
+                            {probWhyDealId === deal.id && bd && (
+                              <div className="px-2 pb-1.5 pt-0.5 space-y-0.5 text-[10px] text-slate-400 border-t border-white/[0.05]">
+                                <div className="flex justify-between">
+                                  <span>Reunião (base)</span>
+                                  <span className="text-slate-200">{bd.base}%</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Portão de fase vencido</span>
+                                  <span className={bd.ajustePortao > 0 ? 'text-emerald-400' : ''}>
+                                    {bd.ajustePortao > 0 ? `+${bd.ajustePortao}` : bd.ajustePortao}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Velocidade ({bd.velocidadeLabel})</span>
+                                  <span
+                                    className={
+                                      bd.ajusteVelocidade > 0
+                                        ? 'text-emerald-400'
+                                        : bd.ajusteVelocidade < 0
+                                          ? 'text-rose-400'
+                                          : ''
+                                    }
+                                  >
+                                    {bd.ajusteVelocidade > 0
+                                      ? `+${bd.ajusteVelocidade}`
+                                      : bd.ajusteVelocidade}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>
+                                    Curso/faculdade
+                                    {bd.cursoFacN > 0 ? ` (amostra ${bd.cursoFacN})` : ''}
+                                  </span>
+                                  <span
+                                    className={
+                                      bd.ajusteCursoFac > 0
+                                        ? 'text-emerald-400'
+                                        : bd.ajusteCursoFac < 0
+                                          ? 'text-rose-400'
+                                          : ''
+                                    }
+                                  >
+                                    {bd.ajusteCursoFac > 0
+                                      ? `+${bd.ajusteCursoFac}`
+                                      : bd.ajusteCursoFac}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between font-semibold text-slate-200 pt-0.5 border-t border-white/[0.05]">
+                                  <span>Probabilidade final</span>
+                                  <span>{bd.final}%</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Tempo no estágio (cor reflete urgência) */}
                         <div
