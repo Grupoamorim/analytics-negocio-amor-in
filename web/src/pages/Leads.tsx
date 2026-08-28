@@ -110,6 +110,7 @@ import {
 import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
 import { fetchCidadeFaculdades, ensureCidadeFaculdade, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
 import DropdownComOutro from '@/components/DropdownComOutro'
+import InlineEditText from '@/components/InlineEditText'
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: string }> = {
   Novo: {
@@ -488,6 +489,12 @@ export default function LeadsPage() {
   const empresas = useMemo(() => {
     const set = new Set<string>()
     leads.forEach((l) => l.empresa && set.add(l.empresa))
+    return Array.from(set).sort()
+  }, [leads])
+
+  const origensConhecidas = useMemo(() => {
+    const set = new Set<string>(['Ativa', 'Passiva', 'Indicação'])
+    leads.forEach((l) => l.comoConheceu && set.add(l.comoConheceu))
     return Array.from(set).sort()
   }, [leads])
 
@@ -1898,17 +1905,22 @@ export default function LeadsPage() {
                         </div>
                       </td>
 
-                      {/* Empresa */}
-                      <td className="py-3.5 px-3">
-                        <Badge
-                          variant="outline"
+                      {/* Empresa — edição inline */}
+                      <td className="py-3.5 px-3" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={lead.empresa || 'AFF'}
+                          onChange={(e) => updateLead(lead.id, { empresa: e.target.value })}
                           className={cn(
-                            'font-bold text-xs',
+                            'text-xs font-bold rounded border bg-transparent px-1.5 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-orange-500',
                             EMPRESA_CORES[lead.empresa || 'AFF'] || EMPRESA_COR_PADRAO,
                           )}
                         >
-                          {lead.empresa || 'AFF'}
-                        </Badge>
+                          {EMPRESAS.map((emp) => (
+                            <option key={emp} value={emp} className="bg-white dark:bg-slate-900">
+                              {emp}
+                            </option>
+                          ))}
+                        </select>
                       </td>
 
                       {/* Faculdade */}
@@ -1924,9 +1936,17 @@ export default function LeadsPage() {
                         {lead.cidade}
                       </td>
 
-                      {/* Ano Formatura */}
-                      <td className="py-3.5 px-3 text-xs font-mono text-slate-600 dark:text-slate-400">
-                        {lead.anoFormatura}
+                      {/* Ano Formatura — edição inline */}
+                      <td
+                        className="py-3.5 px-3 text-xs font-mono text-slate-600 dark:text-slate-400"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <InlineEditText
+                          value={lead.anoFormatura || ''}
+                          onSave={(v) => updateLead(lead.id, { anoFormatura: v })}
+                          placeholder="2027.1"
+                          className="text-xs font-mono text-slate-700 dark:text-slate-300 w-16"
+                        />
                       </td>
 
                       {/* Tipo Serviço */}
@@ -1934,15 +1954,20 @@ export default function LeadsPage() {
                         {lead.tipoServico || '—'}
                       </td>
 
-                      {/* Origem / Como Conheceu */}
-                      <td className="py-3.5 px-3">
-                        {lead.comoConheceu ? (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
-                            {lead.comoConheceu}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs">—</span>
-                        )}
+                      {/* Origem / Como Conheceu — edição inline */}
+                      <td className="py-3.5 px-3 min-w-[110px]" onClick={(e) => e.stopPropagation()}>
+                        <DropdownComOutro
+                          label="Origem"
+                          showLabel={false}
+                          variant="underline"
+                          value={lead.comoConheceu || ''}
+                          options={origensConhecidas}
+                          placeholder="—"
+                          onSave={(v) =>
+                            updateLead(lead.id, { comoConheceu: v, source: v as LeadSource })
+                          }
+                          fieldClassName="w-full bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-orange-500 text-xs text-slate-700 dark:text-slate-300 focus:outline-none px-0.5 py-0.5"
+                        />
                       </td>
 
                       {/* Status / Funil */}
@@ -2049,14 +2074,17 @@ export default function LeadsPage() {
                         })()}
                       </td>
 
-                      {/* Observações */}
-                      <td className="py-3.5 px-3 max-w-[180px]">
-                        <p
-                          className="text-xs text-slate-500 truncate"
-                          title={lead.observacoes || lead.notes || ''}
-                        >
-                          {lead.observacoes || lead.notes || '—'}
-                        </p>
+                      {/* Observações — edição inline */}
+                      <td
+                        className="py-3.5 px-3 max-w-[180px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <InlineEditText
+                          value={lead.observacoes || lead.notes || ''}
+                          onSave={(v) => updateLead(lead.id, { observacoes: v, notes: v })}
+                          placeholder="—"
+                          className="text-xs text-slate-500 w-full"
+                        />
                       </td>
 
                       {/* Ações */}
