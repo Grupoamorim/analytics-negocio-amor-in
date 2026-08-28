@@ -452,6 +452,29 @@ export function currentStageEnteredAt(deal: Deal): string {
   return deal.updatedAt || deal.createdAt
 }
 
+/**
+ * Progresso da turma rumo à Meta de Contratos definida no Funil.
+ * `fechados` = alunos com contrato (auto do SGE); `meta` = lead.metaContratos.
+ * `pct` é null quando não há meta definida.
+ */
+export function metaProgresso(lead: Pick<Lead, 'alunosFechados' | 'metaContratos'>): {
+  fechados: number
+  meta: number
+  pct: number | null
+} {
+  const fechados = lead.alunosFechados || 0
+  const meta = lead.metaContratos || 0
+  return { fechados, meta, pct: meta > 0 ? Math.round((fechados / meta) * 100) : null }
+}
+
+/** Cor do progresso da meta: verde ≥100%, âmbar ≥60%, cinza abaixo. */
+export function metaProgressoCor(pct: number | null): string {
+  if (pct == null) return '#64748b'
+  if (pct >= 100) return '#34D399'
+  if (pct >= 60) return '#FBBF24'
+  return '#94A3B8'
+}
+
 /** Formata uma data ISO em dd/mm. */
 export function formatBRDate(iso: string): string {
   const d = new Date(iso)

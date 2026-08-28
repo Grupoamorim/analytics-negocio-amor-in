@@ -37,8 +37,11 @@ import {
   getTurmaDisplayName,
   getFullTurmaName,
   FUNNEL_STAGES,
+  FUNNEL_STAGE_BY_ID,
   DEFAULT_CHECKLIST_ITEMS,
   currentStageEnteredAt,
+  metaProgresso,
+  metaProgressoCor,
 } from '@/types/crm'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -2000,21 +2003,50 @@ export default function LeadsPage() {
                         )}
                       </td>
 
-                      {/* Alunos Fechados / Cadastrados (X/Y) */}
+                      {/* Alunos Fechados / Cadastrados + progresso da meta */}
                       <td className="py-3.5 px-3 text-center">
-                        <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                          {lead.alunosFechados && lead.alunosFechados > 0 ? (
-                            <span className="flex items-center gap-0.5">
-                              <span className="text-emerald-500 font-bold">
-                                {lead.alunosFechados}
+                        {(() => {
+                          const mp = metaProgresso(lead)
+                          return (
+                            <div className="inline-flex flex-col items-center gap-1 min-w-[64px]">
+                              <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                {lead.alunosFechados && lead.alunosFechados > 0 ? (
+                                  <span className="flex items-center gap-0.5">
+                                    <span className="text-emerald-500 font-bold">
+                                      {lead.alunosFechados}
+                                    </span>
+                                    <span className="text-slate-400">/</span>
+                                    <span>{lead.totalAlunos || 0}</span>
+                                  </span>
+                                ) : (
+                                  <span>{lead.totalAlunos || 0}</span>
+                                )}
                               </span>
-                              <span className="text-slate-400">/</span>
-                              <span>{lead.totalAlunos || 0}</span>
-                            </span>
-                          ) : (
-                            <span>{lead.totalAlunos || 0}</span>
-                          )}
-                        </span>
+                              {mp.pct != null && (
+                                <div
+                                  className="w-full"
+                                  title={`${mp.fechados} de ${mp.meta} contratos (meta)`}
+                                >
+                                  <div className="h-1 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full"
+                                      style={{
+                                        width: `${Math.min(100, mp.pct)}%`,
+                                        backgroundColor: metaProgressoCor(mp.pct),
+                                      }}
+                                    />
+                                  </div>
+                                  <span
+                                    className="text-[10px] font-semibold"
+                                    style={{ color: metaProgressoCor(mp.pct) }}
+                                  >
+                                    {mp.pct}% da meta
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </td>
 
                       {/* Observações */}
@@ -2816,6 +2848,30 @@ function SelectedLeadDetail({
               }
             />
           </div>
+
+          {(() => {
+            const mp = metaProgresso(lead)
+            if (mp.pct == null) return null
+            return (
+              <div className="text-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-slate-500">Progresso da meta</span>
+                  <span className="font-semibold" style={{ color: metaProgressoCor(mp.pct) }}>
+                    {mp.fechados}/{mp.meta} contratos · {mp.pct}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(100, mp.pct)}%`,
+                      backgroundColor: metaProgressoCor(mp.pct),
+                    }}
+                  />
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Contato Principal */}
           <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">

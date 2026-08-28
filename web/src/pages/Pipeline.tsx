@@ -51,6 +51,8 @@ import {
   daysInCurrentStage,
   currentStageEnteredAt,
   formatBRDate,
+  metaProgresso,
+  metaProgressoCor,
   Transcript,
   Contact,
 } from '@/types/crm'
@@ -1095,6 +1097,38 @@ export default function Pipeline() {
                           <span className="text-slate-500">desde {formatBRDate(enteredAt)}</span>
                         </div>
 
+                        {/* Progresso da Meta de Contratos da turma */}
+                        {lead &&
+                          (() => {
+                            const mp = metaProgresso(lead)
+                            if (mp.pct == null) return null
+                            return (
+                              <div
+                                className="mb-2 text-[10px]"
+                                title={`${mp.fechados} de ${mp.meta} contratos (meta)`}
+                              >
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-slate-400">Meta de contratos</span>
+                                  <span
+                                    className="font-semibold"
+                                    style={{ color: metaProgressoCor(mp.pct) }}
+                                  >
+                                    {mp.fechados}/{mp.meta} · {mp.pct}%
+                                  </span>
+                                </div>
+                                <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full"
+                                    style={{
+                                      width: `${Math.min(100, mp.pct)}%`,
+                                      backgroundColor: metaProgressoCor(mp.pct),
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })()}
+
                         {/* Checklist progress — minimizado por padrão, setinha expande só os
                             itens desta etapa (não de todas). */}
                         {stageItems.length > 0 && (
@@ -1810,6 +1844,30 @@ function DealDetailModal({
                   value={String(lead.alunosFechados || 0)}
                 />
               </div>
+
+              {(() => {
+                const mp = metaProgresso(lead)
+                if (mp.pct == null) return null
+                return (
+                  <div className="text-[11px]">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-slate-400">Progresso da meta</span>
+                      <span className="font-semibold" style={{ color: metaProgressoCor(mp.pct) }}>
+                        {mp.fechados}/{mp.meta} contratos · {mp.pct}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, mp.pct)}%`,
+                          backgroundColor: metaProgressoCor(mp.pct),
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Foto da comissão responsável pela turma */}
               <div className="flex items-center gap-3 pt-1 border-t border-white/[0.04]">
