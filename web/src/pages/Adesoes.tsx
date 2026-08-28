@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { UserPlus, TrendingUp, DollarSign, Percent, ArrowUp, ArrowDown } from 'lucide-react'
 import {
   BarChart,
@@ -14,6 +14,11 @@ import { supabase } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/utils/fetchAllRows'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
+import { useAcesso } from '@/context/AcessoContext'
+
+function normalizar(s?: string | null): string {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+}
 
 /** Empresas conhecidas (marcas internas). O texto da turma vindo do SGE sempre
  * começa com esse prefixo, ex.: "AIF Medicina FASA turma 7 2027.2 Itabuna". */
@@ -169,9 +174,51 @@ function agruparPorBalde(
   return Array.from(baldes.entries()).map(([chave, b]) => ({ chave, ...b }))
 }
 
+type TurmaRef = {
+  curso: string | null
+  faculdade: string | null
+  turma: string | null
+  closer: string | null
+  sdr: string | null
+  user_id: string | null
+}
+
 export default function Adesoes() {
   const [adesoes, setAdesoes] = useState<Adesao[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Filtro pessoal "Responsável" — casa o texto da turma da adesão (vindo do SGE)
+  // com uma turma cadastrada e o closer/SDR dela.
+  const { minhaVisao, filtroPessoalAtivo } = useAcesso()
+  const [turmasRef, setTurmasRef] = useState<TurmaRef[]>([])
+  useEffect(() => {
+    supabase
+      .from('turmas')
+      .select('curso, faculdade, turma, closer, sdr, user_id')
+      .then(({ data }) => setTurmasRef((data as TurmaRef[]) || []))
+  }, [])
+
+  const adesaoVisivel = useCallback(
+    (turmaTexto: string | null) => {
+      if (!filtroPessoalAtivo || !turmaTexto) return true
+      const t = normalizar(turmaTexto)
+      const candidatas = turmasRef.filter((r) => {
+        const curso = normalizar(r.curso)
+        const fac = normalizar(r.faculdade)
+        const num = String(r.turma || '').match(/\d+/)?.[0] || ''
+        return (
+          !!curso &&
+          t.includes(curso) &&
+          !!fac &&
+          t.includes(fac) &&
+          (!num || t.includes(`turma ${num}`))
+        )
+      })
+      if (candidatas.length === 0) return true // não bate com turma cadastrada → aparece pra todos
+      return candidatas.some((r) => minhaVisao({ nomes: [r.closer, r.sdr], ownerId: r.user_id }))
+    },
+    [filtroPessoalAtivo, turmasRef, minhaVisao],
+  )
   const [periodo, setPeriodo] = useState<Periodo>('mes')
   const hoje = new Date()
   const inicial = calcularPeriodo('mes', hoje.getFullYear(), hoje.getMonth())
@@ -240,10 +287,15 @@ export default function Adesoes() {
     const semServico = (a: Adesao) => incluirPrestacaoServico || !isPrestacaoServico(a.turma)
     const dentroEmpresa = (a: Adesao) =>
       selectedEmpresas.length === 0 || selectedEmpresas.includes(extractEmpresaFromTurma(a.turma) || '')
+    const doResponsavel = (a: Adesao) => adesaoVisivel(a.turma)
 
     const noPeriodoTodos = adesoes.filter(
       (a) =>
-        a.status !== 'cancelado' && a.data_adesao >= dtIni && a.data_adesao <= dtFim && dentroEmpresa(a),
+        a.status !== 'cancelado' &&
+        a.data_adesao >= dtIni &&
+        a.data_adesao <= dtFim &&
+        dentroEmpresa(a) &&
+        doResponsavel(a),
     )
     const noPeriodo = noPeriodoTodos.filter(semServico)
     const noPeriodoAnterior = adesoes.filter(
@@ -252,7 +304,8 @@ export default function Adesoes() {
         a.data_adesao >= anoAnterior.ini &&
         a.data_adesao <= anoAnterior.fim &&
         semServico(a) &&
-        dentroEmpresa(a),
+        dentroEmpresa(a) &&
+        doResponsavel(a),
     )
 
     const prestacaoServicoNoPeriodo = noPeriodoTodos.filter((a) => isPrestacaoServico(a.turma))
@@ -276,7 +329,7 @@ export default function Adesoes() {
       ? ((totalValor - valorAnoAnterior) / valorAnoAnterior) * 100
       : null
 
-    const adesoesFiltradas = adesoes.filter((a) => semServico(a) && dentroEmpresa(a))
+    const adesoesFiltradas = adesoes.filter((a) => semServico(a) && dentroEmpresa(a) && doResponsavel(a))
     const granularidade: 'dia' | 'mes' = periodo === 'mes' ? 'dia' : 'mes'
     const baldesAtual = agruparPorBalde(adesoesFiltradas, dtIni, dtFim, granularidade)
     const baldesAnterior = agruparPorBalde(
@@ -313,7 +366,7 @@ export default function Adesoes() {
       qtdPrestacaoServico,
       valorPrestacaoServico,
     }
-  }, [adesoes, dtIni, dtFim, periodo, incluirPrestacaoServico, selectedEmpresas])
+  }, [adesoes, dtIni, dtFim, periodo, incluirPrestacaoServico, selectedEmpresas, adesaoVisivel])
 
   const porTurmaOrdenado = useMemo(
     () => sortByField(analise.porTurma, sortFieldTurma, sortDirTurma, (t, f) => (t as any)[f]),
