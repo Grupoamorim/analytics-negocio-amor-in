@@ -1,18 +1,19 @@
 /**
  * Motor de probabilidade ÚNICA de fechamento de uma turma.
  *
- * Regra de ouro (definida com o Lucas): a análise da reunião (foco/transcrição)
- * MANDA no número — é o único fator que mede se a turma quer. O funil só TEMPERA:
+ * Regras de ouro (definidas com o Lucas):
  *
- *   1. bônus pequeno por portão de fase já vencido, proporcional à seletividade
- *      do portão (Comissão→Turma ≈ 0, porque quase todo mundo passa; a coluna é
- *      um "falta fazer", não uma conquista);
- *   2. ajuste por velocidade / estagnação na coluna atual — esse morde: turma
- *      parada há muito tempo cai forte; turma rápida = engajada, sobe;
- *   3. leve empurrão pela taxa histórica de fechamento do curso/faculdade, com
- *      peso proporcional ao tamanho da amostra (N).
+ *   1. A probabilidade SÓ começa a valer depois que o item "Qualificação do
+ *      Contato" do checklist é marcado (ou a turma já está numa fase que
+ *      pressupõe isso — Reunião Comissão em diante). Antes disso: "—".
+ *   2. Sem transcrição/gravação de reunião analisada NÃO existe número — é ela
+ *      que mede se a turma quer. Antes da primeira reunião analisada: "—".
+ *   3. Quando há número, PELO MENOS 90% do peso vem da transcrição (`base`).
+ *      O funil só TEMPERA de leve (no máximo ±1/9 da base, e nunca mais que
+ *      ±8 pontos no total): portão de fase vencido, velocidade/estagnação na
+ *      coluna e taxa histórica do curso/faculdade (só com amostra >= 8).
  *
- * `final = clamp(base + ajustePortao + ajusteVelocidade + ajusteCursoFac, 3, 99)`
+ * `final = clamp(base + tempero, 3, 99)`, com `|tempero| <= min(8, base/9)`.
  */
 
 import {
@@ -25,33 +26,38 @@ import {
   daysInCurrentStage,
 } from '@/types/crm'
 
-/** Pesos fixos do motor. Calibrados pelo playbook; edição em Admin fica pra depois. */
+/** Id do item de checklist "Qualificação do Contato" (2º item da etapa Qualificação/Contato). */
+export const QUALIFICACAO_CHECKLIST_ID = 'stage-2-1'
+
+/** Pesos fixos do motor. Propositalmente pequenos — a transcrição é que manda. */
 export const MOTOR_WEIGHTS = {
   /**
    * Bônus por portão vencido (transição ENTRE estágios consecutivos), pela ordem
    * das fases. Índice i = bônus por ter saído do estágio i para o i+1.
-   * Prospecção→Qualif quase nada; Comissão→Turma mínimo (só uma apresentação);
-   * Turma→Decisão é o que pesa (a turma inteira já viu a proposta).
+   * Tudo minúsculo: a coluna é um "falta fazer", não uma conquista, e o que
+   * importa de verdade (a reunião) já está na base.
    */
   portao: {
     'stage-1->stage-2': 0,
-    'stage-2->stage-3': 2,
+    'stage-2->stage-3': 1,
     'stage-3->stage-4': 1,
-    'stage-4->stage-5': 4,
+    'stage-4->stage-5': 2,
   } as Record<string, number>,
   /** Teto do bônus acumulado de portões. */
-  portaoMax: 8,
+  portaoMax: 4,
   /** Ajuste por velocidade na coluna atual, por faixa de (dias / alerta de estagnação). */
   velocidade: {
-    rapida: 5, // ratio <= 0.5
+    rapida: 2, // ratio <= 0.5
     saudavel: 0, // 0.5 < ratio <= 1.0
-    lenta: -8, // 1.0 < ratio <= 2.0
-    estagnada: -18, // ratio > 2.0
+    lenta: -2, // 1.0 < ratio <= 2.0
+    estagnada: -5, // ratio > 2.0
   },
   /** Efeito máximo (para cima ou para baixo) da taxa de fechamento do curso/faculdade. */
-  cursoFacMax: 5,
+  cursoFacMax: 2,
   /** N de turmas resolvidas a partir do qual o efeito curso/faculdade fica "cheio". */
   cursoFacNParaConfiancaTotal: 15,
+  /** Teto ABSOLUTO do tempero somado (o funil nunca mexe mais que isso). */
+  temperoMax: 8,
   /** Piso/teto do número final. */
   min: 3,
   max: 99,
@@ -112,6 +118,31 @@ function ajusteCursoFac(rate?: CursoFacRate | null): { valor: number; n: number 
   return { valor: Math.round(valor), n: rate.n }
 }
 
+/** Turma "qualificada": item de checklist marcado OU já numa fase que pressupõe isso. */
+function estaQualificado(deal: Deal, stageIdx: number): boolean {
+  if (deal.checklist?.[QUALIFICACAO_CHECKLIST_ID] === true) return true
+  // Reunião Comissão (stage-3) em diante: a qualificação já aconteceu por definição.
+  return stageIdx >= 2
+}
+
+function naoAvaliavel(motivo: string, semReuniao: boolean): { score: number; breakdown: ProbBreakdown } {
+  return {
+    score: 0,
+    breakdown: {
+      base: 0,
+      semReuniao,
+      naoAvaliavel: true,
+      motivo,
+      ajustePortao: 0,
+      ajusteVelocidade: 0,
+      ajusteCursoFac: 0,
+      cursoFacN: 0,
+      velocidadeLabel: 'saudável',
+      final: 0,
+    },
+  }
+}
+
 export interface ComputeArgs {
   deal: Deal
   latestTranscript?: Transcript | null
@@ -128,27 +159,8 @@ export function computeDealProbability({
   cursoFacRate,
 }: ComputeArgs): { score: number; breakdown: ProbBreakdown } {
   const stageId = deal.stageId || 'stage-1'
+  const stageIdx = STAGE_ORDER.indexOf(stageId)
   const stageMeta = FUNNEL_STAGE_BY_ID[stageId] || FUNNEL_STAGES[0]
-
-  // Prospecção: ainda não houve contato com a comissão nem reunião — não dá pra
-  // estimar probabilidade de fechamento com honestidade. Só avaliamos a partir
-  // da Qualificação/Contato. (Decisão do Lucas.)
-  if (stageId === 'stage-1' || deal.stage === 'prospeccao') {
-    return {
-      score: 0,
-      breakdown: {
-        base: 0,
-        semReuniao: true,
-        naoAvaliavel: true,
-        ajustePortao: 0,
-        ajusteVelocidade: 0,
-        ajusteCursoFac: 0,
-        cursoFacN: 0,
-        velocidadeLabel: 'saudável',
-        final: 0,
-      },
-    }
-  }
 
   // Estágio final: o resultado já é conhecido, não há o que estimar.
   if (stageId === 'stage-6' || deal.stage === 'fechou-ou-perdeu') {
@@ -170,24 +182,51 @@ export function computeDealProbability({
 
   const tProb = transcriptProbabilidade(latestTranscript)
   const semReuniao = tProb === undefined
-  const base = semReuniao ? stageMeta.defaultProbability : (tProb as number)
+
+  // Portão 1: só conta a partir da Qualificação do Contato marcada.
+  if (!estaQualificado(deal, stageIdx)) {
+    return naoAvaliavel('Marque "Qualificação do Contato" no checklist', semReuniao)
+  }
+
+  // Portão 2: sem reunião/gravação analisada não há como estimar (é ela que
+  // carrega 90%+ do peso).
+  if (semReuniao) {
+    return naoAvaliavel('Aguardando reunião/gravação analisada', true)
+  }
+
+  // A partir daqui: qualificada E com transcrição. A transcrição é a base.
+  const base = tProb as number
 
   const aPortao = bonusPortao(stageId)
   const vel = ajusteVelocidade(deal, stageMeta)
   const cf = ajusteCursoFac(cursoFacRate)
 
-  const final = Math.round(
-    clamp(base + aPortao + vel.valor + cf.valor, MOTOR_WEIGHTS.min, MOTOR_WEIGHTS.max),
-  )
+  // O funil só tempera: no máx. ±8 e nunca mais que ~1/9 da base (garante que
+  // pelo menos 90% do número vem da transcrição). Se estourar, encolhe os 3
+  // ajustes proporcionalmente pra o "porquê" continuar somando certo.
+  const bruto = aPortao + vel.valor + cf.valor
+  const teto = Math.min(MOTOR_WEIGHTS.temperoMax, Math.floor(base / 9))
+  let pPortao = aPortao
+  let pVel = vel.valor
+  let pCf = cf.valor
+  if (bruto !== 0 && Math.abs(bruto) > teto) {
+    const k = teto / Math.abs(bruto)
+    pPortao = Math.round(aPortao * k)
+    pVel = Math.round(vel.valor * k)
+    pCf = Math.round(cf.valor * k)
+  }
+  const tempero = pPortao + pVel + pCf
+
+  const final = Math.round(clamp(base + tempero, MOTOR_WEIGHTS.min, MOTOR_WEIGHTS.max))
 
   return {
     score: final,
     breakdown: {
       base: Math.round(base),
-      semReuniao,
-      ajustePortao: aPortao,
-      ajusteVelocidade: vel.valor,
-      ajusteCursoFac: cf.valor,
+      semReuniao: false,
+      ajustePortao: pPortao,
+      ajusteVelocidade: pVel,
+      ajusteCursoFac: pCf,
       cursoFacN: cf.n,
       velocidadeLabel: vel.label,
       final,

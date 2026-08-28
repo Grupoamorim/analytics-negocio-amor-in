@@ -239,7 +239,7 @@ function VisaoGeral({
             </div>
           </div>
           <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
-            <Kpi label="Turmas avaliadas (da Qualificação)" value={total} />
+            <Kpi label="Turmas com probabilidade" value={total} />
             <Kpi label="Reuniões analisadas" value={reunioes} />
             <Kpi label="Turmas ganhas (histórico)" value={ganhos} color="text-emerald-400" />
             <Kpi label="Turmas perdidas (histórico)" value={perdidos} color="text-rose-400" />
@@ -250,7 +250,7 @@ function VisaoGeral({
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-semibold text-slate-300">Distribuição das probabilidades do funil</span>
             <span>
-              {total} turmas{totalFunil > 0 ? ` · ${totalFunil} em Prospecção (sem probabilidade)` : ''}
+              {total} turmas{totalFunil > 0 ? ` · ${totalFunil} sem probabilidade ainda` : ''}
             </span>
           </div>
           <div className="h-4 w-full bg-white/[0.04] rounded-full overflow-hidden flex gap-0.5 p-0.5">
@@ -405,7 +405,7 @@ function MotorTab({ linhas }: { linhas: LinhaMotor[] }) {
                     </td>
                     <td className="py-2 px-2">{stageNome(deal.stageId)}</td>
                     <td className="py-2 px-2 text-right" colSpan={5}>
-                      — sem probabilidade (só avalia da Qualificação)
+                      — {b.motivo || 'sem base pra estimar ainda'}
                     </td>
                   </tr>
                 ) : (

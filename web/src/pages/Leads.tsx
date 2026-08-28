@@ -111,6 +111,12 @@ import {
 } from '@/utils/pacoteCatalogo'
 import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
 import { fetchCidadeFaculdades, ensureCidadeFaculdade, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
+import {
+  listarDuracaoCursos,
+  acharDuracaoAnos,
+  semestreDaTurmaLabel,
+  type DuracaoCurso,
+} from '@/utils/duracaoCursos'
 import DropdownComOutro from '@/components/DropdownComOutro'
 import InlineEditText from '@/components/InlineEditText'
 
@@ -444,9 +450,14 @@ export default function LeadsPage() {
     () => Object.keys(cidadeFaculdadesModal).sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [cidadeFaculdadesModal],
   )
+  // Duração dos cursos (Admin → Turmas) — pra calcular em que semestre a turma está.
+  const [duracaoCursos, setDuracaoCursos] = useState<DuracaoCurso[]>([])
+  const semestreDaTurmaTexto = (l: { anoFormatura?: string | null; curso?: string | null; faculdade?: string | null }) =>
+    semestreDaTurmaLabel(l.anoFormatura, acharDuracaoAnos(duracaoCursos, l.curso, l.faculdade))
   useEffect(() => {
     fetchCursosConhecidos().then(setCursosConhecidosModal)
     fetchCidadeFaculdades().then(setCidadeFaculdadesModal)
+    listarDuracaoCursos().then(setDuracaoCursos)
   }, [])
 
   // Persist saved filters
@@ -1690,6 +1701,9 @@ export default function LeadsPage() {
                     isSorted={sortDirFor('anoFormatura')}
                   />
                 </th>
+                <th className="py-3 px-3" title="Em que semestre do curso a turma está hoje (precisa da duração do curso em Admin → Turmas)">
+                  Semestre
+                </th>
                 <th className="py-3 px-3">Serviço</th>
                 <th className="py-3 px-3">Origem</th>
                 <th className="py-3 px-3">
@@ -1713,7 +1727,7 @@ export default function LeadsPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {paginatedLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-12 text-center text-slate-500">
+                  <td colSpan={14} className="py-12 text-center text-slate-500">
                     Nenhuma turma encontrada para os critérios selecionados.
                   </td>
                 </tr>
@@ -1863,6 +1877,32 @@ export default function LeadsPage() {
                           placeholder="2027.1"
                           className="text-xs font-mono text-slate-700 dark:text-slate-300 w-16"
                         />
+                      </td>
+
+                      {/* Semestre do curso (calculado: ano de formatura + duração do curso) */}
+                      <td className="py-3.5 px-3 text-xs whitespace-nowrap">
+                        {(() => {
+                          const txt = semestreDaTurmaTexto(lead)
+                          return (
+                            <span
+                              className={cn(
+                                'font-medium',
+                                txt === '—' || txt === 'A iniciar'
+                                  ? 'text-slate-400 dark:text-slate-500'
+                                  : txt === 'Formado'
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-slate-700 dark:text-slate-300',
+                              )}
+                              title={
+                                txt === '—'
+                                  ? 'Cadastre a duração desse curso em Admin → Turmas'
+                                  : 'Semestre atual / total do curso'
+                              }
+                            >
+                              {txt}
+                            </span>
+                          )
+                        })()}
                       </td>
 
                       {/* Tipo Serviço */}
@@ -2550,9 +2590,14 @@ function SelectedLeadDetail({
   const [mostrarApresentacao, setMostrarApresentacao] = useState(false)
   const [cursosConhecidos, setCursosConhecidos] = useState<string[]>([])
   const [cidadeFaculdades, setCidadeFaculdades] = useState<CidadeFaculdadesMap>({})
+  const [duracaoCursos, setDuracaoCursos] = useState<DuracaoCurso[]>([])
   const cidadesConhecidas = useMemo(
     () => Object.keys(cidadeFaculdades).sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [cidadeFaculdades],
+  )
+  const semestreTxt = semestreDaTurmaLabel(
+    lead.anoFormatura,
+    acharDuracaoAnos(duracaoCursos, lead.curso, lead.faculdade),
   )
 
   // Ticket médio = média do valor dos pacotes cadastrados; Valor Esperado =
@@ -2572,6 +2617,7 @@ function SelectedLeadDetail({
   useEffect(() => {
     fetchCursosConhecidos().then(setCursosConhecidos)
     fetchCidadeFaculdades().then(setCidadeFaculdades)
+    listarDuracaoCursos().then(setDuracaoCursos)
   }, [])
 
   const handleAdicionarPacote = async () => {
@@ -2714,6 +2760,26 @@ function SelectedLeadDetail({
               defaultValue={lead.anoFormatura}
               onSave={(v) => onPatch({ anoFormatura: v })}
             />
+            <div>
+              <span className="text-slate-500 block mb-0.5">Semestre atual</span>
+              <span
+                className={cn(
+                  'font-medium',
+                  semestreTxt === '—' || semestreTxt === 'A iniciar'
+                    ? 'text-slate-400'
+                    : semestreTxt === 'Formado'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-slate-800 dark:text-slate-200',
+                )}
+                title={
+                  semestreTxt === '—'
+                    ? 'Cadastre a duração desse curso em Admin → Turmas'
+                    : 'Semestre atual / total do curso'
+                }
+              >
+                {semestreTxt}
+              </span>
+            </div>
             <DropdownComOutro
               label="Cidade"
               variant="underline"

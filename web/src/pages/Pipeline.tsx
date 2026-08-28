@@ -81,6 +81,12 @@ import {
   adicionarItemCatalogo,
 } from '@/utils/pacoteCatalogo'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
+import {
+  listarDuracaoCursos,
+  acharDuracaoAnos,
+  semestreDaTurmaLabel,
+  type DuracaoCurso,
+} from '@/utils/duracaoCursos'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
 
@@ -219,6 +225,14 @@ export default function Pipeline() {
       // ignora
     }
   }, [savedFunilFilters])
+
+  // Duração dos cursos (Admin → Turmas) → em que semestre a turma está hoje.
+  const [duracaoCursos, setDuracaoCursos] = useState<DuracaoCurso[]>([])
+  useEffect(() => {
+    listarDuracaoCursos().then(setDuracaoCursos)
+  }, [])
+  const semestreDoLead = (l?: { anoFormatura?: string | null; curso?: string | null; faculdade?: string | null } | null) =>
+    l ? semestreDaTurmaLabel(l.anoFormatura, acharDuracaoAnos(duracaoCursos, l.curso, l.faculdade)) : '—'
 
   const handleSaveFunilFilter = () => {
     if (!saveFunilFilterName.trim()) return
@@ -932,6 +946,11 @@ export default function Pipeline() {
                               <div className="text-[10px] text-slate-400 truncate">
                                 {lead?.faculdade || deal.company}
                                 {lead?.curso ? ` • ${lead.curso}` : ''}
+                                {(() => {
+                                  const s = semestreDoLead(lead)
+                                  if (!s || s === '—') return ''
+                                  return /\d/.test(s) ? ` • ${s} sem.` : ` • ${s}`
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -993,14 +1012,17 @@ export default function Pipeline() {
                           )}
                         </div>
 
-                        {/* Prospecção: sem probabilidade — só avalia da Qualificação em diante */}
+                        {/* Sem base ainda: não qualificada ou sem reunião analisada.
+                            90%+ da probabilidade vem da transcrição/gravação. */}
                         {stage.id !== 'stage-6' && bd?.naoAvaliavel && (
-                          <div className="mb-2 flex items-center justify-between text-[10px] px-2 py-1 rounded bg-white/[0.03] border border-white/[0.05]">
-                            <span className="text-slate-400 flex items-center gap-1">
+                          <div className="mb-2 flex items-center justify-between gap-2 text-[10px] px-2 py-1 rounded bg-white/[0.03] border border-white/[0.05]">
+                            <span className="text-slate-400 flex items-center gap-1 shrink-0">
                               <TrendingUp className="w-3 h-3 text-slate-500" />
                               Prob. de fechar:
                             </span>
-                            <span className="text-slate-500">— (avalia da Qualificação)</span>
+                            <span className="text-slate-500 text-right">
+                              — {bd.motivo ? `(${bd.motivo})` : ''}
+                            </span>
                           </div>
                         )}
 
