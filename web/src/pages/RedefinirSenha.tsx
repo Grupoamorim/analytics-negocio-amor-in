@@ -12,14 +12,31 @@ export default function RedefinirSenha() {
   const [pronto, setPronto] = useState(false)
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
+  const [linkErro, setLinkErro] = useState('')
   const [sucesso, setSucesso] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
   useEffect(() => {
+    // Erros vindos do próprio link do Supabase (token expirado, já usado, etc.)
+    // chegam no hash (#error=...&error_description=...) ou na query (?error=...).
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const query = new URLSearchParams(window.location.search)
+    const errDesc =
+      hash.get('error_description') ||
+      query.get('error_description') ||
+      hash.get('error') ||
+      query.get('error')
+    if (errDesc) {
+      setLinkErro(decodeURIComponent(errDesc.replace(/\+/g, ' ')))
+      return
+    }
+
+    // Convite e "esqueci a senha" caem aqui: o supabase-js processa o token do
+    // link (recovery OU invite) e abre uma sessão. Serve pros dois fluxos.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setPronto(true)
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || session) setPronto(true)
     })
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setPronto(true)
@@ -49,12 +66,29 @@ export default function RedefinirSenha() {
             <KeyRound className="w-6 h-6 text-orange-400" />
           </div>
           <CardTitle className="text-white">Nova senha</CardTitle>
-          <CardDescription>Defina a nova senha de acesso à sua conta</CardDescription>
+          <CardDescription>Defina a senha de acesso à sua conta</CardDescription>
         </CardHeader>
-        <CardContent>
-          {!pronto && !sucesso && (
+        <CardContent className="space-y-3">
+          {linkErro && (
+            <div className="text-xs text-rose-400 text-center space-y-2">
+              <p>Esse link não é mais válido: {linkErro}</p>
+              <p className="text-slate-400">
+                Links de convite/redefinição valem uma vez só e expiram rápido. Peça um novo em{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/login')}
+                  className="text-orange-400 hover:underline"
+                >
+                  Entrar → Esqueci minha senha
+                </button>
+                , ou peça pro admin reenviar o convite.
+              </p>
+            </div>
+          )}
+
+          {!pronto && !sucesso && !linkErro && (
             <p className="text-xs text-slate-400 text-center">
-              Abra esta página pelo link recebido no e-mail de redefinição de senha.
+              Abra esta página pelo link recebido no e-mail (convite ou redefinição de senha).
             </p>
           )}
 

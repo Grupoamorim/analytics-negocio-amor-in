@@ -27,6 +27,7 @@ import {
   ClipboardCopy,
   Check,
   Presentation,
+  Filter,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import {
@@ -37,8 +38,11 @@ import {
   getTurmaDisplayName,
   getFullTurmaName,
   FUNNEL_STAGES,
+  FUNNEL_STAGE_BY_ID,
   DEFAULT_CHECKLIST_ITEMS,
   currentStageEnteredAt,
+  metaProgresso,
+  metaProgressoCor,
 } from '@/types/crm'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -64,6 +68,7 @@ import {
 import { Button } from '@/components/ui/button'
 import ImportCsvModal from '@/components/ImportCsvModal'
 import { ColumnHeaderWithFilter, ColumnFilterKey } from '@/components/ColumnHeaderWithFilter'
+import { TableFilterPopover, type FilterVal } from '@/components/TableFilterPopover'
 import { downloadTemplateCsv } from '@/utils/csvImporter'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -107,6 +112,7 @@ import {
 import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
 import { fetchCidadeFaculdades, ensureCidadeFaculdade, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
 import DropdownComOutro from '@/components/DropdownComOutro'
+import InlineEditText from '@/components/InlineEditText'
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: string }> = {
   Novo: {
@@ -202,16 +208,70 @@ function getProximaAcaoInfo(lead: Lead, deal: Deal | undefined): ProximaAcaoInfo
   }
 }
 
+type FilterKey = ColumnFilterKey
+type FiltersState = Partial<Record<FilterKey, FilterVal>>
+
+/** Modo de cada dimensão de filtro. */
+const FILTER_MODE_SET: Record<FilterKey, 'enum' | 'range' | 'enum+range'> = {
+  empresa: 'enum',
+  curso: 'enum',
+  faculdade: 'enum',
+  cidade: 'enum',
+  etapaFunil: 'enum',
+  anoFormatura: 'enum+range',
+  dataCadastro: 'range',
+  dataFechamento: 'range',
+  primeiroContato: 'range',
+}
+const SEM_FUNIL = '(sem funil)'
+
+/** Dimensões mostradas como botões na barra de filtros do topo. */
+const FILTER_BAR: { key: FilterKey; label: string; rangeType?: 'date' }[] = [
+  { key: 'empresa', label: 'Empresa' },
+  { key: 'curso', label: 'Curso' },
+  { key: 'faculdade', label: 'Faculdade' },
+  { key: 'cidade', label: 'Cidade' },
+  { key: 'anoFormatura', label: 'Ano de Formatura' },
+  { key: 'etapaFunil', label: 'Etapa do Funil' },
+  { key: 'dataCadastro', label: 'Cadastro', rangeType: 'date' },
+  { key: 'dataFechamento', label: 'Fechamento', rangeType: 'date' },
+  { key: 'primeiroContato', label: '1º Contato', rangeType: 'date' },
+]
+
+/** Normaliza uma data (Notion / ISO / vazia) para 'YYYY-MM-DD' comparável. */
+function normDate(s: string | undefined | null): string {
+  if (!s) return ''
+  const d = new Date(s)
+  return isNaN(d.getTime()) ? String(s) : d.toISOString().slice(0, 10)
+}
+
 export interface SavedFilter {
   id: string
   name: string
   search: string
-  curso: string
-  faculdade: string
-  cidade: string
-  ano: string
+  filters: FiltersState
+  /** compat: formato antigo (valor único por dimensão) */
+  curso?: string
+  faculdade?: string
+  cidade?: string
+  ano?: string
   empresa?: string
   status?: string
+}
+
+/** Converte um SavedFilter (novo ou antigo) para FiltersState. */
+function savedToFilters(sf: SavedFilter): FiltersState {
+  if (sf.filters && typeof sf.filters === 'object') return sf.filters
+  const out: FiltersState = {}
+  const put = (k: FilterKey, v?: string) => {
+    if (v && v !== 'all') out[k] = { kind: 'enum', mode: 'is', values: [v] }
+  }
+  put('empresa', sf.empresa)
+  put('curso', sf.curso)
+  put('faculdade', sf.faculdade)
+  put('cidade', sf.cidade)
+  put('anoFormatura', sf.ano)
+  return out
 }
 
 const SAVED_FILTERS_KEY = 'turmas_saved_filters'
@@ -242,15 +302,19 @@ export default function LeadsPage() {
     return map
   }, [deals])
 
-  // General Filter State
+  // Filtros — um objeto só, empilhável. Cada dimensão pode ser
+  // "é" / "não é" (enum multi) ou "está entre" (faixa, p/ ano e datas).
   const [search, setSearch] = useState('')
-  const [filterFaculdade, setFilterFaculdade] = useState<string>('all')
-  const [filterCurso, setFilterCurso] = useState<string>('all')
-  const [filterCidade, setFilterCidade] = useState<string>('all')
-  const [filterAno, setFilterAno] = useState<string>('all')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [filterEmpresa, setFilterEmpresa] = useState<string>('all')
+  const [filters, setFilters] = useState<FiltersState>({})
   const [showConcluidas, setShowConcluidas] = useState(false)
+
+  const setFilter = (key: FilterKey, next: FilterVal | undefined) =>
+    setFilters((prev) => {
+      const n = { ...prev }
+      if (next === undefined) delete n[key]
+      else n[key] = next
+      return n
+    })
 
   // Ordenação
   const [sortRules, setSortRules] = useState<SortRule[]>([
@@ -317,8 +381,9 @@ export default function LeadsPage() {
     }
   }, [])
 
-  // Column Filters State (Excel / Notion style)
-  const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnFilterKey, string[]>>>({})
+  // Nome da etapa do funil (Kanban) de cada turma, via o deal vinculado.
+  const etapaFunilDoLead = (lead: Lead): string =>
+    FUNNEL_STAGE_BY_ID[dealByLeadId.get(lead.id)?.stageId || '']?.name || SEM_FUNIL
 
   // Saved Filters State
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => {
@@ -488,41 +553,43 @@ export default function LeadsPage() {
     return Array.from(set).sort()
   }, [leads])
 
-  // Unique values for each column (used for column filter dropdowns)
-  const uniqueColumnValues = useMemo(() => {
-    const map: Record<ColumnFilterKey, string[]> = {
-      empresa: [],
-      curso: [],
-      faculdade: [],
-      cidade: [],
-      anoFormatura: [],
-      status: [],
-    }
-
-    const sets: Record<ColumnFilterKey, Set<string>> = {
-      empresa: new Set(),
-      curso: new Set(),
-      faculdade: new Set(),
-      cidade: new Set(),
-      anoFormatura: new Set(),
-      status: new Set(),
-    }
-
-    leads.forEach((l) => {
-      if (l.empresa) sets.empresa.add(l.empresa)
-      if (l.curso) sets.curso.add(l.curso)
-      if (l.faculdade) sets.faculdade.add(l.faculdade)
-      if (l.cidade) sets.cidade.add(l.cidade)
-      if (l.anoFormatura) sets.anoFormatura.add(l.anoFormatura)
-      if (l.status) sets.status.add(l.status)
-    })
-
-    ;(Object.keys(sets) as ColumnFilterKey[]).forEach((key) => {
-      map[key] = Array.from(sets[key]).sort()
-    })
-
-    return map
+  const origensConhecidas = useMemo(() => {
+    const set = new Set<string>(['Ativa', 'Passiva', 'Indicação'])
+    leads.forEach((l) => l.comoConheceu && set.add(l.comoConheceu))
+    return Array.from(set).sort()
   }, [leads])
+
+  // Valores possíveis de cada dimensão enum (pros checkboxes do filtro)
+  const uniqueColumnValues = useMemo(() => {
+    const s = {
+      empresa: new Set<string>(),
+      curso: new Set<string>(),
+      faculdade: new Set<string>(),
+      cidade: new Set<string>(),
+      anoFormatura: new Set<string>(),
+      etapaFunil: new Set<string>(),
+    }
+    leads.forEach((l) => {
+      if (l.empresa) s.empresa.add(l.empresa)
+      if (l.curso) s.curso.add(l.curso)
+      if (l.faculdade) s.faculdade.add(l.faculdade)
+      if (l.cidade) s.cidade.add(l.cidade)
+      if (l.anoFormatura) s.anoFormatura.add(l.anoFormatura)
+      s.etapaFunil.add(etapaFunilDoLead(l))
+    })
+    const order = FUNNEL_STAGES.map((st) => st.name)
+    return {
+      empresa: [...s.empresa].sort(),
+      curso: [...s.curso].sort(),
+      faculdade: [...s.faculdade].sort(),
+      cidade: [...s.cidade].sort(),
+      anoFormatura: [...s.anoFormatura].sort(),
+      etapaFunil: [...s.etapaFunil].sort(
+        (a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99),
+      ),
+    } as Record<'empresa' | 'curso' | 'faculdade' | 'cidade' | 'anoFormatura' | 'etapaFunil', string[]>
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads, dealByLeadId])
 
   // Filter logic (combining general filters + saved filters + column filters with logical AND)
   const filteredLeads = useMemo(() => {
@@ -541,54 +608,52 @@ export default function LeadsPage() {
         (lead.contatoNome && lead.contatoNome.toLowerCase().includes(q)) ||
         (lead.observacoes && lead.observacoes.toLowerCase().includes(q))
 
-      const matchesFaculdade = filterFaculdade === 'all' || lead.faculdade === filterFaculdade
-      const matchesCurso = filterCurso === 'all' || lead.curso === filterCurso
-      const matchesCidade = filterCidade === 'all' || lead.cidade === filterCidade
-      const matchesAno = filterAno === 'all' || lead.anoFormatura === filterAno
-      const matchesStatus = filterStatus === 'all' || lead.status === filterStatus
-      const matchesEmpresa = filterEmpresa === 'all' || lead.empresa === filterEmpresa
-
-      // Column filters
-      const matchesColEmpresa =
-        !columnFilters.empresa || columnFilters.empresa.includes(lead.empresa || 'AFF')
-      const matchesColCurso = !columnFilters.curso || columnFilters.curso.includes(lead.curso)
-      const matchesColFaculdade =
-        !columnFilters.faculdade || columnFilters.faculdade.includes(lead.faculdade)
-      const matchesColCidade = !columnFilters.cidade || columnFilters.cidade.includes(lead.cidade)
-      const matchesColAno =
-        !columnFilters.anoFormatura || columnFilters.anoFormatura.includes(lead.anoFormatura)
-      const matchesColStatus = !columnFilters.status || columnFilters.status.includes(lead.status)
       const matchesConcluida = showConcluidas || !lead.concluida
+      if (!matchesSearch || !matchesConcluida) return false
 
-      return (
-        matchesSearch &&
-        matchesFaculdade &&
-        matchesCurso &&
-        matchesCidade &&
-        matchesAno &&
-        matchesStatus &&
-        matchesEmpresa &&
-        matchesColEmpresa &&
-        matchesColCurso &&
-        matchesColFaculdade &&
-        matchesColCidade &&
-        matchesColAno &&
-        matchesColStatus &&
-        matchesConcluida
-      )
+      // Valor do lead em cada dimensão de filtro
+      const valOf = (key: FilterKey): string => {
+        switch (key) {
+          case 'empresa':
+            return lead.empresa || 'AFF'
+          case 'curso':
+            return lead.curso || ''
+          case 'faculdade':
+            return lead.faculdade || ''
+          case 'cidade':
+            return lead.cidade || ''
+          case 'anoFormatura':
+            return lead.anoFormatura || ''
+          case 'etapaFunil':
+            return etapaFunilDoLead(lead)
+          case 'dataCadastro':
+            return normDate(lead.dataCadastro)
+          case 'dataFechamento':
+            return normDate(lead.dataFechamento)
+          case 'primeiroContato':
+            return normDate(lead.primeiroContatoEm)
+        }
+      }
+
+      for (const [k, f] of Object.entries(filters) as [FilterKey, FilterVal][]) {
+        if (!f) continue
+        const v = valOf(k)
+        if (f.kind === 'enum') {
+          const inSet = f.values.includes(v)
+          if (f.mode === 'is' && !inSet) return false
+          if (f.mode === 'not' && inSet) return false
+        } else {
+          const cv = k === 'anoFormatura' ? v : normDate(v)
+          const from = k === 'anoFormatura' ? f.from : normDate(f.from)
+          const to = k === 'anoFormatura' ? f.to : normDate(f.to)
+          if (!cv) return false
+          if (from && cv < from) return false
+          if (to && cv > to) return false
+        }
+      }
+      return true
     })
-  }, [
-    leads,
-    search,
-    filterFaculdade,
-    filterCurso,
-    filterCidade,
-    filterAno,
-    filterStatus,
-    filterEmpresa,
-    columnFilters,
-    showConcluidas,
-  ])
+  }, [leads, search, filters, showConcluidas, dealByLeadId])
 
   // Opções de ordenação disponíveis para a tabela de turmas
   const SORT_OPTIONS = [
@@ -597,7 +662,7 @@ export default function LeadsPage() {
     { value: 'faculdade', label: 'Faculdade' },
     { value: 'cidade', label: 'Cidade' },
     { value: 'anoFormatura', label: 'Ano de Formatura' },
-    { value: 'status', label: 'Funil / Status' },
+    { value: 'status', label: 'Etapa do Funil' },
     { value: 'tipoServico', label: 'Tipo de Serviço' },
     { value: 'alunosFechados', label: 'Alunos Fechados' },
     { value: 'potentialValue', label: 'Valor Potencial' },
@@ -633,6 +698,11 @@ export default function LeadsPage() {
         return lead.alunosFechados || 0
       case 'potentialValue':
         return lead.potentialValue || 0
+      case 'status': {
+        const nome = etapaFunilDoLead(lead)
+        const idx = FUNNEL_STAGES.findIndex((s) => s.name === nome)
+        return idx === -1 ? 99 : idx
+      }
       default:
         return (lead as any)[field]
     }
@@ -745,16 +815,7 @@ export default function LeadsPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [
-    search,
-    filterFaculdade,
-    filterCurso,
-    filterCidade,
-    filterAno,
-    filterStatus,
-    filterEmpresa,
-    columnFilters,
-  ])
+  }, [search, filters])
 
   // Pagination calculation
   const totalPages = useMemo(() => {
@@ -768,10 +829,7 @@ export default function LeadsPage() {
     return sortedLeads.slice(start, start + pageSize)
   }, [sortedLeads, currentPage, pageSize])
 
-  // Check active column filters count
-  const activeColFiltersCount = useMemo(() => {
-    return Object.values(columnFilters).filter((arr) => arr && arr.length > 0).length
-  }, [columnFilters])
+  const activeColFiltersCount = Object.keys(filters).length
 
   // Stats rápidos
   const stats = useMemo(() => {
@@ -975,12 +1033,7 @@ export default function LeadsPage() {
       id: `filter-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: saveFilterName.trim(),
       search,
-      curso: filterCurso,
-      faculdade: filterFaculdade,
-      cidade: filterCidade,
-      ano: filterAno,
-      empresa: filterEmpresa,
-      status: filterStatus,
+      filters,
     }
     setSavedFilters((prev) => [...prev, newFilter])
     setActiveFilterId(newFilter.id)
@@ -991,12 +1044,7 @@ export default function LeadsPage() {
   const handleApplySavedFilter = (sf: SavedFilter) => {
     setActiveFilterId(sf.id)
     setSearch(sf.search || '')
-    setFilterCurso(sf.curso || 'all')
-    setFilterFaculdade(sf.faculdade || 'all')
-    setFilterCidade(sf.cidade || 'all')
-    setFilterAno(sf.ano || 'all')
-    setFilterEmpresa(sf.empresa || 'all')
-    setFilterStatus(sf.status || 'all')
+    setFilters(savedToFilters(sf))
   }
 
   const handleRemoveSavedFilter = (id: string, e?: React.MouseEvent) => {
@@ -1009,52 +1057,8 @@ export default function LeadsPage() {
 
   const handleClearAllFilters = () => {
     setSearch('')
-    setFilterFaculdade('all')
-    setFilterCurso('all')
-    setFilterCidade('all')
-    setFilterAno('all')
-    setFilterStatus('all')
-    setFilterEmpresa('all')
-    setColumnFilters({})
+    setFilters({})
     setActiveFilterId(null)
-  }
-
-  // Column Filter Actions
-  const handleToggleColumnValue = (col: ColumnFilterKey, val: string) => {
-    const allColVals = uniqueColumnValues[col] || []
-    setColumnFilters((prev) => {
-      const current = prev[col] !== undefined ? prev[col]! : allColVals
-      let updated: string[]
-      if (current.includes(val)) {
-        updated = current.filter((v) => v !== val)
-      } else {
-        updated = [...current, val]
-      }
-      if (updated.length === allColVals.length) {
-        const next = { ...prev }
-        delete next[col]
-        return next
-      }
-      return {
-        ...prev,
-        [col]: updated,
-      }
-    })
-  }
-
-  const handleSelectAllColumn = (col: ColumnFilterKey) => {
-    setColumnFilters((prev) => {
-      const next = { ...prev }
-      delete next[col]
-      return next
-    })
-  }
-
-  const handleClearColumn = (col: ColumnFilterKey) => {
-    setColumnFilters((prev) => ({
-      ...prev,
-      [col]: [],
-    }))
   }
 
   const handleOpenCreate = () => {
@@ -1184,15 +1188,7 @@ export default function LeadsPage() {
     setDeleteConfirmId(null)
   }
 
-  const hasAnyActiveFilter =
-    search ||
-    filterFaculdade !== 'all' ||
-    filterCurso !== 'all' ||
-    filterCidade !== 'all' ||
-    filterAno !== 'all' ||
-    filterStatus !== 'all' ||
-    filterEmpresa !== 'all' ||
-    activeColFiltersCount > 0
+  const hasAnyActiveFilter = !!search || activeColFiltersCount > 0
 
   return (
     <div className="space-y-6">
@@ -1491,121 +1487,57 @@ export default function LeadsPage() {
             </div>
           </div>
 
-          {/* Visões rápidas por Empresa — um clique, sem precisar abrir o dropdown */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setFilterEmpresa('all')}
-              className={cn(
-                'px-3 py-1 rounded-full text-xs font-semibold border transition-colors',
-                filterEmpresa === 'all'
-                  ? 'bg-orange-600 text-white border-transparent shadow-sm'
-                  : 'text-slate-400 border-white/[0.08] bg-[#0a0f14] hover:text-white hover:border-white/20',
-              )}
-            >
-              Todos
-            </button>
-            {empresas.map((emp) => (
+          {/* Filtros empilháveis — clique pra escolher vários valores; datas têm "está entre" */}
+          <div className="flex flex-wrap items-center gap-2">
+            {FILTER_BAR.map((fb) => {
+              const cur = filters[fb.key]
+              const label =
+                cur?.kind === 'enum'
+                  ? `${fb.label}: ${cur.values.length}${cur.mode === 'not' ? ' exceto' : ''}`
+                  : cur?.kind === 'range'
+                    ? `${fb.label}: ${cur.from || '…'}–${cur.to || '…'}`
+                    : fb.label
+              return (
+                <TableFilterPopover
+                  key={fb.key}
+                  title={fb.label}
+                  modeSet={FILTER_MODE_SET[fb.key]}
+                  uniqueValues={
+                    fb.rangeType === 'date'
+                      ? []
+                      : (uniqueColumnValues as Record<string, string[]>)[fb.key] || []
+                  }
+                  rangeInputType={fb.rangeType === 'date' ? 'date' : 'text'}
+                  rangeSuggestions={fb.key === 'anoFormatura' ? uniqueColumnValues.anoFormatura : []}
+                  value={cur}
+                  onChange={(next) => setFilter(fb.key, next)}
+                  trigger={
+                    <button
+                      type="button"
+                      className={cn(
+                        'h-8 px-3 rounded-lg text-xs font-medium border inline-flex items-center gap-1.5 cursor-pointer transition-colors',
+                        cur
+                          ? 'bg-orange-600 text-white border-transparent'
+                          : 'text-slate-400 border-white/[0.1] bg-[#0a0f14] hover:text-white hover:border-white/25',
+                      )}
+                    >
+                      <Filter className="h-3 w-3" />
+                      {label}
+                    </button>
+                  }
+                />
+              )
+            })}
+
+            {hasAnyActiveFilter && (
               <button
-                key={emp}
                 type="button"
-                onClick={() => setFilterEmpresa(emp)}
-                className={cn(
-                  'px-3 py-1 rounded-full text-xs font-semibold border transition-colors',
-                  filterEmpresa === emp
-                    ? 'bg-orange-600 text-white border-transparent shadow-sm'
-                    : 'text-slate-400 border-white/[0.08] bg-[#0a0f14] hover:text-white hover:border-white/20',
-                )}
+                onClick={handleClearAllFilters}
+                className="h-8 px-3 rounded-lg text-xs font-medium text-slate-400 hover:text-white border border-white/[0.1] bg-[#0a0f14]"
               >
-                {emp}
+                Limpar tudo
               </button>
-            ))}
-          </div>
-
-          {/* Filter Selects Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
-            <Select value={filterEmpresa} onValueChange={setFilterEmpresa}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as Empresas</SelectItem>
-                {empresas.map((emp) => (
-                  <SelectItem key={emp} value={emp}>
-                    {emp}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={filterCurso} onValueChange={setFilterCurso}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Curso" />
-              </SelectTrigger>
-              <SelectContent className="max-h-56">
-                <SelectItem value="all">Todos os Cursos</SelectItem>
-                {cursos.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={filterFaculdade} onValueChange={setFilterFaculdade}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Faculdade" />
-              </SelectTrigger>
-              <SelectContent className="max-h-56">
-                <SelectItem value="all">Todas as Faculdades</SelectItem>
-                {faculdades.map((fac) => (
-                  <SelectItem key={fac} value={fac}>
-                    {fac}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={filterCidade} onValueChange={setFilterCidade}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Cidade" />
-              </SelectTrigger>
-              <SelectContent className="max-h-56">
-                <SelectItem value="all">Todas as Cidades</SelectItem>
-                {cidades.map((cid) => (
-                  <SelectItem key={cid} value={cid}>
-                    {cid}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={filterAno} onValueChange={setFilterAno}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Ano Formatura" />
-              </SelectTrigger>
-              <SelectContent className="max-h-56">
-                <SelectItem value="all">Todos os Anos</SelectItem>
-                {anos.map((ano) => (
-                  <SelectItem key={ano} value={ano}>
-                    {ano}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Status</SelectItem>
-                <SelectItem value="Novo">Novo (Prospecção)</SelectItem>
-                <SelectItem value="Qualificado">Qualificado (Negociação)</SelectItem>
-                <SelectItem value="Convertido">Ganhou</SelectItem>
-                <SelectItem value="Perdido">Perdeu</SelectItem>
-              </SelectContent>
-            </Select>
+            )}
 
             <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap px-1">
               <Checkbox
@@ -1696,11 +1628,10 @@ export default function LeadsPage() {
                   <ColumnHeaderWithFilter
                     colKey="curso"
                     title="Turma / Curso"
+                    modeSet={FILTER_MODE_SET.curso}
                     uniqueValues={uniqueColumnValues.curso}
-                    selectedValues={columnFilters.curso}
-                    onToggleValue={(v) => handleToggleColumnValue('curso', v)}
-                    onSelectAll={() => handleSelectAllColumn('curso')}
-                    onClear={() => handleClearColumn('curso')}
+                    value={filters.curso}
+                    onChange={(next) => setFilter('curso', next)}
                     onSort={(dir) => setSingleSort('curso', dir)}
                     isSorted={sortDirFor('curso')}
                   />
@@ -1714,11 +1645,10 @@ export default function LeadsPage() {
                   <ColumnHeaderWithFilter
                     colKey="empresa"
                     title="Empresa"
+                    modeSet={FILTER_MODE_SET.empresa}
                     uniqueValues={uniqueColumnValues.empresa}
-                    selectedValues={columnFilters.empresa}
-                    onToggleValue={(v) => handleToggleColumnValue('empresa', v)}
-                    onSelectAll={() => handleSelectAllColumn('empresa')}
-                    onClear={() => handleClearColumn('empresa')}
+                    value={filters.empresa}
+                    onChange={(next) => setFilter('empresa', next)}
                     onSort={(dir) => setSingleSort('empresa', dir)}
                     isSorted={sortDirFor('empresa')}
                   />
@@ -1727,11 +1657,10 @@ export default function LeadsPage() {
                   <ColumnHeaderWithFilter
                     colKey="faculdade"
                     title="Faculdade"
+                    modeSet={FILTER_MODE_SET.faculdade}
                     uniqueValues={uniqueColumnValues.faculdade}
-                    selectedValues={columnFilters.faculdade}
-                    onToggleValue={(v) => handleToggleColumnValue('faculdade', v)}
-                    onSelectAll={() => handleSelectAllColumn('faculdade')}
-                    onClear={() => handleClearColumn('faculdade')}
+                    value={filters.faculdade}
+                    onChange={(next) => setFilter('faculdade', next)}
                     onSort={(dir) => setSingleSort('faculdade', dir)}
                     isSorted={sortDirFor('faculdade')}
                   />
@@ -1740,11 +1669,10 @@ export default function LeadsPage() {
                   <ColumnHeaderWithFilter
                     colKey="cidade"
                     title="Cidade"
+                    modeSet={FILTER_MODE_SET.cidade}
                     uniqueValues={uniqueColumnValues.cidade}
-                    selectedValues={columnFilters.cidade}
-                    onToggleValue={(v) => handleToggleColumnValue('cidade', v)}
-                    onSelectAll={() => handleSelectAllColumn('cidade')}
-                    onClear={() => handleClearColumn('cidade')}
+                    value={filters.cidade}
+                    onChange={(next) => setFilter('cidade', next)}
                     onSort={(dir) => setSingleSort('cidade', dir)}
                     isSorted={sortDirFor('cidade')}
                   />
@@ -1753,11 +1681,11 @@ export default function LeadsPage() {
                   <ColumnHeaderWithFilter
                     colKey="anoFormatura"
                     title="Ano Formatura"
+                    modeSet={FILTER_MODE_SET.anoFormatura}
                     uniqueValues={uniqueColumnValues.anoFormatura}
-                    selectedValues={columnFilters.anoFormatura}
-                    onToggleValue={(v) => handleToggleColumnValue('anoFormatura', v)}
-                    onSelectAll={() => handleSelectAllColumn('anoFormatura')}
-                    onClear={() => handleClearColumn('anoFormatura')}
+                    rangeSuggestions={uniqueColumnValues.anoFormatura}
+                    value={filters.anoFormatura}
+                    onChange={(next) => setFilter('anoFormatura', next)}
                     onSort={(dir) => setSingleSort('anoFormatura', dir)}
                     isSorted={sortDirFor('anoFormatura')}
                   />
@@ -1766,13 +1694,12 @@ export default function LeadsPage() {
                 <th className="py-3 px-3">Origem</th>
                 <th className="py-3 px-3">
                   <ColumnHeaderWithFilter
-                    colKey="status"
-                    title="Funil"
-                    uniqueValues={uniqueColumnValues.status}
-                    selectedValues={columnFilters.status}
-                    onToggleValue={(v) => handleToggleColumnValue('status', v)}
-                    onSelectAll={() => handleSelectAllColumn('status')}
-                    onClear={() => handleClearColumn('status')}
+                    colKey="etapaFunil"
+                    title="Etapa do Funil"
+                    modeSet={FILTER_MODE_SET.etapaFunil}
+                    uniqueValues={uniqueColumnValues.etapaFunil}
+                    value={filters.etapaFunil}
+                    onChange={(next) => setFilter('etapaFunil', next)}
                     onSort={(dir) => setSingleSort('status', dir)}
                     isSorted={sortDirFor('status')}
                   />
@@ -1792,7 +1719,6 @@ export default function LeadsPage() {
                 </tr>
               ) : (
                 paginatedLeads.map((lead) => {
-                  const statusInfo = STATUS_CONFIG[lead.status] || STATUS_CONFIG.Novo
                   const sgeLink = sgeLinks.find((lnk) => lnk.leadId === lead.id)
                   const isManualMode = manualMode
                   const proximaAcao = getProximaAcaoInfo(lead, dealByLeadId.get(lead.id))
@@ -1895,17 +1821,22 @@ export default function LeadsPage() {
                         </div>
                       </td>
 
-                      {/* Empresa */}
-                      <td className="py-3.5 px-3">
-                        <Badge
-                          variant="outline"
+                      {/* Empresa — edição inline */}
+                      <td className="py-3.5 px-3" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={lead.empresa || 'AFF'}
+                          onChange={(e) => updateLead(lead.id, { empresa: e.target.value })}
                           className={cn(
-                            'font-bold text-xs',
+                            'text-xs font-bold rounded border bg-transparent px-1.5 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-orange-500',
                             EMPRESA_CORES[lead.empresa || 'AFF'] || EMPRESA_COR_PADRAO,
                           )}
                         >
-                          {lead.empresa || 'AFF'}
-                        </Badge>
+                          {EMPRESAS.map((emp) => (
+                            <option key={emp} value={emp} className="bg-white dark:bg-slate-900">
+                              {emp}
+                            </option>
+                          ))}
+                        </select>
                       </td>
 
                       {/* Faculdade */}
@@ -1921,9 +1852,17 @@ export default function LeadsPage() {
                         {lead.cidade}
                       </td>
 
-                      {/* Ano Formatura */}
-                      <td className="py-3.5 px-3 text-xs font-mono text-slate-600 dark:text-slate-400">
-                        {lead.anoFormatura}
+                      {/* Ano Formatura — edição inline */}
+                      <td
+                        className="py-3.5 px-3 text-xs font-mono text-slate-600 dark:text-slate-400"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <InlineEditText
+                          value={lead.anoFormatura || ''}
+                          onSave={(v) => updateLead(lead.id, { anoFormatura: v })}
+                          placeholder="2027.1"
+                          className="text-xs font-mono text-slate-700 dark:text-slate-300 w-16"
+                        />
                       </td>
 
                       {/* Tipo Serviço */}
@@ -1931,28 +1870,41 @@ export default function LeadsPage() {
                         {lead.tipoServico || '—'}
                       </td>
 
-                      {/* Origem / Como Conheceu */}
-                      <td className="py-3.5 px-3">
-                        {lead.comoConheceu ? (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
-                            {lead.comoConheceu}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs">—</span>
-                        )}
+                      {/* Origem / Como Conheceu — edição inline */}
+                      <td className="py-3.5 px-3 min-w-[110px]" onClick={(e) => e.stopPropagation()}>
+                        <DropdownComOutro
+                          label="Origem"
+                          showLabel={false}
+                          variant="underline"
+                          value={lead.comoConheceu || ''}
+                          options={origensConhecidas}
+                          placeholder="—"
+                          onSave={(v) =>
+                            updateLead(lead.id, { comoConheceu: v, source: v as LeadSource })
+                          }
+                          fieldClassName="w-full bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-orange-500 text-xs text-slate-700 dark:text-slate-300 focus:outline-none px-0.5 py-0.5"
+                        />
                       </td>
 
-                      {/* Status / Funil */}
+                      {/* Etapa do Funil (Kanban) */}
                       <td className="py-3.5 px-3">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border',
-                            statusInfo.bg,
-                            statusInfo.color,
-                          )}
-                        >
-                          {statusInfo.label}
-                        </span>
+                        {(() => {
+                          const etapa = etapaFunilDoLead(lead)
+                          const cor =
+                            FUNNEL_STAGES.find((s) => s.name === etapa)?.color || '#64748b'
+                          return (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border"
+                              style={{
+                                color: cor,
+                                borderColor: `${cor}66`,
+                                backgroundColor: `${cor}1a`,
+                              }}
+                            >
+                              {etapa}
+                            </span>
+                          )
+                        })()}
                       </td>
 
                       {/* Coluna SGE */}
@@ -2000,31 +1952,63 @@ export default function LeadsPage() {
                         )}
                       </td>
 
-                      {/* Alunos Fechados / Cadastrados (X/Y) */}
+                      {/* Alunos Fechados / Cadastrados + progresso da meta */}
                       <td className="py-3.5 px-3 text-center">
-                        <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                          {lead.alunosFechados && lead.alunosFechados > 0 ? (
-                            <span className="flex items-center gap-0.5">
-                              <span className="text-emerald-500 font-bold">
-                                {lead.alunosFechados}
+                        {(() => {
+                          const mp = metaProgresso(lead)
+                          return (
+                            <div className="inline-flex flex-col items-center gap-1 min-w-[64px]">
+                              <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                {lead.alunosFechados && lead.alunosFechados > 0 ? (
+                                  <span className="flex items-center gap-0.5">
+                                    <span className="text-emerald-500 font-bold">
+                                      {lead.alunosFechados}
+                                    </span>
+                                    <span className="text-slate-400">/</span>
+                                    <span>{lead.totalAlunos || 0}</span>
+                                  </span>
+                                ) : (
+                                  <span>{lead.totalAlunos || 0}</span>
+                                )}
                               </span>
-                              <span className="text-slate-400">/</span>
-                              <span>{lead.totalAlunos || 0}</span>
-                            </span>
-                          ) : (
-                            <span>{lead.totalAlunos || 0}</span>
-                          )}
-                        </span>
+                              {mp.pct != null && (
+                                <div
+                                  className="w-full"
+                                  title={`${mp.fechados} de ${mp.meta} contratos (meta)`}
+                                >
+                                  <div className="h-1 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full"
+                                      style={{
+                                        width: `${Math.min(100, mp.pct)}%`,
+                                        backgroundColor: metaProgressoCor(mp.pct),
+                                      }}
+                                    />
+                                  </div>
+                                  <span
+                                    className="text-[10px] font-semibold"
+                                    style={{ color: metaProgressoCor(mp.pct) }}
+                                  >
+                                    {mp.pct}% da meta
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </td>
 
-                      {/* Observações */}
-                      <td className="py-3.5 px-3 max-w-[180px]">
-                        <p
-                          className="text-xs text-slate-500 truncate"
-                          title={lead.observacoes || lead.notes || ''}
-                        >
-                          {lead.observacoes || lead.notes || '—'}
-                        </p>
+                      {/* Observações — edição inline */}
+                      <td
+                        className="py-3.5 px-3 max-w-[180px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <InlineEditText
+                          value={lead.observacoes || lead.notes || ''}
+                          onSave={(v) => updateLead(lead.id, { observacoes: v, notes: v })}
+                          placeholder="—"
+                          className="text-xs text-slate-500 w-full"
+                        />
                       </td>
 
                       {/* Ações */}
@@ -2816,6 +2800,30 @@ function SelectedLeadDetail({
               }
             />
           </div>
+
+          {(() => {
+            const mp = metaProgresso(lead)
+            if (mp.pct == null) return null
+            return (
+              <div className="text-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-slate-500">Progresso da meta</span>
+                  <span className="font-semibold" style={{ color: metaProgressoCor(mp.pct) }}>
+                    {mp.fechados}/{mp.meta} contratos · {mp.pct}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(100, mp.pct)}%`,
+                      backgroundColor: metaProgressoCor(mp.pct),
+                    }}
+                  />
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Contato Principal */}
           <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
