@@ -1,788 +1,901 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import {
-  BrainCircuit,
-  Upload,
-  CheckCircle2,
-  AlertTriangle,
-  Lightbulb,
-  FileText,
-  Sparkles,
-  ArrowRight,
   TrendingUp,
   RefreshCw,
-  X,
-  Plus,
-  Clock,
-  ShieldCheck,
-  Award,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  BookOpen,
+  Gauge,
+  GraduationCap,
+  Building2,
+  Info,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
-import { analyzeTranscriptText } from '@/utils/probabilityEngine'
 import { useToast } from '@/hooks/use-toast'
-import { Link } from 'react-router-dom'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
+import {
+  FUNNEL_STAGES,
+  FUNNEL_STAGE_BY_ID,
+  getTurmaDisplayName,
+  type Deal,
+  type Transcript,
+  type AprendizadoEstudo,
+} from '@/types/crm'
+import { computeDealProbability, MOTOR_WEIGHTS, probColor } from '@/utils/funnelProbability'
+import {
+  computeEstudoAgregado,
+  montarCorpusParaIA,
+  gerarEstudoIA,
+  type EstudoEscopo,
+} from '@/utils/aprendizadoEngine'
+import { getGeminiApiKey, getGeminiModel } from '@/utils/geminiApi'
+
+type Tab = 'geral' | 'motor' | 'aprendizado' | 'relatorio'
+
+const stageNome = (id?: string) => (id ? FUNNEL_STAGE_BY_ID[id]?.name || id : '—')
 
 export default function Probability() {
-  const { transcripts, leads, settings, addTranscript, reanalyzeTranscript } = useCRM()
+  const {
+    deals,
+    leads,
+    transcripts,
+    funilEventos,
+    estudos,
+    dealProbById,
+    recomputeAllProbabilities,
+    upsertEstudo,
+  } = useCRM()
   const { toast } = useToast()
 
-  // Estados de Upload / Análise
-  const [uploadModalOpen, setUploadModalOpen] = useState(false)
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [analyzing, setAnalyzing] = useState(false)
-  const [analysisProgress, setAnalysisProgress] = useState(0)
-  const [analysisStatusText, setAnalysisStatusText] = useState('')
-  const [analysisResultsPreview, setAnalysisResultsPreview] = useState<any[]>([])
-  const [associatedLeadId, setAssociatedLeadId] = useState<string>('')
+  const [tab, setTab] = useState<Tab>('geral')
+  const [recalculando, setRecalculando] = useState(false)
 
-  // Animação de Anel de Progresso Hero (0 ao valor em 800ms)
-  const [animatedScore, setAnimatedScore] = useState(0)
+  const leadById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads])
 
-  // 1. Médias globais
-  const analyzedTranscripts = useMemo(() => transcripts.filter((t) => t.analyzed), [transcripts])
-  const avgProbability = useMemo(() => {
-    if (analyzedTranscripts.length === 0) return 62
-    const sum = analyzedTranscripts.reduce((acc, t) => acc + (t.probabilityScore || 0), 0)
-    return Math.round(sum / analyzedTranscripts.length)
-  }, [analyzedTranscripts])
+  // Deals ativos (não Fechou/Perdeu) com breakdown calculado ao vivo pelo motor
+  const dealsComBreakdown = useMemo(() => {
+    return deals
+      .filter((d) => d.stageId !== 'stage-6' && d.stage !== 'fechou-ou-perdeu')
+      .map((d) => {
+        const info = dealProbById.get(d.id)
+        return {
+          deal: d,
+          lead: d.leadId ? leadById.get(d.leadId) : undefined,
+          score: info?.score ?? d.probability,
+          breakdown:
+            info?.breakdown ??
+            ({
+              base: d.probability,
+              semReuniao: true,
+              ajustePortao: 0,
+              ajusteVelocidade: 0,
+              ajusteCursoFac: 0,
+              cursoFacN: 0,
+              velocidadeLabel: 'saudável',
+              final: d.probability,
+            } as ReturnType<typeof computeDealProbability>['breakdown']),
+        }
+      })
+  }, [deals, leadById, dealProbById])
 
-  const totalPositiveSignalsCount = useMemo(() => {
-    return analyzedTranscripts.reduce(
-      (acc, t) => acc + (t.signals?.filter((s) => s.type === 'positive').length || 0),
-      0,
-    )
-  }, [analyzedTranscripts])
-
-  // Médias dos 4 Fatores
-  const avgNeedCoverage = useMemo(() => {
-    if (analyzedTranscripts.length === 0) return 78
+  const mediaGeral = useMemo(() => {
+    if (dealsComBreakdown.length === 0) return 0
     return Math.round(
-      analyzedTranscripts.reduce((acc, t) => acc + (t.needCoverageScore || 78), 0) /
-        analyzedTranscripts.length,
+      dealsComBreakdown.reduce((a, x) => a + x.score, 0) / dealsComBreakdown.length,
     )
-  }, [analyzedTranscripts])
+  }, [dealsComBreakdown])
 
-  const avgTiming = useMemo(() => {
-    if (analyzedTranscripts.length === 0) return 64
-    return Math.round(
-      analyzedTranscripts.reduce((acc, t) => acc + (t.timingScore || 64), 0) /
-        analyzedTranscripts.length,
-    )
-  }, [analyzedTranscripts])
-
-  const avgDecisionPower = useMemo(() => {
-    if (analyzedTranscripts.length === 0) return 71
-    return Math.round(
-      analyzedTranscripts.reduce((acc, t) => acc + (t.decisionPowerScore || 71), 0) /
-        analyzedTranscripts.length,
-    )
-  }, [analyzedTranscripts])
-
-  const avgPerceivedValue = useMemo(() => {
-    if (analyzedTranscripts.length === 0) return 82
-    return Math.round(
-      analyzedTranscripts.reduce((acc, t) => acc + (t.perceivedValueScore || 82), 0) /
-        analyzedTranscripts.length,
-    )
-  }, [analyzedTranscripts])
-
-  // Histograma de Distribuição (0-25%, 26-50%, 51-75%, 76-100%)
   const histogram = useMemo(() => {
-    const buckets = { low: 0, medLow: 0, medHigh: 0, high: 0 }
-    analyzedTranscripts.forEach((t) => {
-      const s = t.probabilityScore || 0
-      if (s <= 25) buckets.low++
-      else if (s <= 50) buckets.medLow++
-      else if (s <= 75) buckets.medHigh++
-      else buckets.high++
+    const b = { low: 0, medLow: 0, medHigh: 0, high: 0 }
+    dealsComBreakdown.forEach((x) => {
+      if (x.score <= 25) b.low++
+      else if (x.score <= 50) b.medLow++
+      else if (x.score <= 75) b.medHigh++
+      else b.high++
     })
-    return buckets
-  }, [analyzedTranscripts])
+    return b
+  }, [dealsComBreakdown])
 
-  // Animação de contagem do anel de pontuação
-  useEffect(() => {
-    let start = 0
-    const end = avgProbability
-    const duration = 800
-    const stepTime = 20
-    const steps = duration / stepTime
-    const increment = end / steps
+  const ganhos = deals.filter((d) => d.outcome === 'ganho').length
+  const perdidos = deals.filter((d) => d.outcome === 'perdido').length
+  const reunioesAnalisadas = transcripts.filter((t) => t.analyzed || t.geminiAnalysis).length
 
-    const timer = setInterval(() => {
-      start += increment
-      if (start >= end) {
-        setAnimatedScore(end)
-        clearInterval(timer)
-      } else {
-        setAnimatedScore(Math.floor(start))
-      }
-    }, stepTime)
-
-    return () => clearInterval(timer)
-  }, [avgProbability])
-
-  // Todos os insights automáticos consolidados
-  const allInsights = useMemo(() => {
-    const list: {
-      type: 'positive' | 'risk' | 'recommendation'
-      text: string
-      transcriptId: string
-      company: string
-      quote?: string
-    }[] = []
-
-    analyzedTranscripts.forEach((t) => {
-      t.insights?.forEach((ins) => {
-        list.push({
-          type: ins.type,
-          text: ins.text,
-          transcriptId: t.id,
-          company: t.company,
-          quote: ins.quote,
-        })
-      })
-    })
-
-    return list
-  }, [analyzedTranscripts])
-
-  // Handler de seleção de arquivos
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setSelectedFiles(Array.from(e.target.files))
+  const handleRecalcular = async () => {
+    setRecalculando(true)
+    try {
+      await recomputeAllProbabilities()
+      toast({ title: 'Probabilidades recalculadas', description: `${deals.length} turmas.` })
+    } finally {
+      setRecalculando(false)
     }
   }
 
-  // Execução do fluxo de upload e análise
-  const handleStartAnalysis = async () => {
-    if (selectedFiles.length === 0) return
-
-    setAnalyzing(true)
-    setAnalysisProgress(10)
-    setAnalysisStatusText('Carregando arquivos de transcrição...')
-
-    const results: any[] = []
-
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i]
-      setAnalysisStatusText(
-        `Analisando transcrição ${i + 1} de ${selectedFiles.length}: ${file.name}...`,
-      )
-      setAnalysisProgress(Math.round(((i + 1) / selectedFiles.length) * 85))
-
-      // Leitura de texto do arquivo
-      const text = await file.text()
-
-      // Executa motor de heurísticas locais
-      const res = analyzeTranscriptText(
-        text,
-        settings.analysisConfig.positiveKeywords,
-        settings.analysisConfig.negativeKeywords,
-        settings.analysisConfig.keywordWeightMultiplier,
-      )
-
-      // Salva no store
-      const leadMatch = leads.find((l) => l.id === associatedLeadId)
-      const companyName = leadMatch ? leadMatch.faculdade : file.name.replace(/\.[^/.]+$/, '')
-
-      const newTr = await addTranscript({
-        title: `Transcrição - ${companyName}`,
-        fileName: file.name,
-        company: companyName,
-        contactName: leadMatch
-          ? `${leadMatch.curso} ${leadMatch.faculdade} ${leadMatch.turma}`
-          : 'Turma',
-        leadId: associatedLeadId || undefined,
-        date: new Date().toISOString(),
-        durationMinutes: res.estimatedMinutes,
-        wordCount: res.wordCount,
-        content: text,
-        analyzed: true,
-        probabilityScore: res.score,
-        needCoverageScore: res.needCoverageScore,
-        timingScore: res.timingScore,
-        decisionPowerScore: res.decisionPowerScore,
-        perceivedValueScore: res.perceivedValueScore,
-        signals: res.signals,
-        insights: res.insights,
-      })
-
-      results.push({
-        file: file.name,
-        score: res.score,
-        positiveSignals: res.signals.filter((s) => s.type === 'positive'),
-        negativeSignals: res.signals.filter((s) => s.type === 'negative'),
-        transcriptId: newTr.id,
-      })
-
-      // Simulação visual de cadência de análise
-      await new Promise((resolve) => setTimeout(resolve, 300))
-    }
-
-    setAnalysisProgress(100)
-    setAnalysisStatusText('Análise concluída com sucesso!')
-    setAnalysisResultsPreview(results)
-    setAnalyzing(false)
-
-    toast({
-      title: 'Análise Concluída',
-      description: `${selectedFiles.length} transcrições processadas com novo score.`,
-    })
-  }
-
-  // Cor do score
-  const getScoreColor = (score: number) => {
-    if (score >= 75) return '#10b981' // Esmeralda
-    if (score >= 50) return '#EA580C' // Violeta
-    return '#F97316' // Indigo
-  }
+  const tabs: { id: Tab; label: string; icon: typeof Gauge }[] = [
+    { id: 'geral', label: 'Visão Geral', icon: TrendingUp },
+    { id: 'motor', label: 'Motor', icon: Gauge },
+    { id: 'aprendizado', label: 'Aprendizado', icon: BookOpen },
+    { id: 'relatorio', label: 'Relatório por Curso / Faculdade', icon: GraduationCap },
+  ]
 
   return (
-    <div className="space-y-8 animate-fade-in pb-8">
-      {/* Topo da Tela */}
+    <div className="space-y-6 animate-fade-in pb-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-            Probabilidade de Conversão
-            <span className="text-xs px-2.5 py-1 rounded-full bg-orange-500/15 text-orange-300 font-semibold border border-orange-500/25">
-              Motor Heurístico Ativo
-            </span>
+            Probabilidade de Fechamento
             <AIInsightsButton context="probability" />
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Análise baseada em transcrições de reuniões e histórico
+            Uma probabilidade só por turma: a análise da reunião manda, o funil só tempera.
           </p>
         </div>
-
         <button
           type="button"
-          onClick={() => {
-            setSelectedFiles([])
-            setAnalysisResultsPreview([])
-            setUploadModalOpen(true)
-          }}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-orange-600 to-orange-600 hover:from-orange-500 hover:to-orange-500 text-white text-sm font-semibold shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          onClick={handleRecalcular}
+          disabled={recalculando}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold shadow-lg shadow-orange-500/20 disabled:opacity-50"
         >
-          <Upload className="w-4 h-4" /> Analisar Transcrições
+          <RefreshCw className={`w-4 h-4 ${recalculando ? 'animate-spin' : ''}`} />
+          Recalcular todas
         </button>
       </div>
 
-      {/* Card Hero de Pontuação Global */}
-      <div className="bg-[#111820] border border-white/[0.06] rounded-2xl p-6 lg:p-8 shadow-2xl relative overflow-hidden">
-        {/* Glow de fundo */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Abas */}
+      <div className="flex gap-1 border-b border-white/[0.06] overflow-x-auto">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+              tab === t.id
+                ? 'border-orange-500 text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <t.icon className="w-4 h-4" /> {t.label}
+          </button>
+        ))}
+      </div>
 
-        <div className="flex flex-col lg:flex-row items-center gap-8 relative z-10">
-          {/* Anel de Progresso SVG Central */}
-          <div className="relative w-44 h-44 flex items-center justify-center flex-shrink-0">
+      {tab === 'geral' && (
+        <VisaoGeral
+          media={mediaGeral}
+          total={dealsComBreakdown.length}
+          histogram={histogram}
+          ganhos={ganhos}
+          perdidos={perdidos}
+          reunioes={reunioesAnalisadas}
+        />
+      )}
+      {tab === 'motor' && <MotorTab linhas={dealsComBreakdown} />}
+      {tab === 'aprendizado' && (
+        <AprendizadoTab deals={deals} transcripts={transcripts} funilEventos={funilEventos} />
+      )}
+      {tab === 'relatorio' && (
+        <RelatorioTab
+          leads={leads}
+          deals={deals}
+          transcripts={transcripts}
+          funilEventos={funilEventos}
+          estudos={estudos}
+          upsertEstudo={upsertEstudo}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ Visão Geral */
+
+function VisaoGeral({
+  media,
+  total,
+  histogram,
+  ganhos,
+  perdidos,
+  reunioes,
+}: {
+  media: number
+  total: number
+  histogram: { low: number; medLow: number; medHigh: number; high: number }
+  ganhos: number
+  perdidos: number
+  reunioes: number
+}) {
+  const dash = (media * 251.2) / 100
+  return (
+    <div className="space-y-6">
+      <div className="bg-[#111820] border border-white/[0.06] rounded-2xl p-6 lg:p-8">
+        <div className="flex flex-col lg:flex-row items-center gap-8">
+          <div className="relative w-40 h-40 flex-shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+              <circle cx="50" cy="50" r="40" fill="transparent" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
               <circle
                 cx="50"
                 cy="50"
                 r="40"
                 fill="transparent"
-                stroke="rgba(255,255,255,0.06)"
+                stroke={probColor(media)}
                 strokeWidth="8"
-              />
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                fill="transparent"
-                stroke={getScoreColor(avgProbability)}
-                strokeWidth="8"
-                strokeDasharray={`${(animatedScore * 251.2) / 100} 251.2`}
+                strokeDasharray={`${dash} 251.2`}
                 strokeLinecap="round"
-                className="transition-all duration-300"
               />
             </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-4xl font-extrabold text-white tracking-tight">
-                {animatedScore}%
-              </span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-4xl font-extrabold text-white">{media}%</span>
               <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                Média Geral
+                Média do funil
               </span>
             </div>
           </div>
-
-          {/* 3 Mini-KPIs ao Lado */}
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-              <div className="text-slate-400 text-xs mb-1">Transcrições Analisadas</div>
-              <div className="text-2xl font-bold text-white">{analyzedTranscripts.length}</div>
-              <div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1 font-semibold">
-                <CheckCircle2 className="w-3.5 h-3.5" /> 100% processadas
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-              <div className="text-slate-400 text-xs mb-1">Sinais Positivos Detectados</div>
-              <div className="text-2xl font-bold text-emerald-400">{totalPositiveSignalsCount}</div>
-              <div className="text-[11px] text-slate-400 mt-1">Termos de alta intenção</div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-              <div className="text-slate-400 text-xs mb-1">Convergência de Aprendizado</div>
-              <div className="text-2xl font-bold text-orange-400">+8.4%</div>
-              <div className="text-[11px] text-orange-300 mt-1">Melhora vs. mês anterior</div>
-            </div>
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
+            <Kpi label="Turmas no funil" value={total} />
+            <Kpi label="Reuniões analisadas" value={reunioes} />
+            <Kpi label="Turmas ganhas (histórico)" value={ganhos} color="text-emerald-400" />
+            <Kpi label="Turmas perdidas (histórico)" value={perdidos} color="text-rose-400" />
           </div>
         </div>
 
-        {/* Histograma de Distribuição Horizontal */}
         <div className="mt-8 pt-6 border-t border-white/[0.06] space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-semibold text-slate-300">
-              Distribuição de Probabilidade do Funil
-            </span>
-            <span>Total de {analyzedTranscripts.length} amostras</span>
+            <span className="font-semibold text-slate-300">Distribuição das probabilidades do funil</span>
+            <span>{total} turmas</span>
           </div>
-
           <div className="h-4 w-full bg-white/[0.04] rounded-full overflow-hidden flex gap-0.5 p-0.5">
-            <div
-              className="h-full bg-red-500 rounded-l-full transition-all duration-500"
-              style={{
-                width: `${(histogram.low / (analyzedTranscripts.length || 1)) * 100}%`,
-              }}
-              title={`0-25%: ${histogram.low}`}
-            />
-            <div
-              className="h-full bg-amber-500 transition-all duration-500"
-              style={{
-                width: `${(histogram.medLow / (analyzedTranscripts.length || 1)) * 100}%`,
-              }}
-              title={`26-50%: ${histogram.medLow}`}
-            />
-            <div
-              className="h-full bg-orange-500 transition-all duration-500"
-              style={{
-                width: `${(histogram.medHigh / (analyzedTranscripts.length || 1)) * 100}%`,
-              }}
-              title={`51-75%: ${histogram.medHigh}`}
-            />
-            <div
-              className="h-full bg-emerald-500 rounded-r-full transition-all duration-500"
-              style={{
-                width: `${(histogram.high / (analyzedTranscripts.length || 1)) * 100}%`,
-              }}
-              title={`76-100%: ${histogram.high}`}
-            />
+            <Bar w={histogram.low} total={total} className="bg-rose-500 rounded-l-full" />
+            <Bar w={histogram.medLow} total={total} className="bg-amber-500" />
+            <Bar w={histogram.medHigh} total={total} className="bg-orange-500" />
+            <Bar w={histogram.high} total={total} className="bg-emerald-500 rounded-r-full" />
           </div>
-
           <div className="flex justify-between text-[11px] text-slate-400 pt-1">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-red-500" /> 0-25% ({histogram.low})
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500" /> 26-50% ({histogram.medLow})
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-orange-500" /> 51-75% ({histogram.medHigh})
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" /> 76-100% ({histogram.high})
-            </span>
+            <span>0-25% ({histogram.low})</span>
+            <span>26-50% ({histogram.medLow})</span>
+            <span>51-75% ({histogram.medHigh})</span>
+            <span>76-100% ({histogram.high})</span>
           </div>
         </div>
       </div>
 
-      {/* Métricas de Fatores de Conversão (Grid 4 cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Fator 1: Cobertura de Necessidades */}
-        <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 hover:border-orange-500/40 transition-all">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-300">Cobertura de Necessidades</span>
-            <ShieldCheck className="w-4 h-4 text-orange-400" />
-          </div>
-          <div className="text-2xl font-bold text-white mb-2">{avgNeedCoverage}%</div>
-          <div className="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full bg-orange-500 rounded-full"
-              style={{ width: `${avgNeedCoverage}%` }}
-            />
-          </div>
-          <p className="text-[11px] text-slate-400">Quão bem a solução atendeu às dores citadas</p>
-        </div>
+      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 text-sm text-slate-300 flex gap-3">
+        <Info className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+        <p>
+          A probabilidade de cada turma é calculada pelo motor: base na análise da reunião mais
+          recente, ajustada levemente por portão de fase vencido e pela velocidade dentro da coluna
+          (turma parada cai, turma rápida sobe). Veja a conta de cada turma na aba{' '}
+          <span className="font-semibold text-white">Motor</span>.
+        </p>
+      </div>
+    </div>
+  )
+}
 
-        {/* Fator 2: Alinhamento de Timing */}
-        <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 hover:border-orange-500/40 transition-all">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-300">Alinhamento de Timing</span>
-            <Clock className="w-4 h-4 text-orange-400" />
-          </div>
-          <div className="text-2xl font-bold text-white mb-2">{avgTiming}%</div>
-          <div className="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-orange-500 rounded-full" style={{ width: `${avgTiming}%` }} />
-          </div>
-          <p className="text-[11px] text-slate-400">Urgência expressa para implementar</p>
-        </div>
+function Kpi({ label, value, color }: { label: string; value: number; color?: string }) {
+  return (
+    <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+      <div className="text-slate-400 text-xs mb-1">{label}</div>
+      <div className={`text-2xl font-bold ${color || 'text-white'}`}>{value}</div>
+    </div>
+  )
+}
 
-        {/* Fator 3: Poder de Decisão */}
-        <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 hover:border-amber-500/40 transition-all">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-300">Poder de Decisão</span>
-            <Award className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-2xl font-bold text-white mb-2">{avgDecisionPower}%</div>
-          <div className="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full bg-amber-500 rounded-full"
-              style={{ width: `${avgDecisionPower}%` }}
-            />
-          </div>
-          <p className="text-[11px] text-slate-400">Presença de decisor na reunião</p>
-        </div>
+function Bar({ w, total, className }: { w: number; total: number; className: string }) {
+  return <div className={`h-full ${className}`} style={{ width: `${(w / (total || 1)) * 100}%` }} />
+}
 
-        {/* Fator 4: Valor Percebido */}
-        <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 hover:border-emerald-500/40 transition-all">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-300">Valor Percebido</span>
-            <Sparkles className="w-4 h-4 text-emerald-400" />
+/* ------------------------------------------------------------------ Motor */
+
+interface LinhaMotor {
+  deal: Deal
+  lead?: { curso: string; faculdade: string } | any
+  score: number
+  breakdown: ReturnType<typeof computeDealProbability>['breakdown']
+}
+
+function MotorTab({ linhas }: { linhas: LinhaMotor[] }) {
+  const [field, setField] = useState('score')
+  const [dir, setDir] = useState<SortDirection>('desc')
+
+  const sorted = useMemo(
+    () =>
+      sortByField(linhas, field, dir, (x, f) => {
+        switch (f) {
+          case 'turma':
+            return x.lead ? getTurmaDisplayName(x.lead) : x.deal.title
+          case 'fase':
+            return FUNNEL_STAGES.findIndex((s) => s.id === x.deal.stageId)
+          case 'base':
+            return x.breakdown.base
+          case 'velocidade':
+            return x.breakdown.ajusteVelocidade
+          case 'score':
+          default:
+            return x.score
+        }
+      }),
+    [linhas, field, dir],
+  )
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 space-y-3 text-sm text-slate-300">
+        <h3 className="font-semibold text-white flex items-center gap-2">
+          <Gauge className="w-4 h-4 text-orange-400" /> Como o número é calculado
+        </h3>
+        <p className="text-slate-400 text-xs leading-relaxed">
+          <span className="font-semibold text-slate-200">final = base da reunião + portão de fase + velocidade + curso/faculdade</span>{' '}
+          (limitado entre {MOTOR_WEIGHTS.min}% e {MOTOR_WEIGHTS.max}%). A base é a probabilidade da
+          reunião mais recente (Gemini). Sem reunião analisada, a base é o padrão da fase — e o número
+          fica marcado como <span className="italic">sem reunião</span>.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+            <div className="font-semibold text-slate-200 mb-1">Portão de fase vencido</div>
+            <div className="text-slate-400">
+              Qualif→Comissão +{MOTOR_WEIGHTS.portao['stage-2->stage-3']} · Comissão→Turma +
+              {MOTOR_WEIGHTS.portao['stage-3->stage-4']} · Turma→Decisão +
+              {MOTOR_WEIGHTS.portao['stage-4->stage-5']} (teto +{MOTOR_WEIGHTS.portaoMax})
+            </div>
           </div>
-          <div className="text-2xl font-bold text-white mb-2">{avgPerceivedValue}%</div>
-          <div className="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full bg-emerald-500 rounded-full"
-              style={{ width: `${avgPerceivedValue}%` }}
-            />
+          <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+            <div className="font-semibold text-slate-200 mb-1">Velocidade na coluna</div>
+            <div className="text-slate-400">
+              rápida +{MOTOR_WEIGHTS.velocidade.rapida} · saudável {MOTOR_WEIGHTS.velocidade.saudavel}{' '}
+              · lenta {MOTOR_WEIGHTS.velocidade.lenta} · estagnada{' '}
+              {MOTOR_WEIGHTS.velocidade.estagnada}
+            </div>
           </div>
-          <p className="text-[11px] text-slate-400">Menções positivas à proposta</p>
+          <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+            <div className="font-semibold text-slate-200 mb-1">Curso / faculdade</div>
+            <div className="text-slate-400">
+              até ±{MOTOR_WEIGHTS.cursoFacMax}, proporcional à taxa histórica de fechamento e ao
+              tamanho da amostra.
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Insights Automáticos Gerados */}
-      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-white">
-              Insights e Recomendações Automáticas
-            </h3>
-            <p className="text-xs text-slate-400">
-              Descobertas extraídas das transcrições gravadas
-            </p>
-          </div>
-          <span className="text-xs font-semibold text-slate-400">{allInsights.length} Gerados</span>
+      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-white text-sm">Turmas no funil ({linhas.length})</h3>
+          <SortControl
+            options={[
+              { value: 'score', label: 'Probabilidade' },
+              { value: 'turma', label: 'Turma' },
+              { value: 'fase', label: 'Fase' },
+              { value: 'base', label: 'Base (reunião)' },
+              { value: 'velocidade', label: 'Velocidade' },
+            ]}
+            field={field}
+            direction={dir}
+            onFieldChange={setField}
+            onDirectionToggle={() => setDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          />
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {allInsights.map((ins, idx) => {
-            const isPos = ins.type === 'positive'
-            const isRisk = ins.type === 'risk'
-
-            return (
-              <div
-                key={idx}
-                className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-start gap-3 hover:border-white/[0.12] transition-colors"
-              >
-                <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                    isPos
-                      ? 'bg-emerald-500/15 text-emerald-400'
-                      : isRisk
-                        ? 'bg-red-500/15 text-red-400'
-                        : 'bg-orange-500/15 text-orange-400'
-                  }`}
-                >
-                  {isPos && <CheckCircle2 className="w-4 h-4" />}
-                  {isRisk && <AlertTriangle className="w-4 h-4" />}
-                  {!isPos && !isRisk && <Lightbulb className="w-4 h-4" />}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span
-                      className={`text-[11px] font-bold uppercase tracking-wider ${
-                        isPos ? 'text-emerald-400' : isRisk ? 'text-red-400' : 'text-orange-400'
-                      }`}
-                    >
-                      {isPos ? 'Sinal Positivo' : isRisk ? 'Sinal de Risco' : 'Recomendação'}
-                    </span>
-                    <Link
-                      to="/transcricoes"
-                      className="text-[10px] text-slate-500 hover:text-orange-300 flex items-center gap-0.5"
-                    >
-                      {ins.company} <ArrowRight className="w-2.5 h-2.5" />
-                    </Link>
-                  </div>
-
-                  <p className="text-xs text-slate-200 leading-relaxed">{ins.text}</p>
-
-                  {ins.quote && (
-                    <div className="mt-2 text-[11px] text-slate-400 italic bg-white/[0.02] px-2 py-1 rounded border-l-2 border-orange-500/50">
-                      &quot;{ins.quote}&quot;
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Tabela de Transcrições Utilizadas */}
-      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-white">
-              Transcrições de Reuniões Utilizadas
-            </h3>
-            <p className="text-xs text-slate-400">
-              Arquivos processados no cálculo de probabilidade
-            </p>
-          </div>
-          <Link
-            to="/transcricoes"
-            className="text-xs text-orange-400 hover:underline flex items-center gap-1 font-semibold"
-          >
-            Gerenciar Transcrições <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
-                <th className="py-3 px-3">Transcrição</th>
-                <th className="py-3 px-3">Empresa</th>
-                <th className="py-3 px-3">Data</th>
-                <th className="py-3 px-3">Probabilidade</th>
-                <th className="py-3 px-3">Sinais Detectados</th>
-                <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-3 text-right">Ação</th>
+              <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wider text-slate-400">
+                <th className="py-2 px-2">Turma</th>
+                <th className="py-2 px-2">Fase</th>
+                <th className="py-2 px-2 text-right">Reunião</th>
+                <th className="py-2 px-2 text-right">+Portão</th>
+                <th className="py-2 px-2 text-right">±Velocidade</th>
+                <th className="py-2 px-2 text-right">±Curso/Fac</th>
+                <th className="py-2 px-2 text-right">Final</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
-              {transcripts.map((t) => (
-                <tr key={t.id} className="hover:bg-white/[0.02]">
-                  <td className="py-3 px-3 font-semibold text-white flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-orange-400 flex-shrink-0" />
-                    <span className="truncate max-w-[200px]">{t.title}</span>
+              {sorted.map(({ deal, lead, score, breakdown: b }) => (
+                <tr key={deal.id} className="hover:bg-white/[0.02]">
+                  <td className="py-2 px-2 text-white font-medium max-w-[220px] truncate">
+                    {lead ? getTurmaDisplayName(lead) : deal.title}
                   </td>
-                  <td className="py-3 px-3 text-slate-300">{t.company}</td>
-                  <td className="py-3 px-3 text-slate-400">
-                    {new Date(t.date).toLocaleDateString()}
+                  <td className="py-2 px-2 text-slate-400">{stageNome(deal.stageId)}</td>
+                  <td className="py-2 px-2 text-right text-slate-300">
+                    {b.base}%{b.semReuniao && <span className="text-slate-500"> *</span>}
                   </td>
-                  <td className="py-3 px-3">
-                    <span
-                      className="px-2 py-0.5 rounded-full font-bold text-[11px]"
-                      style={{
-                        backgroundColor: `${getScoreColor(t.probabilityScore)}20`,
-                        color: getScoreColor(t.probabilityScore),
-                      }}
-                    >
-                      {t.probabilityScore}%
-                    </span>
+                  <td className="py-2 px-2 text-right text-emerald-400">
+                    {b.ajustePortao ? `+${b.ajustePortao}` : '—'}
                   </td>
-                  <td className="py-3 px-3 text-slate-400">
-                    <span className="text-emerald-400 font-semibold">
-                      +{t.signals?.filter((s) => s.type === 'positive').length || 0}
-                    </span>{' '}
-                    /{' '}
-                    <span className="text-red-400 font-semibold">
-                      -{t.signals?.filter((s) => s.type === 'negative').length || 0}
-                    </span>
+                  <td
+                    className={`py-2 px-2 text-right ${
+                      b.ajusteVelocidade > 0
+                        ? 'text-emerald-400'
+                        : b.ajusteVelocidade < 0
+                          ? 'text-rose-400'
+                          : 'text-slate-500'
+                    }`}
+                  >
+                    {b.ajusteVelocidade > 0
+                      ? `+${b.ajusteVelocidade}`
+                      : b.ajusteVelocidade < 0
+                        ? b.ajusteVelocidade
+                        : '—'}
+                    <span className="text-slate-500 text-[10px]"> ({b.velocidadeLabel})</span>
                   </td>
-                  <td className="py-3 px-3">
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold">
-                      Analisada
-                    </span>
+                  <td
+                    className={`py-2 px-2 text-right ${
+                      b.ajusteCursoFac > 0
+                        ? 'text-emerald-400'
+                        : b.ajusteCursoFac < 0
+                          ? 'text-rose-400'
+                          : 'text-slate-500'
+                    }`}
+                  >
+                    {b.ajusteCursoFac > 0
+                      ? `+${b.ajusteCursoFac}`
+                      : b.ajusteCursoFac < 0
+                        ? b.ajusteCursoFac
+                        : '—'}
+                    {b.cursoFacN > 0 && (
+                      <span className="text-slate-500 text-[10px]"> (n={b.cursoFacN})</span>
+                    )}
                   </td>
-                  <td className="py-3 px-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        reanalyzeTranscript(t.id)
-                        toast({
-                          title: 'Re-análise executada',
-                          description: `${t.company} re-processado com sucesso.`,
-                        })
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-white/[0.06] inline-flex items-center gap-1 text-[11px]"
-                      title="Re-analisar com parâmetros atuais"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" /> Re-analisar
-                    </button>
+                  <td className="py-2 px-2 text-right font-bold" style={{ color: probColor(score) }}>
+                    {score}%
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <p className="text-[11px] text-slate-500 mt-2">* base veio do padrão da fase (turma ainda sem reunião analisada).</p>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ Aprendizado */
+
+function tally(items: string[], top = 12) {
+  const map = new Map<string, { texto: string; n: number }>()
+  for (const raw of items) {
+    const texto = (raw || '').trim()
+    if (!texto) continue
+    const k = texto.toLowerCase()
+    const cur = map.get(k)
+    if (cur) cur.n++
+    else map.set(k, { texto, n: 1 })
+  }
+  return [...map.values()].sort((a, b) => b.n - a.n).slice(0, top)
+}
+
+function AprendizadoTab({
+  deals,
+  transcripts,
+  funilEventos,
+}: {
+  deals: Deal[]
+  transcripts: Transcript[]
+  funilEventos: import('@/types/crm').FunilEvento[]
+}) {
+  const perdidos = useMemo(() => deals.filter((d) => d.outcome === 'perdido'), [deals])
+  const perdidoLeadIds = useMemo(
+    () => new Set(perdidos.map((d) => d.leadId).filter(Boolean) as string[]),
+    [perdidos],
+  )
+
+  const objecoesGerais = useMemo(
+    () => tally(transcripts.flatMap((t) => t.geminiAnalysis?.pontosAtencao || [])),
+    [transcripts],
+  )
+  const travamFechamento = useMemo(
+    () =>
+      tally([
+        ...perdidos.map((d) => d.lostReason || '').filter(Boolean),
+        ...transcripts
+          .filter((t) => t.leadId && perdidoLeadIds.has(t.leadId))
+          .flatMap((t) => t.geminiAnalysis?.pontosAtencao || []),
+        ...funilEventos
+          .filter((e) => e.outcome === 'perdido' && e.motivoPerda)
+          .map((e) => e.motivoPerda as string),
+      ]),
+    [perdidos, transcripts, funilEventos, perdidoLeadIds],
+  )
+
+  const contraditorios = funilEventos.filter(
+    (e) => e.observacao || e.avancouApesarProbBaixa,
+  )
+  const reunioesAnalisadas = transcripts.filter((t) => t.geminiAnalysis).length
+
+  return (
+    <div className="space-y-5">
+      <Painel
+        titulo="O que trava o avanço de fase"
+        sub={`Objeções e pontos de atenção mais citados nas reuniões — amostra: ${reunioesAnalisadas} reuniões analisadas`}
+        icon={AlertTriangle}
+        itens={objecoesGerais}
+        vazio="Nenhuma reunião analisada ainda."
+      />
+      <Painel
+        titulo="O que trava o fechamento"
+        sub={`Motivos de perda e objeções de turmas que não fecharam — amostra: ${perdidos.length} turmas perdidas`}
+        icon={AlertTriangle}
+        itens={travamFechamento}
+        vazio={
+          perdidos.length > 0
+            ? `${perdidos.length} turmas perdidas, mas nenhuma com motivo registrado ainda. Registre o motivo ao marcar "Perdeu" no funil.`
+            : 'Nenhuma turma perdida registrada ainda.'
+        }
+      />
+
+      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+        <h3 className="font-semibold text-white text-sm flex items-center gap-2 mb-1">
+          <Sparkles className="w-4 h-4 text-orange-400" /> Casos que contrariaram o motor
+        </h3>
+        <p className="text-xs text-slate-400 mb-3">
+          Onde a reunião/velocidade previu uma coisa e o resultado foi outro — é daqui que o motor
+          aprende. Amostra: {contraditorios.length} eventos.
+        </p>
+        {contraditorios.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Ainda sem casos registrados. Conforme as turmas avançam e fecham, eles aparecem aqui.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {contraditorios.slice(0, 30).map((e) => (
+              <li
+                key={e.id}
+                className="text-xs text-slate-300 flex items-start gap-2 p-2 rounded bg-white/[0.02] border border-white/[0.05]"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 flex-shrink-0 mt-0.5" />
+                <span>
+                  <span className="text-slate-400">
+                    {e.curso || '—'}
+                    {e.faculdade ? ` · ${e.faculdade}` : ''} —{' '}
+                    {e.tipo === 'desfecho'
+                      ? e.outcome === 'ganho'
+                        ? 'Fechou'
+                        : 'Perdeu'
+                      : `${stageNome(e.fromStage)} → ${stageNome(e.toStage)}`}
+                    :{' '}
+                  </span>
+                  {e.observacao ||
+                    (e.avancouApesarProbBaixa
+                      ? `avançou de fase mesmo com probabilidade baixa (${e.transcriptProbNoMomento ?? '?'}%).`
+                      : '')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Painel({
+  titulo,
+  sub,
+  icon: Icon,
+  itens,
+  vazio,
+}: {
+  titulo: string
+  sub: string
+  icon: typeof AlertTriangle
+  itens: { texto: string; n: number }[]
+  vazio: string
+}) {
+  return (
+    <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+      <h3 className="font-semibold text-white text-sm flex items-center gap-2 mb-1">
+        <Icon className="w-4 h-4 text-rose-400" /> {titulo}
+      </h3>
+      <p className="text-xs text-slate-400 mb-3">{sub}</p>
+      {itens.length === 0 ? (
+        <p className="text-sm text-slate-500">{vazio}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {itens.map((o, i) => (
+            <li key={i} className="flex items-center gap-2 text-xs text-slate-300">
+              <span className="inline-flex items-center justify-center min-w-[24px] h-5 rounded bg-rose-500/15 text-rose-300 font-bold text-[10px]">
+                {o.n}
+              </span>
+              {o.texto}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ Relatório */
+
+function RelatorioTab({
+  leads,
+  deals,
+  transcripts,
+  funilEventos,
+  estudos,
+  upsertEstudo,
+}: {
+  leads: import('@/types/crm').Lead[]
+  deals: Deal[]
+  transcripts: Transcript[]
+  funilEventos: import('@/types/crm').FunilEvento[]
+  estudos: AprendizadoEstudo[]
+  upsertEstudo: (e: AprendizadoEstudo) => Promise<void>
+}) {
+  const [modo, setModo] = useState<'curso' | 'faculdade'>('curso')
+  const [valor, setValor] = useState('')
+  const [gerando, setGerando] = useState(false)
+  const { toast } = useToast()
+
+  const cursos = useMemo(
+    () => [...new Set(leads.map((l) => l.curso).filter(Boolean))].sort(),
+    [leads],
+  )
+  const faculdades = useMemo(
+    () => [...new Set(leads.map((l) => l.faculdade).filter(Boolean))].sort(),
+    [leads],
+  )
+  const opcoes = modo === 'curso' ? cursos : faculdades
+
+  const escopo: EstudoEscopo = useMemo(
+    () =>
+      modo === 'curso'
+        ? { escopo: 'curso', curso: valor }
+        : { escopo: 'faculdade', faculdade: valor },
+    [modo, valor],
+  )
+
+  const agregado = useMemo(() => {
+    if (!valor) return null
+    return computeEstudoAgregado(escopo, { deals, leads, transcripts, funilEventos, materiais: [] })
+  }, [escopo, valor, deals, leads, transcripts, funilEventos])
+
+  const salvo = useMemo(
+    () =>
+      estudos.find(
+        (e) =>
+          e.escopo === escopo.escopo &&
+          (escopo.curso ? e.curso === escopo.curso : true) &&
+          (escopo.faculdade ? e.faculdade === escopo.faculdade : true),
+      ),
+    [estudos, escopo],
+  )
+
+  const handleGerar = async () => {
+    if (!agregado) return
+    const key = getGeminiApiKey()
+    if (!key) {
+      toast({
+        title: 'Configure a chave do Gemini',
+        description: 'Administração → IA.',
+        variant: 'destructive',
+      })
+      return
+    }
+    setGerando(true)
+    try {
+      const corpus = montarCorpusParaIA(escopo, agregado, {
+        deals,
+        leads,
+        transcripts,
+        funilEventos,
+        materiais: [],
+      })
+      const ia = await gerarEstudoIA(escopo, corpus, key, getGeminiModel())
+      await upsertEstudo({
+        ...agregado,
+        ...ia,
+        geradoPor: 'gemini',
+        geradoEm: new Date().toISOString(),
+      })
+      toast({ title: 'Estudo atualizado', description: valor })
+    } catch (e: any) {
+      toast({ title: 'Falha ao gerar estudo', description: e.message, variant: 'destructive' })
+    } finally {
+      setGerando(false)
+    }
+  }
+
+  const amostraPequena = (agregado?.amostraTurmas ?? 0) < 5
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 flex flex-wrap items-center gap-3">
+        <div className="flex rounded-lg border border-white/10 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => {
+              setModo('curso')
+              setValor('')
+            }}
+            className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${
+              modo === 'curso' ? 'bg-orange-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            <GraduationCap className="w-3.5 h-3.5" /> Por curso
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setModo('faculdade')
+              setValor('')
+            }}
+            className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${
+              modo === 'faculdade' ? 'bg-orange-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" /> Por faculdade
+          </button>
+        </div>
+        <select
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          className="bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white min-w-[220px]"
+        >
+          <option value="">Selecione {modo === 'curso' ? 'o curso' : 'a faculdade'}...</option>
+          {opcoes.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        {valor && (
+          <button
+            type="button"
+            onClick={handleGerar}
+            disabled={gerando}
+            className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold disabled:opacity-50"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${gerando ? 'animate-spin' : ''}`} />
+            {salvo?.geradoPor === 'gemini' ? 'Atualizar estudo com IA' : 'Gerar estudo com IA'}
+          </button>
+        )}
       </div>
 
-      {/* Modal de Upload e Análise */}
-      {uploadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-[620px] max-h-[90vh] bg-[#111820] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-white">Analisar Novas Transcrições</h3>
-                <p className="text-xs text-slate-400">Faça upload de arquivos .txt, .md ou .docx</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setUploadModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {!valor && (
+        <p className="text-sm text-slate-500 px-1">
+          Escolha um curso ou faculdade para ver os números reais e o estudo de pitch / apresentação.
+        </p>
+      )}
+
+      {valor && agregado && (
+        <>
+          {amostraPequena && (
+            <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 text-xs text-amber-200 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              Amostra pequena ({agregado.amostraTurmas} turma(s) com desfecho). As recomendações vão
+              ficar mais precisas conforme mais turmas fecharem.
             </div>
+          )}
 
-            <div className="p-6 overflow-y-auto space-y-5 flex-1">
-              {/* Drop Area */}
-              <label className="border-2 border-dashed border-white/15 hover:border-orange-500 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-[#0a0f14]/50 hover:bg-orange-500/[0.03] transition-all group">
-                <input
-                  type="file"
-                  multiple
-                  accept=".txt,.md,.docx,.text"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <div className="w-12 h-12 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-400 group-hover:scale-110 transition-transform mb-3">
-                  <Upload className="w-6 h-6" />
-                </div>
-                <div className="text-sm font-semibold text-white">
-                  Arraste seus arquivos aqui ou clique para selecionar
-                </div>
-                <div className="text-xs text-slate-400 mt-1">
-                  Formatos aceitos: .txt, .md, transcrições de áudio/vídeo
-                </div>
-              </label>
-
-              {/* Vincular a Lead Opcional */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Vincular a Lead Existente (Opcional)
-                </label>
-                <select
-                  value={associatedLeadId}
-                  onChange={(e) => setAssociatedLeadId(e.target.value)}
-                  className="w-full bg-[#0a0f14] border border-white/10 rounded-lg p-2 text-xs text-white"
-                >
-                  <option value="">Nenhum lead associado (detectar automaticamente)</option>
-                  {leads.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.curso} — {l.faculdade} ({l.turma})
-                    </option>
-                  ))}
-                </select>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Kpi
+              label="Turmas c/ desfecho"
+              value={agregado.amostraTurmas}
+            />
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+              <div className="text-slate-400 text-xs mb-1">Taxa de fechamento</div>
+              <div className="text-2xl font-bold text-white">
+                {agregado.taxaFechamento != null
+                  ? `${Math.round(agregado.taxaFechamento * 100)}%`
+                  : '—'}
               </div>
-
-              {/* Lista de Arquivos Selecionados */}
-              {selectedFiles.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-slate-300">
-                    Arquivos selecionados ({selectedFiles.length}):
-                  </div>
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {selectedFiles.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className="p-2 rounded-lg bg-[#0a0f14] border border-white/[0.06] flex items-center justify-between text-xs"
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <FileText className="w-4 h-4 text-orange-400 flex-shrink-0" />
-                          <span className="text-white truncate">{file.name}</span>
-                          <span className="text-slate-500 text-[10px]">
-                            ({(file.size / 1024).toFixed(1)} KB)
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedFiles(selectedFiles.filter((_, i) => i !== idx))
-                          }
-                          className="text-slate-500 hover:text-red-400 p-1"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Barra de Progresso Animada durante Análise */}
-              {analyzing && (
-                <div className="p-4 rounded-xl bg-white/[0.02] border border-orange-500/30 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-orange-300 font-semibold">{analysisStatusText}</span>
-                    <span className="font-bold text-white">{analysisProgress}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-orange-500 to-orange-500 transition-all duration-300"
-                      style={{ width: `${analysisProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Resultados Parciais do Processamento */}
-              {analysisResultsPreview.length > 0 && !analyzing && (
-                <div className="space-y-3 pt-2 border-t border-white/[0.08]">
-                  <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" /> Resultados Calculados:
-                  </div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {analysisResultsPreview.map((res, i) => (
-                      <div
-                        key={i}
-                        className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06] flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <div className="font-semibold text-white">{res.file}</div>
-                          <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                            <span className="text-emerald-400">
-                              +{res.positiveSignals.length} sinais pos.
-                            </span>
-                            <span className="text-red-400">
-                              -{res.negativeSignals.length} objeções
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-base font-extrabold text-orange-400">
-                          {res.score}%
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-
-            {/* Footer Modal */}
-            <div className="px-6 py-4 border-t border-white/[0.08] flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setUploadModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.06] border border-white/[0.08]"
-              >
-                {analysisResultsPreview.length > 0 ? 'Fechar' : 'Cancelar'}
-              </button>
-
-              <button
-                type="button"
-                disabled={selectedFiles.length === 0 || analyzing}
-                onClick={handleStartAnalysis}
-                className="px-5 py-2 text-xs font-semibold text-white bg-gradient-to-r from-orange-600 to-orange-600 hover:from-orange-500 hover:to-orange-500 rounded-lg shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {analyzing ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Analisando...
-                  </>
+            <Kpi label="Reuniões analisadas" value={agregado.amostraReunioes} />
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+              <div className="text-slate-400 text-xs mb-1">Tempo médio p/ fase</div>
+              <div className="text-xs text-slate-200 mt-1 space-y-0.5">
+                {agregado.tempoMedioPorEstagio &&
+                Object.keys(agregado.tempoMedioPorEstagio).length ? (
+                  Object.entries(agregado.tempoMedioPorEstagio).map(([s, d]) => (
+                    <div key={s}>
+                      {stageNome(s)}: {d}d
+                    </div>
+                  ))
                 ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" /> Analisar Agora
-                  </>
+                  <span className="text-slate-500">sem dados</span>
                 )}
-              </button>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <ListaContagem titulo="Objeções mais citadas" itens={agregado.objecoesComuns || []} />
+            <ListaContagem
+              titulo="Pontos fortes mais citados"
+              itens={agregado.pontosFortesComuns || []}
+              positivo
+            />
+            <ListaContagem
+              titulo="Motivos de perda / lições"
+              itens={agregado.motivosPerdaComuns || []}
+            />
+          </div>
+
+          {salvo?.geradoPor === 'gemini' ? (
+            <div className="space-y-4">
+              <TextoEstudo titulo="O que funciona neste recorte" texto={salvo.oQueFunciona} />
+              <TextoEstudo titulo="O que evitar" texto={salvo.oQueEvitar} />
+              <TextoEstudo titulo="Pitch recomendado" texto={salvo.pitchRecomendado} destaque />
+              <TextoEstudo
+                titulo="Estrutura de apresentação recomendada"
+                texto={salvo.estruturaApresentacao}
+                destaque
+              />
+              <TextoEstudo
+                titulo="Preferências dos formandos"
+                texto={salvo.preferenciasFormandos}
+              />
+              <p className="text-[11px] text-slate-500">
+                Estudo gerado por IA em{' '}
+                {salvo.geradoEm ? new Date(salvo.geradoEm).toLocaleString('pt-BR') : '—'} a partir dos
+                dados reais acima.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 text-center text-sm text-slate-400">
+              Clique em <span className="font-semibold text-white">Gerar estudo com IA</span> para
+              montar o pitch e a estrutura de apresentação recomendados para {valor}, a partir de todo
+              o material real acima.
+            </div>
+          )}
+        </>
       )}
+    </div>
+  )
+}
+
+function ListaContagem({
+  titulo,
+  itens,
+  positivo,
+}: {
+  titulo: string
+  itens: { texto: string; n: number }[]
+  positivo?: boolean
+}) {
+  return (
+    <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-4">
+      <h4 className="text-xs font-semibold text-slate-200 mb-2">{titulo}</h4>
+      {itens.length === 0 ? (
+        <p className="text-xs text-slate-500">Sem dados ainda.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {itens.map((o, i) => (
+            <li key={i} className="flex items-start gap-2 text-xs text-slate-300">
+              <span
+                className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded font-bold text-[10px] ${
+                  positivo ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
+                }`}
+              >
+                {o.n}
+              </span>
+              {o.texto}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function TextoEstudo({
+  titulo,
+  texto,
+  destaque,
+}: {
+  titulo: string
+  texto?: string
+  destaque?: boolean
+}) {
+  if (!texto) return null
+  return (
+    <div
+      className={`rounded-xl p-5 border ${
+        destaque ? 'bg-orange-500/[0.06] border-orange-500/25' : 'bg-[#111820] border-white/[0.06]'
+      }`}
+    >
+      <h4 className="text-sm font-semibold text-white mb-2">{titulo}</h4>
+      <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{texto}</p>
     </div>
   )
 }

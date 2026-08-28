@@ -158,6 +158,9 @@ function mapRowToDeal(row: any & { updated_by_profile?: { email: string | null }
     checklist: normalizeChecklist(row.checklist),
     stageHistory,
     outcome: (row.outcome as any) || null,
+    lostReason: row.lost_reason || undefined,
+    probBreakdown: (row.prob_breakdown as any) || undefined,
+    probAtualizadaEm: row.prob_atualizada_em || undefined,
     createdAt,
     updatedAt,
     updatedByEmail: row.updated_by_profile?.email || undefined,
@@ -324,7 +327,12 @@ export function useDeals() {
         if (updates.stage !== undefined) updatePayload.stage = updates.stage
         else if (updates.stageId !== undefined) updatePayload.stage = updates.stageId
         if (updates.probability !== undefined) updatePayload.probabilidade = updates.probability
+        if (updates.probBreakdown !== undefined) {
+          updatePayload.prob_breakdown = updates.probBreakdown as any
+          updatePayload.prob_atualizada_em = new Date().toISOString()
+        }
         if (updates.outcome !== undefined) updatePayload.outcome = updates.outcome
+        if (updates.lostReason !== undefined) updatePayload.lost_reason = updates.lostReason
         if (updates.expectedCloseDate !== undefined)
           updatePayload.data_previsao_fechamento = updates.expectedCloseDate
         if (updates.contractType !== undefined) updatePayload.tipo_contrato = updates.contractType
@@ -344,6 +352,7 @@ export function useDeals() {
             from_stage: oldStage,
             to_stage: newStage,
             changed_at: new Date().toISOString(),
+            changed_by: user.id,
           })
         }
       } catch (e: any) {

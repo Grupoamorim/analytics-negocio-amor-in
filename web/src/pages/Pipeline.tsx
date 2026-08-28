@@ -34,6 +34,7 @@ import {
   ClipboardCopy,
   Check,
   ChevronRight,
+  ChevronDown,
   Filter,
   BookmarkPlus,
 } from 'lucide-react'
@@ -70,7 +71,13 @@ import {
   removerPacote,
   gerarMensagemPacotes,
 } from '@/utils/pacotesTurma'
-import { ItemCatalogo, TemplatePacote, fetchCatalogoAtivo, fetchTemplatesAtivos } from '@/utils/pacoteCatalogo'
+import {
+  ItemCatalogo,
+  TemplatePacote,
+  fetchCatalogoAtivo,
+  fetchTemplatesAtivos,
+  adicionarItemCatalogo,
+} from '@/utils/pacoteCatalogo'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
@@ -99,7 +106,7 @@ export default function Pipeline() {
     leads,
     members,
     stages,
-    transcripts,
+    dealProbById,
     moveDealStage,
     updateDeal,
     deleteDeal,
@@ -118,6 +125,7 @@ export default function Pipeline() {
 
   const [draggingDealId, setDraggingDealId] = useState<string | null>(null)
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
+  const [probWhyDealId, setProbWhyDealId] = useState<string | null>(null)
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
   const [creatingForStageId, setCreatingForStageId] = useState<string | null>(null)
   const [creatingSearch, setCreatingSearch] = useState('')
@@ -865,18 +873,11 @@ export default function Pipeline() {
                             : stage.color
                         : stage.color
 
-                    // Buscar transcrição mais recente para obter a probabilidade da IA
-                    const latestTranscript = deal.leadId
-                      ? transcripts
-                          .filter((t) => t.leadId === deal.leadId)
-                          .sort(
-                            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-                          )[0]
-                      : undefined
-
-                    const transcriptProb =
-                      latestTranscript?.geminiAnalysis?.probabilidade ??
-                      latestTranscript?.probabilityScore
+                    // Probabilidade ÚNICA de fechamento (motor, ao vivo): reunião
+                    // manda, funil só tempera (portão vencido + velocidade na coluna).
+                    const probInfo = dealProbById.get(deal.id)
+                    const bd = probInfo?.breakdown
+                    const motorProb = probInfo?.score ?? deal.probability
 
                     return (
                       <div
@@ -990,28 +991,97 @@ export default function Pipeline() {
                           )}
                         </div>
 
-                        {/* Probabilidade calculada por Transcrição */}
-                        <div className="mb-2 flex items-center justify-between text-[10px] px-2 py-1 rounded bg-white/[0.03] border border-white/[0.05]">
-                          <span className="text-slate-400 flex items-center gap-1">
-                            <TrendingUp className="w-3 h-3 text-orange-400" />
-                            Probabilidade:
-                          </span>
-                          {transcriptProb !== undefined ? (
-                            <span
-                              className={`font-bold ${
-                                transcriptProb >= 70
-                                  ? 'text-emerald-400'
-                                  : transcriptProb >= 45
-                                    ? 'text-amber-400'
-                                    : 'text-rose-400'
-                              }`}
+                        {/* Probabilidade ÚNICA de fechamento (motor) */}
+                        {stage.id !== 'stage-6' && (
+                          <div className="mb-2 rounded bg-white/[0.03] border border-white/[0.05]">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setProbWhyDealId(probWhyDealId === deal.id ? null : deal.id)
+                              }}
+                              className="w-full flex items-center justify-between text-[10px] px-2 py-1"
+                              title="Ver por que esse número"
                             >
-                              {transcriptProb}% de chance de avançar
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 italic">Sem análise</span>
-                          )}
-                        </div>
+                              <span className="text-slate-400 flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3 text-orange-400" />
+                                Prob. de fechar:
+                              </span>
+                              <span
+                                className={`font-bold flex items-center gap-1 ${
+                                  motorProb >= 70
+                                    ? 'text-emerald-400'
+                                    : motorProb >= 45
+                                      ? 'text-amber-400'
+                                      : 'text-rose-400'
+                                }`}
+                              >
+                                {motorProb}%
+                                {bd?.semReuniao && (
+                                  <span className="text-slate-500 font-normal">(sem reunião)</span>
+                                )}
+                                <ChevronDown
+                                  className={`w-3 h-3 text-slate-500 transition-transform ${
+                                    probWhyDealId === deal.id ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </span>
+                            </button>
+                            {probWhyDealId === deal.id && bd && (
+                              <div className="px-2 pb-1.5 pt-0.5 space-y-0.5 text-[10px] text-slate-400 border-t border-white/[0.05]">
+                                <div className="flex justify-between">
+                                  <span>Reunião (base)</span>
+                                  <span className="text-slate-200">{bd.base}%</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Portão de fase vencido</span>
+                                  <span className={bd.ajustePortao > 0 ? 'text-emerald-400' : ''}>
+                                    {bd.ajustePortao > 0 ? `+${bd.ajustePortao}` : bd.ajustePortao}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Velocidade ({bd.velocidadeLabel})</span>
+                                  <span
+                                    className={
+                                      bd.ajusteVelocidade > 0
+                                        ? 'text-emerald-400'
+                                        : bd.ajusteVelocidade < 0
+                                          ? 'text-rose-400'
+                                          : ''
+                                    }
+                                  >
+                                    {bd.ajusteVelocidade > 0
+                                      ? `+${bd.ajusteVelocidade}`
+                                      : bd.ajusteVelocidade}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>
+                                    Curso/faculdade
+                                    {bd.cursoFacN > 0 ? ` (amostra ${bd.cursoFacN})` : ''}
+                                  </span>
+                                  <span
+                                    className={
+                                      bd.ajusteCursoFac > 0
+                                        ? 'text-emerald-400'
+                                        : bd.ajusteCursoFac < 0
+                                          ? 'text-rose-400'
+                                          : ''
+                                    }
+                                  >
+                                    {bd.ajusteCursoFac > 0
+                                      ? `+${bd.ajusteCursoFac}`
+                                      : bd.ajusteCursoFac}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between font-semibold text-slate-200 pt-0.5 border-t border-white/[0.05]">
+                                  <span>Probabilidade final</span>
+                                  <span>{bd.final}%</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Tempo no estágio (cor reflete urgência) */}
                         <div
@@ -1410,6 +1480,8 @@ function DealDetailModal({
   const [salvandoPacote, setSalvandoPacote] = useState(false)
   const [catalogoItens, setCatalogoItens] = useState<ItemCatalogo[]>([])
   const [templatesPacote, setTemplatesPacote] = useState<TemplatePacote[]>([])
+  const [novoItemCatalogo, setNovoItemCatalogo] = useState('')
+  const [addingItemCatalogo, setAddingItemCatalogo] = useState(false)
   const [mensagemGerada, setMensagemGerada] = useState<string | null>(null)
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
@@ -1465,6 +1537,21 @@ function DealDetailModal({
     setNovoPacote((d) => ({ ...d, nome: d.nome || template.nome, itens: [...template.itens] }))
   }
 
+  const handleAdicionarItemCatalogo = async () => {
+    const nome = novoItemCatalogo.trim()
+    if (!nome) return
+    setAddingItemCatalogo(true)
+    try {
+      await adicionarItemCatalogo(nome)
+      setCatalogoItens(await fetchCatalogoAtivo())
+      setNovoItemCatalogo('')
+    } catch (e) {
+      console.warn('Erro ao adicionar item ao catálogo:', e)
+    } finally {
+      setAddingItemCatalogo(false)
+    }
+  }
+
   const handleToggleItemNovoPacote = (nomeItem: string) => {
     setNovoPacote((d) => ({
       ...d,
@@ -1488,12 +1575,20 @@ function DealDetailModal({
     campo: 'nome' | 'valor' | 'parcelas',
     valor: string,
   ) => {
-    const patch =
+    let patch: Partial<PacoteTurma> =
       campo === 'nome'
         ? { nome: valor }
         : campo === 'valor'
           ? { valor: Number(valor.replace(',', '.')) || 0 }
           : { parcelas: Number(valor) || 1 }
+
+    // Se a turma tem valor base de parcela, mudar a qtd de parcelas recalcula
+    // o valor total do pacote automaticamente (base × parcelas).
+    if (campo === 'parcelas' && lead?.valorParcelaBase != null) {
+      const n = Number(valor) || 1
+      patch = { ...patch, valor: Math.round(lead.valorParcelaBase * n) }
+    }
+
     await atualizarPacote(pacote.id, patch)
     setPacotes((prev) => prev.map((p) => (p.id === pacote.id ? { ...p, ...patch } : p)))
     setMensagemGerada(null)
@@ -1757,6 +1852,35 @@ function DealDetailModal({
                 )}
               </div>
 
+              {/* Config de parcelas da turma (vale pra todos os pacotes) */}
+              <div className="grid grid-cols-2 gap-2">
+                <MiniFieldBlur
+                  label="Valor base da parcela (R$)"
+                  type="number"
+                  defaultValue={lead.valorParcelaBase != null ? String(lead.valorParcelaBase) : ''}
+                  onSave={(v) =>
+                    onUpdateLead({
+                      valorParcelaBase: v.trim() ? Number(v.replace(',', '.')) || 0 : undefined,
+                    })
+                  }
+                />
+                <div>
+                  <label className="block text-[9px] text-slate-500 mb-1 uppercase tracking-wide">
+                    Início dos pagamentos
+                  </label>
+                  <input
+                    type="month"
+                    value={lead.pagamentoInicio ? lead.pagamentoInicio.slice(0, 7) : ''}
+                    onChange={(e) =>
+                      onUpdateLead({
+                        pagamentoInicio: e.target.value ? `${e.target.value}-01` : undefined,
+                      })
+                    }
+                    className="w-full bg-[#111820] border border-white/10 rounded px-2 py-1 text-xs text-slate-200"
+                  />
+                </div>
+              </div>
+
               {pacotes.length > 0 && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="p-2 rounded-lg bg-[#111820] border border-white/[0.06]">
@@ -1819,6 +1943,14 @@ function DealDetailModal({
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                      {p.parcelas > 0 && p.valor > 0 && (
+                        <p className="text-[10px] text-orange-400/90">
+                          = R$ {(p.valor / p.parcelas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês × {p.parcelas} parcelas
+                          {lead.pagamentoInicio
+                            ? ` · início ${new Date(lead.pagamentoInicio + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`
+                            : ''}
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         {catalogoItens.map((item) => {
                           const incluso = p.itens.includes(item.nome)
@@ -1878,8 +2010,35 @@ function DealDetailModal({
                   label="Parcelas"
                   type="number"
                   value={novoPacote.parcelas}
-                  onChange={(v) => setNovoPacote((d) => ({ ...d, parcelas: v }))}
+                  onChange={(v) =>
+                    setNovoPacote((d) => {
+                      const n = Number(v)
+                      return {
+                        ...d,
+                        parcelas: v,
+                        valor:
+                          lead.valorParcelaBase != null && n > 0
+                            ? String(Math.round(lead.valorParcelaBase * n))
+                            : d.valor,
+                      }
+                    })
+                  }
                 />
+                {(() => {
+                  const val = Number(novoPacote.valor.replace(',', '.'))
+                  const par = Number(novoPacote.parcelas)
+                  if (!val || !par) return null
+                  return (
+                    <p className="text-[10px] text-orange-400/90">
+                      = R$ {(val / par).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
+                      {' × '}
+                      {par} parcelas
+                      {lead.pagamentoInicio
+                        ? ` · início ${new Date(lead.pagamentoInicio + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`
+                        : ''}
+                    </p>
+                  )
+                })()}
                 <div>
                   <label className="block text-[9px] text-slate-500 mb-1 uppercase tracking-wide">
                     Itens do pacote (clique pra marcar)
@@ -1903,6 +2062,29 @@ function DealDetailModal({
                         </button>
                       )
                     })}
+                  </div>
+                  {/* + criar um novo item/evento no catálogo (fica disponível pra todas as turmas) */}
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <input
+                      value={novoItemCatalogo}
+                      onChange={(e) => setNovoItemCatalogo(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAdicionarItemCatalogo()
+                        }
+                      }}
+                      placeholder="Novo item/evento (ex: Missa, Jantar...)"
+                      className="flex-1 bg-[#0a0f14] border border-white/10 rounded px-2 py-1 text-[10px] text-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAdicionarItemCatalogo}
+                      disabled={addingItemCatalogo || !novoItemCatalogo.trim()}
+                      className="text-[10px] font-semibold text-orange-400 border border-orange-800 rounded px-2 py-1 disabled:opacity-40 inline-flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" /> Criar
+                    </button>
                   </div>
                 </div>
                 <button
