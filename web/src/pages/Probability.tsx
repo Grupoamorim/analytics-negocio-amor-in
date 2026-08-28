@@ -80,23 +80,27 @@ export default function Probability() {
       })
   }, [deals, leadById, dealProbById])
 
+  // Prospecção não entra na média nem no histograma (não é avaliável).
+  const avaliaveis = useMemo(
+    () => dealsComBreakdown.filter((x) => !x.breakdown.naoAvaliavel),
+    [dealsComBreakdown],
+  )
+
   const mediaGeral = useMemo(() => {
-    if (dealsComBreakdown.length === 0) return 0
-    return Math.round(
-      dealsComBreakdown.reduce((a, x) => a + x.score, 0) / dealsComBreakdown.length,
-    )
-  }, [dealsComBreakdown])
+    if (avaliaveis.length === 0) return 0
+    return Math.round(avaliaveis.reduce((a, x) => a + x.score, 0) / avaliaveis.length)
+  }, [avaliaveis])
 
   const histogram = useMemo(() => {
     const b = { low: 0, medLow: 0, medHigh: 0, high: 0 }
-    dealsComBreakdown.forEach((x) => {
+    avaliaveis.forEach((x) => {
       if (x.score <= 25) b.low++
       else if (x.score <= 50) b.medLow++
       else if (x.score <= 75) b.medHigh++
       else b.high++
     })
     return b
-  }, [dealsComBreakdown])
+  }, [avaliaveis])
 
   const ganhos = deals.filter((d) => d.outcome === 'ganho').length
   const perdidos = deals.filter((d) => d.outcome === 'perdido').length
@@ -163,7 +167,8 @@ export default function Probability() {
       {tab === 'geral' && (
         <VisaoGeral
           media={mediaGeral}
-          total={dealsComBreakdown.length}
+          total={avaliaveis.length}
+          totalFunil={dealsComBreakdown.length - avaliaveis.length}
           histogram={histogram}
           ganhos={ganhos}
           perdidos={perdidos}
@@ -193,6 +198,7 @@ export default function Probability() {
 function VisaoGeral({
   media,
   total,
+  totalFunil,
   histogram,
   ganhos,
   perdidos,
@@ -200,6 +206,7 @@ function VisaoGeral({
 }: {
   media: number
   total: number
+  totalFunil: number
   histogram: { low: number; medLow: number; medHigh: number; high: number }
   ganhos: number
   perdidos: number
@@ -232,7 +239,7 @@ function VisaoGeral({
             </div>
           </div>
           <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
-            <Kpi label="Turmas no funil" value={total} />
+            <Kpi label="Turmas avaliadas (da Qualificação)" value={total} />
             <Kpi label="Reuniões analisadas" value={reunioes} />
             <Kpi label="Turmas ganhas (histórico)" value={ganhos} color="text-emerald-400" />
             <Kpi label="Turmas perdidas (histórico)" value={perdidos} color="text-rose-400" />
@@ -242,7 +249,9 @@ function VisaoGeral({
         <div className="mt-8 pt-6 border-t border-white/[0.06] space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-semibold text-slate-300">Distribuição das probabilidades do funil</span>
-            <span>{total} turmas</span>
+            <span>
+              {total} turmas{totalFunil > 0 ? ` · ${totalFunil} em Prospecção (sem probabilidade)` : ''}
+            </span>
           </div>
           <div className="h-4 w-full bg-white/[0.04] rounded-full overflow-hidden flex gap-0.5 p-0.5">
             <Bar w={histogram.low} total={total} className="bg-rose-500 rounded-l-full" />
@@ -388,7 +397,18 @@ function MotorTab({ linhas }: { linhas: LinhaMotor[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
-              {sorted.map(({ deal, lead, score, breakdown: b }) => (
+              {sorted.map(({ deal, lead, score, breakdown: b }) =>
+                b.naoAvaliavel ? (
+                  <tr key={deal.id} className="hover:bg-white/[0.02] text-slate-500">
+                    <td className="py-2 px-2 max-w-[220px] truncate">
+                      {lead ? getTurmaDisplayName(lead) : deal.title}
+                    </td>
+                    <td className="py-2 px-2">{stageNome(deal.stageId)}</td>
+                    <td className="py-2 px-2 text-right" colSpan={5}>
+                      — sem probabilidade (só avalia da Qualificação)
+                    </td>
+                  </tr>
+                ) : (
                 <tr key={deal.id} className="hover:bg-white/[0.02]">
                   <td className="py-2 px-2 text-white font-medium max-w-[220px] truncate">
                     {lead ? getTurmaDisplayName(lead) : deal.title}
@@ -438,7 +458,8 @@ function MotorTab({ linhas }: { linhas: LinhaMotor[] }) {
                     {score}%
                   </td>
                 </tr>
-              ))}
+                ),
+              )}
             </tbody>
           </table>
         </div>

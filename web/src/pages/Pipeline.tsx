@@ -993,8 +993,19 @@ export default function Pipeline() {
                           )}
                         </div>
 
+                        {/* Prospecção: sem probabilidade — só avalia da Qualificação em diante */}
+                        {stage.id !== 'stage-6' && bd?.naoAvaliavel && (
+                          <div className="mb-2 flex items-center justify-between text-[10px] px-2 py-1 rounded bg-white/[0.03] border border-white/[0.05]">
+                            <span className="text-slate-400 flex items-center gap-1">
+                              <TrendingUp className="w-3 h-3 text-slate-500" />
+                              Prob. de fechar:
+                            </span>
+                            <span className="text-slate-500">— (avalia da Qualificação)</span>
+                          </div>
+                        )}
+
                         {/* Probabilidade ÚNICA de fechamento (motor) */}
-                        {stage.id !== 'stage-6' && (
+                        {stage.id !== 'stage-6' && !bd?.naoAvaliavel && (
                           <div className="mb-2 rounded bg-white/[0.03] border border-white/[0.05]">
                             <button
                               type="button"

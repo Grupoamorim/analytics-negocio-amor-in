@@ -634,6 +634,8 @@ export interface ProbBreakdown {
   base: number
   /** Sem reunião analisada: `base` veio do padrão do estágio, é chute. */
   semReuniao: boolean
+  /** Prospecção: sem contato/reunião ainda — não dá pra estimar (mostra "—"). */
+  naoAvaliavel?: boolean
   /** Bônus pequeno por portões de fase já vencidos (proporcional à seletividade). */
   ajustePortao: number
   /** Ajuste por velocidade/estagnação na coluna atual (o pedaço que morde). */

@@ -103,7 +103,9 @@ function ajusteVelocidade(deal: Deal, stageMeta: FunnelStageMeta): { valor: numb
 }
 
 function ajusteCursoFac(rate?: CursoFacRate | null): { valor: number; n: number } {
-  if (!rate || rate.n < 1) return { valor: 0, n: 0 }
+  // Só usa a taxa histórica do curso/faculdade quando há amostra suficiente
+  // (>= 8 turmas com desfecho) — abaixo disso não há média confiável.
+  if (!rate || rate.n < 8) return { valor: 0, n: rate?.n ?? 0 }
   const confianca = Math.min(1, rate.n / MOTOR_WEIGHTS.cursoFacNParaConfiancaTotal)
   const bruto = (rate.rate - 0.5) * 2 * MOTOR_WEIGHTS.cursoFacMax // rate 0→-max, 1→+max
   const valor = clamp(bruto * confianca, -MOTOR_WEIGHTS.cursoFacMax, MOTOR_WEIGHTS.cursoFacMax)
@@ -127,6 +129,26 @@ export function computeDealProbability({
 }: ComputeArgs): { score: number; breakdown: ProbBreakdown } {
   const stageId = deal.stageId || 'stage-1'
   const stageMeta = FUNNEL_STAGE_BY_ID[stageId] || FUNNEL_STAGES[0]
+
+  // Prospecção: ainda não houve contato com a comissão nem reunião — não dá pra
+  // estimar probabilidade de fechamento com honestidade. Só avaliamos a partir
+  // da Qualificação/Contato. (Decisão do Lucas.)
+  if (stageId === 'stage-1' || deal.stage === 'prospeccao') {
+    return {
+      score: 0,
+      breakdown: {
+        base: 0,
+        semReuniao: true,
+        naoAvaliavel: true,
+        ajustePortao: 0,
+        ajusteVelocidade: 0,
+        ajusteCursoFac: 0,
+        cursoFacN: 0,
+        velocidadeLabel: 'saudável',
+        final: 0,
+      },
+    }
+  }
 
   // Estágio final: o resultado já é conhecido, não há o que estimar.
   if (stageId === 'stage-6' || deal.stage === 'fechou-ou-perdeu') {
