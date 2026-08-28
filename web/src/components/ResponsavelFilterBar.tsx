@@ -49,7 +49,7 @@ export default function ResponsavelFilterBar({ className }: { className?: string
         ))}
       </select>
 
-      {!vendoProprio && nome && (
+      {filtroPessoalAtivo && !vendoProprio && nome && (
         <button
           type="button"
           onClick={() => setResponsavelFiltro(nome)}
@@ -60,7 +60,7 @@ export default function ResponsavelFilterBar({ className }: { className?: string
         </button>
       )}
 
-      {!isAdmin && filtroPessoalAtivo && !vendoProprio && (
+      {!isAdmin && (!filtroPessoalAtivo || !vendoProprio) && (
         <span className="text-slate-500">— volta pro seu ao atualizar a página</span>
       )}
     </div>

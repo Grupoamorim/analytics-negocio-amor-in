@@ -65,9 +65,12 @@ function primeiroNome(s?: string | null): string {
 }
 
 export const AcessoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, loading: authLoading } = useAuth()
 
-  const [carregando, setCarregando] = useState(true)
+  // Só sai de "carregando" depois que a autenticação resolveu E a 1ª busca terminou —
+  // senão o AdminRoute/RotaComPermissao decidem cedo demais (role ainda vazio) e redirecionam.
+  const [buscaConcluida, setBuscaConcluida] = useState(false)
+  const carregando = authLoading || !buscaConcluida
   const [role, setRole] = useState('')
   const [nome, setNome] = useState('')
   const [usuarios, setUsuarios] = useState<UsuarioSistema[]>([])
@@ -78,11 +81,12 @@ export const AcessoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const isAdmin = role === 'admin'
 
   const carregar = useCallback(async () => {
+    if (authLoading) return
     if (!isAuthenticated || !userId) {
-      setCarregando(false)
+      setRole('')
+      setBuscaConcluida(true)
       return
     }
-    setCarregando(true)
 
     // `acesso_paginas` é nova e ainda não está no types.ts gerado — cast como o resto do projeto faz.
     const db = supabase as any
@@ -109,8 +113,8 @@ export const AcessoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setRole(meuPerfil?.role || 'membro')
     setNome(meuPerfil?.nome || user?.email?.split('@')[0] || 'Usuário')
 
-    setCarregando(false)
-  }, [isAuthenticated, userId, user?.email])
+    setBuscaConcluida(true)
+  }, [authLoading, isAuthenticated, userId, user?.email])
 
   useEffect(() => {
     carregar()
