@@ -51,6 +51,8 @@ function mapRowToLead(row: TurmaRow & { updated_by_profile?: { email: string | n
     codigoSGE: row.codigo_sge || undefined,
     quantidadeComissao: row.quantidade_comissao ?? undefined,
     metaContratos: row.meta_contratos ?? undefined,
+    valorParcelaBase: row.valor_parcela_base ?? undefined,
+    pagamentoInicio: row.pagamento_inicio || undefined,
     fotoUrl: row.foto_url || undefined,
     concluida: row.concluida || false,
     concluidaEm: row.concluida_em || undefined,
@@ -95,6 +97,8 @@ function mapLeadToInsert(lead: Partial<Lead>, userId: string): TurmaInsert {
     alunos_fechados: lead.alunosFechados || 0,
     quantidade_comissao: lead.quantidadeComissao ?? null,
     meta_contratos: lead.metaContratos ?? null,
+    valor_parcela_base: lead.valorParcelaBase ?? null,
+    pagamento_inicio: lead.pagamentoInicio || null,
     foto_url: lead.fotoUrl || null,
     data_cadastro: lead.dataCadastro || null,
     primeiro_contato: lead.primeiroContatoEm || null,
@@ -232,6 +236,10 @@ export function useTurmas() {
         if (updates.quantidadeComissao !== undefined)
           updatePayload.quantidade_comissao = updates.quantidadeComissao
         if (updates.metaContratos !== undefined) updatePayload.meta_contratos = updates.metaContratos
+        if (updates.valorParcelaBase !== undefined)
+          updatePayload.valor_parcela_base = updates.valorParcelaBase
+        if (updates.pagamentoInicio !== undefined)
+          updatePayload.pagamento_inicio = updates.pagamentoInicio
         if (updates.fotoUrl !== undefined) updatePayload.foto_url = updates.fotoUrl
         if (updates.concluida !== undefined) updatePayload.concluida = updates.concluida
         if (updates.concluidaEm !== undefined) updatePayload.concluida_em = updates.concluidaEm || null

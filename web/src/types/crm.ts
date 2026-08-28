@@ -93,6 +93,10 @@ export interface Lead {
 
   quantidadeComissao?: number // nº de pessoas na comissão da turma
   metaContratos?: number // meta de contratos fechados para a turma
+  /** Valor base das parcelas fixas aplicado a todos os pacotes da turma. */
+  valorParcelaBase?: number
+  /** Mês/ano de início dos pagamentos (ISO YYYY-MM-01). */
+  pagamentoInicio?: string
   fotoUrl?: string // foto de capa da turma
 
   concluida?: boolean // true quando a turma passou do semestre de formatura (job automático)

@@ -1946,6 +1946,7 @@ export type Database = {
           meta_vendas: number | null
           nome: string
           observacoes: string | null
+          pagamento_inicio: string | null
           primeiro_contato: string | null
           proposta_link: string | null
           quantidade_comissao: number | null
@@ -1958,6 +1959,7 @@ export type Database = {
           updated_at: string | null
           updated_by: string | null
           user_id: string | null
+          valor_parcela_base: number | null
         }
         Insert: {
           alunos_fechados?: number | null
@@ -1988,6 +1990,7 @@ export type Database = {
           meta_vendas?: number | null
           nome: string
           observacoes?: string | null
+          pagamento_inicio?: string | null
           primeiro_contato?: string | null
           proposta_link?: string | null
           quantidade_comissao?: number | null
@@ -2000,6 +2003,7 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
+          valor_parcela_base?: number | null
         }
         Update: {
           alunos_fechados?: number | null
@@ -2030,6 +2034,7 @@ export type Database = {
           meta_vendas?: number | null
           nome?: string
           observacoes?: string | null
+          pagamento_inicio?: string | null
           primeiro_contato?: string | null
           proposta_link?: string | null
           quantidade_comissao?: number | null
@@ -2042,6 +2047,7 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
+          valor_parcela_base?: number | null
         }
         Relationships: [
           {

@@ -71,7 +71,13 @@ import {
   removerPacote,
   gerarMensagemPacotes,
 } from '@/utils/pacotesTurma'
-import { ItemCatalogo, TemplatePacote, fetchCatalogoAtivo, fetchTemplatesAtivos } from '@/utils/pacoteCatalogo'
+import {
+  ItemCatalogo,
+  TemplatePacote,
+  fetchCatalogoAtivo,
+  fetchTemplatesAtivos,
+  adicionarItemCatalogo,
+} from '@/utils/pacoteCatalogo'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
 
 const PROPOSAL_LINK_STORAGE = 'sdr_crm_proposal_links_v1'
@@ -1474,6 +1480,8 @@ function DealDetailModal({
   const [salvandoPacote, setSalvandoPacote] = useState(false)
   const [catalogoItens, setCatalogoItens] = useState<ItemCatalogo[]>([])
   const [templatesPacote, setTemplatesPacote] = useState<TemplatePacote[]>([])
+  const [novoItemCatalogo, setNovoItemCatalogo] = useState('')
+  const [addingItemCatalogo, setAddingItemCatalogo] = useState(false)
   const [mensagemGerada, setMensagemGerada] = useState<string | null>(null)
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
@@ -1529,6 +1537,21 @@ function DealDetailModal({
     setNovoPacote((d) => ({ ...d, nome: d.nome || template.nome, itens: [...template.itens] }))
   }
 
+  const handleAdicionarItemCatalogo = async () => {
+    const nome = novoItemCatalogo.trim()
+    if (!nome) return
+    setAddingItemCatalogo(true)
+    try {
+      await adicionarItemCatalogo(nome)
+      setCatalogoItens(await fetchCatalogoAtivo())
+      setNovoItemCatalogo('')
+    } catch (e) {
+      console.warn('Erro ao adicionar item ao catálogo:', e)
+    } finally {
+      setAddingItemCatalogo(false)
+    }
+  }
+
   const handleToggleItemNovoPacote = (nomeItem: string) => {
     setNovoPacote((d) => ({
       ...d,
@@ -1552,12 +1575,20 @@ function DealDetailModal({
     campo: 'nome' | 'valor' | 'parcelas',
     valor: string,
   ) => {
-    const patch =
+    let patch: Partial<PacoteTurma> =
       campo === 'nome'
         ? { nome: valor }
         : campo === 'valor'
           ? { valor: Number(valor.replace(',', '.')) || 0 }
           : { parcelas: Number(valor) || 1 }
+
+    // Se a turma tem valor base de parcela, mudar a qtd de parcelas recalcula
+    // o valor total do pacote automaticamente (base × parcelas).
+    if (campo === 'parcelas' && lead?.valorParcelaBase != null) {
+      const n = Number(valor) || 1
+      patch = { ...patch, valor: Math.round(lead.valorParcelaBase * n) }
+    }
+
     await atualizarPacote(pacote.id, patch)
     setPacotes((prev) => prev.map((p) => (p.id === pacote.id ? { ...p, ...patch } : p)))
     setMensagemGerada(null)
@@ -1821,6 +1852,35 @@ function DealDetailModal({
                 )}
               </div>
 
+              {/* Config de parcelas da turma (vale pra todos os pacotes) */}
+              <div className="grid grid-cols-2 gap-2">
+                <MiniFieldBlur
+                  label="Valor base da parcela (R$)"
+                  type="number"
+                  defaultValue={lead.valorParcelaBase != null ? String(lead.valorParcelaBase) : ''}
+                  onSave={(v) =>
+                    onUpdateLead({
+                      valorParcelaBase: v.trim() ? Number(v.replace(',', '.')) || 0 : undefined,
+                    })
+                  }
+                />
+                <div>
+                  <label className="block text-[9px] text-slate-500 mb-1 uppercase tracking-wide">
+                    Início dos pagamentos
+                  </label>
+                  <input
+                    type="month"
+                    value={lead.pagamentoInicio ? lead.pagamentoInicio.slice(0, 7) : ''}
+                    onChange={(e) =>
+                      onUpdateLead({
+                        pagamentoInicio: e.target.value ? `${e.target.value}-01` : undefined,
+                      })
+                    }
+                    className="w-full bg-[#111820] border border-white/10 rounded px-2 py-1 text-xs text-slate-200"
+                  />
+                </div>
+              </div>
+
               {pacotes.length > 0 && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="p-2 rounded-lg bg-[#111820] border border-white/[0.06]">
@@ -1883,6 +1943,14 @@ function DealDetailModal({
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                      {p.parcelas > 0 && p.valor > 0 && (
+                        <p className="text-[10px] text-orange-400/90">
+                          = R$ {(p.valor / p.parcelas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês × {p.parcelas} parcelas
+                          {lead.pagamentoInicio
+                            ? ` · início ${new Date(lead.pagamentoInicio + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`
+                            : ''}
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         {catalogoItens.map((item) => {
                           const incluso = p.itens.includes(item.nome)
@@ -1942,8 +2010,35 @@ function DealDetailModal({
                   label="Parcelas"
                   type="number"
                   value={novoPacote.parcelas}
-                  onChange={(v) => setNovoPacote((d) => ({ ...d, parcelas: v }))}
+                  onChange={(v) =>
+                    setNovoPacote((d) => {
+                      const n = Number(v)
+                      return {
+                        ...d,
+                        parcelas: v,
+                        valor:
+                          lead.valorParcelaBase != null && n > 0
+                            ? String(Math.round(lead.valorParcelaBase * n))
+                            : d.valor,
+                      }
+                    })
+                  }
                 />
+                {(() => {
+                  const val = Number(novoPacote.valor.replace(',', '.'))
+                  const par = Number(novoPacote.parcelas)
+                  if (!val || !par) return null
+                  return (
+                    <p className="text-[10px] text-orange-400/90">
+                      = R$ {(val / par).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
+                      {' × '}
+                      {par} parcelas
+                      {lead.pagamentoInicio
+                        ? ` · início ${new Date(lead.pagamentoInicio + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}`
+                        : ''}
+                    </p>
+                  )
+                })()}
                 <div>
                   <label className="block text-[9px] text-slate-500 mb-1 uppercase tracking-wide">
                     Itens do pacote (clique pra marcar)
@@ -1967,6 +2062,29 @@ function DealDetailModal({
                         </button>
                       )
                     })}
+                  </div>
+                  {/* + criar um novo item/evento no catálogo (fica disponível pra todas as turmas) */}
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <input
+                      value={novoItemCatalogo}
+                      onChange={(e) => setNovoItemCatalogo(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAdicionarItemCatalogo()
+                        }
+                      }}
+                      placeholder="Novo item/evento (ex: Missa, Jantar...)"
+                      className="flex-1 bg-[#0a0f14] border border-white/10 rounded px-2 py-1 text-[10px] text-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAdicionarItemCatalogo}
+                      disabled={addingItemCatalogo || !novoItemCatalogo.trim()}
+                      className="text-[10px] font-semibold text-orange-400 border border-orange-800 rounded px-2 py-1 disabled:opacity-40 inline-flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" /> Criar
+                    </button>
                   </div>
                 </div>
                 <button
