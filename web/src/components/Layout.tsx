@@ -46,16 +46,9 @@ type NavItem = { path: string; label: string; icon: typeof LayoutDashboard }
 // várias telas dentro de "Comercial".
 const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
   {
-    section: null,
-    items: [
-      { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-      // Adesões é aba híbrida (comercial + financeiro) — fica solta abaixo do Dashboard.
-      { path: '/adesoes', label: 'Adesões', icon: UserPlus },
-    ],
-  },
-  {
     section: 'Comercial',
     items: [
+      { path: '/', label: 'Painel Comercial', icon: LayoutDashboard },
       { path: '/captacao', label: 'Mapa de Mercado', icon: QrCode },
       { path: '/pipeline', label: 'Funil Amor In', icon: Kanban },
       { path: '/leads', label: 'Turmas', icon: GraduationCap },
@@ -68,6 +61,8 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
   {
     section: 'Financeiro',
     items: [
+      { path: '/painel-financeiro', label: 'Painel Financeiro', icon: LayoutDashboard },
+      { path: '/adesoes', label: 'Adesões', icon: UserPlus },
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign },
       { path: '/dre', label: 'DRE', icon: TrendingUp },
       { path: '/projecoes', label: 'Projeções', icon: Rocket },
