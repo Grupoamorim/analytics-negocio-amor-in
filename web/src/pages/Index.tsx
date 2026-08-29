@@ -20,7 +20,9 @@ import { SortControl, sortByField, type SortDirection } from '@/components/SortC
 import KpiCard from '@/components/dashboard/KpiCard'
 import SectionTitle from '@/components/dashboard/SectionTitle'
 import InfoHint from '@/components/dashboard/InfoHint'
+import PaceBand from '@/components/dashboard/PaceBand'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import { useMetasNegocio } from '@/hooks/useMetasNegocio'
 import { getTurmaDisplayName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import {
   funilAberto,
@@ -34,6 +36,8 @@ import {
   responsavelDaTurma,
   turmaEmAtendimento,
   pctSemResponsavel,
+  distribuicao,
+  pontosComerciais,
   type LinhaRanking,
 } from '@/utils/comercialMetrics'
 
@@ -83,6 +87,15 @@ export default function Index() {
     if (abertos.length === 0) return 0
     return Math.round(abertos.reduce((a, d) => a + (d.probability ?? 0), 0) / abertos.length)
   }, [deals])
+
+  const { metaVigente } = useMetasNegocio()
+  const hoje = new Date().toISOString().slice(0, 10)
+  const metaContratos = metaVigente('contratos', hoje) || metaVigente('alunos', hoje)
+  const metaMetrica: 'contratos' | 'alunos' = metaContratos?.metrica === 'alunos' ? 'alunos' : 'contratos'
+  const pontosMeta = useMemo(() => pontosComerciais(leads, metaMetrica), [leads, metaMetrica])
+
+  const distCurso = useMemo(() => distribuicao(leads, (l) => l.curso), [leads])
+  const distMarca = useMemo(() => distribuicao(leads, (l) => l.empresa || 'Sem marca'), [leads])
 
   const rankVend = useMemo(() => rankingPorResponsavel(leads, deals), [leads, deals])
   const rankFac = useMemo(() => rankingPorFaculdade(leads, deals), [leads, deals])
@@ -168,6 +181,14 @@ export default function Index() {
         </InfoHint>
         O período afeta ganhas e alunos fechados. Funil e rankings são a situação atual.
       </p>
+
+      {/* ============ Meta & Pace ============ */}
+      <PaceBand
+        titulo={metaMetrica === 'alunos' ? 'Meta de alunos fechados' : 'Meta de contratos'}
+        metrica={metaMetrica}
+        meta={metaContratos}
+        pontos={pontosMeta}
+      />
 
       {/* ============ KPIs ============ */}
       <div className="flex items-center justify-between">
@@ -341,6 +362,20 @@ export default function Index() {
           ajuda="Quais cursos fecham mais contratos e trazem mais alunos. Cursos com muitas turmas ganhas e turmas grandes são os de maior retorno por esforço." />
       </div>
 
+      {/* ============ Distribuição por Curso / Marca ============ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <DistribuicaoCard
+          titulo="Distribuição por Curso"
+          ajuda={`Quantas turmas e alunos temos em cada curso — a base de mercado onde a Amor In atua. % sobre o total de ${distCurso.totalTurmas} turmas e ${distCurso.totalAlunos} alunos.`}
+          dados={distCurso}
+        />
+        <DistribuicaoCard
+          titulo="Distribuição por Marca"
+          ajuda="Turmas e alunos por marca interna (AIF, AFF, AIF-V...). Mostra o peso de cada marca na carteira comercial."
+          dados={distMarca}
+        />
+      </div>
+
       {/* ============ Turmas em atendimento ============ */}
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">
         <SectionTitle
@@ -418,6 +453,49 @@ export default function Index() {
       {loading && allLeads.length === 0 && (
         <div className="text-center text-xs text-slate-500 py-4">Carregando dados do CRM…</div>
       )}
+    </div>
+  )
+}
+
+function DistribuicaoCard({
+  titulo,
+  ajuda,
+  dados,
+}: {
+  titulo: string
+  ajuda: React.ReactNode
+  dados: ReturnType<typeof distribuicao>
+}) {
+  return (
+    <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 shadow-lg">
+      <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+        {titulo}
+        <InfoHint title={titulo}>{ajuda}</InfoHint>
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs min-w-[400px]">
+          <thead>
+            <tr className="text-left text-slate-500 text-[10px] uppercase tracking-wider border-b border-white/[0.06]">
+              <th className="py-2 pr-3">Nome</th>
+              <th className="py-2 px-2 text-right">Turmas</th>
+              <th className="py-2 px-2 text-right">Ganhas</th>
+              <th className="py-2 px-2 text-right">Alunos</th>
+              <th className="py-2 pl-2 text-right">% Turmas</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/[0.04]">
+            {dados.linhas.slice(0, 12).map((l) => (
+              <tr key={l.chave} className="hover:bg-white/[0.02]">
+                <td className="py-2 pr-3 text-slate-200 truncate max-w-[150px]">{l.chave}</td>
+                <td className="py-2 px-2 text-right text-white font-semibold">{l.turmas}</td>
+                <td className="py-2 px-2 text-right text-emerald-400">{l.ganhas}</td>
+                <td className="py-2 px-2 text-right text-slate-300">{l.alunos}</td>
+                <td className="py-2 pl-2 text-right text-orange-300">{l.pctTurmas.toFixed(0)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

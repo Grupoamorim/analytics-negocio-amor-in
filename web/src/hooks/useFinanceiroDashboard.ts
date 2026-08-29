@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/utils/fetchAllRows'
+import type { PontoDiario } from '@/utils/pace'
 
 // Carrega uma única vez pagamentos / contas a pagar / adesões e expõe agregados
 // por período — mesma base de caixa usada em Financeiro/DRE (recebido pela
@@ -55,6 +56,8 @@ export interface FinanceiroDashboardAgregado {
   adesoesQtdAnterior: number
   adesoesValorAnterior: number
   fluxoMensal: { mes: string; recebido: number; previsto: number }[]
+  adesoesMensal: { mes: string; qtd: number; valor: number }[]
+  receitaPorMarca: { marca: string; recebido: number }[]
 }
 
 export function useFinanceiroDashboard(
@@ -191,6 +194,30 @@ export function useFinanceiroDashboard(
     }
     const fluxoMensal = Object.values(porMes).sort((a, b) => a.mes.localeCompare(b.mes))
 
+    // Adesões por mês (últimos 12 meses até hoje).
+    const porMesAdesao: Record<string, { mes: string; qtd: number; valor: number }> = {}
+    for (const ad of adesoes) {
+      if (!ad.data_adesao || !adesaoDaEmpresa(ad.turma)) continue
+      const k = ad.data_adesao.slice(0, 7)
+      if (!dentroJanela(k)) continue
+      const e = (porMesAdesao[k] ||= { mes: k, qtd: 0, valor: 0 })
+      e.qtd += 1
+      e.valor += Number(ad.valor || 0)
+    }
+    const adesoesMensal = Object.values(porMesAdesao).sort((a, b) => a.mes.localeCompare(b.mes))
+
+    // Receita recebida por marca dentro do período dos KPIs.
+    const porMarca: Record<string, number> = {}
+    for (const p of pagamentos) {
+      if (p.status !== 'pago' || !noPeriodo(p.data_pagamento)) continue
+      if (!daEmpresa(p.empresa)) continue
+      const m = p.empresa || 'Sem marca'
+      porMarca[m] = (porMarca[m] || 0) + Number(p.valor_pago || 0)
+    }
+    const receitaPorMarca = Object.entries(porMarca)
+      .map(([marca, recebido]) => ({ marca, recebido }))
+      .sort((a, b) => b.recebido - a.recebido)
+
     return {
       recebido,
       recebidoAnterior,
@@ -205,8 +232,32 @@ export function useFinanceiroDashboard(
       adesoesQtdAnterior,
       adesoesValorAnterior,
       fluxoMensal,
+      adesoesMensal,
+      receitaPorMarca,
     }
   }, [pagamentos, contasPagar, adesoes, dtIni, dtFim, empresas])
 
-  return { agregado, loading }
+  const daEmpresaFn = useMemo(
+    () => (emp: string | null) => empresas.length === 0 || (!!emp && empresas.includes(emp)),
+    [empresas],
+  )
+
+  /** Série dia-a-dia (valor do dia) de uma métrica financeira, pra cálculo de pace. */
+  const pontosDiarios = useCallback(
+    (metrica: 'receita' | 'adesoes'): PontoDiario[] => {
+      if (metrica === 'receita') {
+        return pagamentos
+          .filter((p) => p.status === 'pago' && p.data_pagamento && daEmpresaFn(p.empresa))
+          .map((p) => ({ data: p.data_pagamento!.slice(0, 10), valor: Number(p.valor_pago || 0) }))
+      }
+      const adesaoDaEmpresa = (turma: string | null) =>
+        empresas.length === 0 || empresas.includes((turma || '').trim().split(/\s+/)[0])
+      return adesoes
+        .filter((a) => a.data_adesao && adesaoDaEmpresa(a.turma))
+        .map((a) => ({ data: a.data_adesao!.slice(0, 10), valor: 1 }))
+    },
+    [pagamentos, adesoes, empresas, daEmpresaFn],
+  )
+
+  return { agregado, loading, pontosDiarios }
 }

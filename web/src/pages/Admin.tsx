@@ -18,6 +18,7 @@ import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { useAuth } from '@/hooks/useAuth'
 import { useAcesso } from '@/context/AcessoContext'
 import { PAGINAS, PAGINAS_PADRAO_COMERCIAL, PAGINAS_FINANCEIRO } from '@/utils/paginas'
+import MetasAdmin from '@/components/admin/MetasAdmin'
 import { translateAuthError } from '@/lib/authErrors'
 import {
   saveGeminiApiKey,
@@ -747,8 +748,9 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="usuarios" className="space-y-4">
-        <TabsList className="grid grid-cols-3 sm:grid-cols-8 w-full max-w-5xl bg-[#111820] border border-white/[0.06]">
+        <TabsList className="grid grid-cols-3 sm:grid-cols-9 w-full max-w-5xl bg-[#111820] border border-white/[0.06]">
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+          <TabsTrigger value="metas">Metas</TabsTrigger>
           <TabsTrigger value="vendedores">Vendedores/SDR</TabsTrigger>
           <TabsTrigger value="turmas">Turmas</TabsTrigger>
           <TabsTrigger value="integracoes">Integrações</TabsTrigger>
@@ -757,6 +759,11 @@ export default function Admin() {
           <TabsTrigger value="marca">Marca</TabsTrigger>
           <TabsTrigger value="preferencias">Preferências</TabsTrigger>
         </TabsList>
+
+        {/* ABA: METAS */}
+        <TabsContent value="metas" className="space-y-4">
+          <MetasAdmin />
+        </TabsContent>
 
         {/* ABA: USUÁRIOS E CARGOS */}
         <TabsContent value="usuarios" className="space-y-4">

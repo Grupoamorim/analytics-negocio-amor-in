@@ -241,6 +241,66 @@ function agrupar(
     })
 }
 
+// ---------------------------------------------------------------------------
+// Distribuição (por curso / marca)
+// ---------------------------------------------------------------------------
+
+export interface LinhaDistribuicao {
+  chave: string
+  turmas: number
+  alunos: number
+  ganhas: number
+  pctTurmas: number
+  pctAlunos: number
+}
+
+export function distribuicao(
+  leads: Lead[],
+  chaveDe: (l: Lead) => string,
+): { linhas: LinhaDistribuicao[]; totalTurmas: number; totalAlunos: number } {
+  const map = new Map<string, { turmas: number; alunos: number; ganhas: number }>()
+  let totalTurmas = 0
+  let totalAlunos = 0
+  for (const l of leads) {
+    if (l.mesmaTurmaFisicaDe) continue // não conta a turma-espelho de pacote separado
+    const k = (chaveDe(l) || '').trim() || '—'
+    const alunos = l.totalAlunos || 0
+    const e = map.get(k) || { turmas: 0, alunos: 0, ganhas: 0 }
+    e.turmas += 1
+    e.alunos += alunos
+    if (norm(l.status) === 'convertido') e.ganhas += 1
+    map.set(k, e)
+    totalTurmas += 1
+    totalAlunos += alunos
+  }
+  const linhas = Array.from(map.entries())
+    .map(([chave, e]) => ({
+      chave,
+      turmas: e.turmas,
+      alunos: e.alunos,
+      ganhas: e.ganhas,
+      pctTurmas: totalTurmas > 0 ? (e.turmas / totalTurmas) * 100 : 0,
+      pctAlunos: totalAlunos > 0 ? (e.alunos / totalAlunos) * 100 : 0,
+    }))
+    .sort((a, b) => b.turmas - a.turmas || a.chave.localeCompare(b.chave, 'pt-BR'))
+  return { linhas, totalTurmas, totalAlunos }
+}
+
+/** Série dia-a-dia para pace comercial: contratos fechados (1 por turma) ou alunos fechados. */
+export function pontosComerciais(
+  leads: Lead[],
+  metrica: 'contratos' | 'alunos',
+): { data: string; valor: number }[] {
+  const out: { data: string; valor: number }[] = []
+  for (const l of leads) {
+    if (norm(l.status) !== 'convertido') continue
+    const d = dataFechamento(l)
+    if (!d) continue
+    out.push({ data: d, valor: metrica === 'contratos' ? 1 : l.alunosFechados || 0 })
+  }
+  return out
+}
+
 /** % das turmas (com desfecho ou em atendimento) que não têm responsável cadastrado. */
 export function pctSemResponsavel(leads: Lead[]): number {
   if (leads.length === 0) return 0

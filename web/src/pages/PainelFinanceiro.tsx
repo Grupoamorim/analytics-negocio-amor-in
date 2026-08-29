@@ -25,8 +25,10 @@ import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
 import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
 import { useCRM } from '@/context/CRMContext'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
+import { useMetasNegocio } from '@/hooks/useMetasNegocio'
 import KpiCard from '@/components/dashboard/KpiCard'
 import SectionTitle from '@/components/dashboard/SectionTitle'
+import PaceBand from '@/components/dashboard/PaceBand'
 import AIInsightsButton from '@/components/AIInsightsButton'
 
 const brl = (v: number) => `R$ ${Math.round(v).toLocaleString('pt-BR')}`
@@ -48,7 +50,27 @@ export default function PainelFinanceiro() {
     return Array.from(s).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [leads])
 
-  const { agregado: a, loading } = useFinanceiroDashboard(f.dtIni, f.dtFim, selectedEmpresas)
+  const { agregado: a, loading, pontosDiarios } = useFinanceiroDashboard(
+    f.dtIni,
+    f.dtFim,
+    selectedEmpresas,
+  )
+  const { metaVigente } = useMetasNegocio()
+  const hoje = new Date().toISOString().slice(0, 10)
+  const metaReceita = metaVigente('receita', hoje)
+  const metaAdesoes = metaVigente('adesoes', hoje)
+  const pontosReceita = useMemo(() => pontosDiarios('receita'), [pontosDiarios])
+  const pontosAdesoes = useMemo(() => pontosDiarios('adesoes'), [pontosDiarios])
+
+  const NOMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+  const rotuloMes = (mes: string) => {
+    const [ano, m] = mes.split('-')
+    return `${NOMES[Number(m) - 1]}/${ano.slice(2)}`
+  }
+  const adesoesChart = useMemo(
+    () => a.adesoesMensal.map((m) => ({ mes: rotuloMes(m.mes), Adesões: m.qtd, Valor: Math.round(m.valor) })),
+    [a.adesoesMensal],
+  )
 
   const inadimplenciaPct =
     a.aReceberEmAberto > 0 ? (a.inadimplencia / a.aReceberEmAberto) * 100 : 0
@@ -80,6 +102,12 @@ export default function PainelFinanceiro() {
       </div>
 
       <PeriodoFiltroBar {...f} />
+
+      {/* Meta & Pace — receita (e adesões, se houver meta) */}
+      <PaceBand titulo="Meta de receita" metrica="receita" meta={metaReceita} pontos={pontosReceita} />
+      {metaAdesoes && (
+        <PaceBand titulo="Meta de adesões" metrica="adesoes" meta={metaAdesoes} pontos={pontosAdesoes} />
+      )}
 
       <div className="flex items-center justify-between">
         <SectionTitle ajuda="Todos os valores contam pelo regime de caixa: 'recebido' é o dinheiro que efetivamente entrou (data de pagamento), não o que foi faturado. As variações comparam com o mesmo período do ano anterior.">
@@ -177,6 +205,56 @@ export default function PainelFinanceiro() {
                 </ResponsiveContainer>
               </div>
             )}
+          </div>
+
+          {/* Adesões por mês + Receita por marca */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">
+              <SectionTitle ajuda="Novos contratos de aluno (SGE) por mês de adesão, últimos 12 meses. Barras = quantidade. É o principal termômetro de entrada de receita futura.">
+                Adesões por mês
+              </SectionTitle>
+              {adesoesChart.length === 0 ? (
+                <div className="h-52 flex items-center justify-center text-xs text-slate-500">Sem adesões no período.</div>
+              ) : (
+                <div className="h-52 mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={adesoesChart} margin={{ left: 4, right: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                      <XAxis dataKey="mes" stroke="#64748b" fontSize={11} />
+                      <YAxis stroke="#64748b" fontSize={11} width={32} />
+                      <Tooltip
+                        formatter={(v: number, n: string) => (n === 'Valor' ? brl(Number(v)) : v)}
+                        contentStyle={{ background: '#0a0f14', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
+                      />
+                      <Bar dataKey="Adesões" fill={RECEITA} radius={[3, 3, 0, 0]} maxBarSize={36} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">
+              <SectionTitle ajuda="Quanto de caixa entrou no período por marca interna (AIF, AFF, AIF-V...). Mostra qual marca está sustentando o faturamento agora.">
+                Receita recebida por marca
+              </SectionTitle>
+              <div className="mt-4 space-y-2">
+                {a.receitaPorMarca.length === 0 && (
+                  <div className="text-xs text-slate-500 py-4 text-center">Sem receita no período.</div>
+                )}
+                {a.receitaPorMarca.map((r) => {
+                  const max = a.receitaPorMarca[0]?.recebido || 1
+                  return (
+                    <div key={r.marca} className="flex items-center gap-3 text-xs">
+                      <span className="w-[90px] flex-shrink-0 text-slate-300 truncate">{r.marca}</span>
+                      <div className="flex-1 h-3 bg-white/[0.05] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${(r.recebido / max) * 100}%`, backgroundColor: RECEITA }} />
+                      </div>
+                      <span className="w-24 text-right font-semibold text-white">{brl(r.recebido)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Atalhos para o detalhe */}
