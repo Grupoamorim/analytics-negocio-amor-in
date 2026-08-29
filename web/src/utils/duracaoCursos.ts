@@ -100,7 +100,10 @@ export function parseAnoFormatura(s?: string | null): { ano: number; sem: 1 | 2 
 
 /**
  * Em qual semestre do curso a turma está hoje.
- * Ex.: Direito (5 anos = 10 semestres) que forma em 2028.1, hoje em 2026.2 → 7º de 10.
+ * Ex.: Direito (5 anos = 10 semestres) que entrou em 2026.1 forma em 2031.1
+ * (formatura = 1 semestre depois do fim das aulas, regra confirmada com o Lucas
+ * — ver CLAUDE.md). Hoje em 2026.2 → 2º de 10 (já passou o 2026.1, está cursando
+ * o 2026.2).
  * Retorna null quando não dá pra saber (sem ano de formatura válido ou sem
  * duração cadastrada — não inventamos duração de curso).
  */
@@ -114,7 +117,9 @@ export function semestreDaTurma(
   const total = Math.round(duracaoAnos * 2)
   const agora = semestreAcademico(hoje)
   const faltam = (grad.ano - agora.ano) * 2 + (grad.sem - agora.sem)
-  const atual = total - faltam
+  // +1: a formatura acontece 1 semestre depois do fim das aulas, então "faltam"
+  // semestres até a formatura é sempre 1 a mais do que semestres restantes de aula.
+  const atual = total - faltam + 1
   return {
     atual: Math.min(Math.max(atual, 1), total),
     total,

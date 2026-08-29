@@ -5,7 +5,7 @@ import { addLead } from '@/utils/captacaoStorage'
 import { fetchCidadeFaculdades, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
 import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
 import { fetchVendedoresAtivos } from '@/utils/vendedores'
-import { listarDuracaoCursos } from '@/utils/duracaoCursos'
+import { listarDuracaoCursos, semestreDaTurma } from '@/utils/duracaoCursos'
 import { formatPhoneBR } from '@/utils/phoneMask'
 
 const OUTRO = '__outro__'
@@ -51,33 +51,14 @@ interface TurmaEncontrada {
   periodoAtual: number | null
 }
 
-/** ano.semestre -> índice sequencial de semestres (pra fazer conta de diferença). */
-function idxSemestre(anoSemestre: string): number | null {
-  const m = /^(\d{4})\.([12])$/.exec(anoSemestre.trim())
-  if (!m) return null
-  return Number(m[1]) * 2 + Number(m[2])
-}
-
-function semestreAtualCalendario(): string {
-  const hoje = new Date()
-  const sem = hoje.getMonth() < 6 ? 1 : 2
-  return `${hoje.getFullYear()}.${sem}`
-}
-
 /** Calcula em qual período (1º, 2º...) do curso a turma está agora, usando a
- * duração cadastrada (Administração > Turmas). Sem duração cadastrada pro
- * curso, não inventamos o período — retorna null. */
+ * duração cadastrada (Administração > Turmas) e a mesma lógica central de
+ * `web/src/utils/duracaoCursos.ts` (usada em Turmas e Funil). Sem duração
+ * cadastrada pro curso, não inventamos o período — retorna null. */
 function calcularPeriodoAtual(anoFormatura: string, duracaoAnos: number): number | null {
-  const idxFormatura = idxSemestre(anoFormatura)
-  const idxHoje = idxSemestre(semestreAtualCalendario())
-  if (idxFormatura === null || idxHoje === null) return null
-  const semestresTotais = duracaoAnos * 2
-  // A formatura acontece 1 semestre depois do fim das aulas (regra
-  // confirmada com o Lucas) - por isso o +1 aqui, sem ele o período
-  // atual saía sempre 1 semestre atrasado.
-  const periodo = semestresTotais - (idxFormatura - idxHoje) + 1
-  if (periodo < 1 || periodo > semestresTotais) return null
-  return periodo
+  const s = semestreDaTurma(anoFormatura, duracaoAnos)
+  if (!s || s.naoIniciado || s.formado) return null
+  return s.atual
 }
 
 export default function CaptacaoForm() {
