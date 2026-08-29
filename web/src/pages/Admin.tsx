@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { useAuth } from '@/hooks/useAuth'
 import { useAcesso } from '@/context/AcessoContext'
-import { PAGINAS, PAGINAS_PADRAO_COMERCIAL } from '@/utils/paginas'
+import { PAGINAS, PAGINAS_PADRAO_COMERCIAL, PAGINAS_FINANCEIRO } from '@/utils/paginas'
 import { translateAuthError } from '@/lib/authErrors'
 import {
   saveGeminiApiKey,
@@ -937,7 +937,18 @@ export default function Admin() {
                                   onClick={() => setRascunhoAcesso(PAGINAS_PADRAO_COMERCIAL)}
                                   className="text-[11px] text-slate-400 hover:text-white underline decoration-dotted"
                                 >
-                                  Padrão comercial
+                                  Só comercial
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setRascunhoAcesso((prev) =>
+                                      Array.from(new Set([...prev, ...PAGINAS_FINANCEIRO])),
+                                    )
+                                  }
+                                  className="text-[11px] text-slate-400 hover:text-white underline decoration-dotted"
+                                >
+                                  + Liberar financeiro
                                 </button>
                               </div>
                             </td>
