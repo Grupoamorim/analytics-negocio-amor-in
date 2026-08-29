@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import type { Contact } from '@/types/crm'
 import { INITIAL_CONTACTS } from '@/data/seedData'
 import type { Database } from '@/lib/supabase/types'
+import { reportSupabaseError } from '@/utils/reportError'
 
 type ContatoRow = Database['public']['Tables']['contatos']['Row']
 type ContatoInsert = Database['public']['Tables']['contatos']['Insert']
@@ -168,6 +169,7 @@ export function useContatos() {
       } catch (e: any) {
         console.warn('Erro ao salvar contato no Supabase:', e)
         setError(e.message)
+        reportSupabaseError('Criar contato', e)
       }
     }
 
@@ -206,6 +208,7 @@ export function useContatos() {
       } catch (e: any) {
         console.warn('Erro ao atualizar contato no Supabase:', e)
         setError(e.message)
+        reportSupabaseError('Atualizar contato', e)
       }
     }
 
@@ -241,6 +244,7 @@ export function useContatos() {
       } catch (e: any) {
         console.warn('Erro ao marcar não responde:', e)
         setError(e.message)
+        reportSupabaseError('Marcar não responde', e)
         return
       }
     }
@@ -264,6 +268,7 @@ export function useContatos() {
       } catch (e: any) {
         console.warn('Erro ao marcar respondeu:', e)
         setError(e.message)
+        reportSupabaseError('Marcar respondeu', e)
         return
       }
     }
@@ -283,6 +288,7 @@ export function useContatos() {
       } catch (e: any) {
         console.warn('Erro ao excluir contato do Supabase:', e)
         setError(e.message)
+        reportSupabaseError('Excluir contato', e)
       }
     }
 

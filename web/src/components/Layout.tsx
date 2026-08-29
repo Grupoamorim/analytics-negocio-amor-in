@@ -53,6 +53,7 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
       { path: '/pipeline', label: 'Funil Amor In', icon: Kanban },
       { path: '/leads', label: 'Turmas', icon: GraduationCap },
       { path: '/contatos', label: 'Contatos', icon: Users },
+      { path: '/clientes', label: 'Clientes', icon: GraduationCap },
       { path: '/probabilidade', label: 'Probabilidade', icon: BrainCircuit },
       { path: '/transcricoes', label: 'Transcrições', icon: FileText },
       { path: '/notas', label: 'Notas', icon: StickyNote },

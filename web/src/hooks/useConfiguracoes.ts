@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import type { Database } from '@/lib/supabase/types'
+import { reportSupabaseError } from '@/utils/reportError'
 
 type ConfiguracaoRow = Database['public']['Tables']['configuracoes']['Row']
 type ConfiguracaoInsert = Database['public']['Tables']['configuracoes']['Insert']
@@ -37,6 +38,9 @@ export interface ConfiguracoesData {
   sgeToken: string
   geminiApiKey: string
   logoUrl: string
+  resendApiKey: string
+  emailAlertaTurmaNova: string
+  emailAlertaErro: string
   filtrosSalvos: any[]
   preferencias: {
     notifyOnNewLead?: boolean
@@ -51,6 +55,9 @@ const DEFAULT_CONFIG: ConfiguracoesData = {
   sgeToken: '',
   geminiApiKey: '',
   logoUrl: '',
+  resendApiKey: '',
+  emailAlertaTurmaNova: '',
+  emailAlertaErro: '',
   filtrosSalvos: [],
   preferencias: {
     notifyOnNewLead: true,
@@ -65,6 +72,9 @@ function mapRowToConfig(row: ConfiguracaoRow): ConfiguracoesData {
     sgeToken: row.sge_token || '',
     geminiApiKey: row.gemini_api_key || '',
     logoUrl: row.logo_url || '',
+    resendApiKey: row.resend_api_key || '',
+    emailAlertaTurmaNova: row.email_alerta_turma_nova || '',
+    emailAlertaErro: row.email_alerta_erro || '',
     filtrosSalvos: (row.filtros_salvos as any[]) || [],
     preferencias: (row.preferencias as any) || DEFAULT_CONFIG.preferencias,
   }
@@ -134,6 +144,9 @@ export function useConfiguracoes() {
           sge_token: localToMigrate.sgeToken || '',
           gemini_api_key: localToMigrate.geminiApiKey || '',
           logo_url: localToMigrate.logoUrl || '',
+          resend_api_key: localToMigrate.resendApiKey || '',
+          email_alerta_turma_nova: localToMigrate.emailAlertaTurmaNova || '',
+          email_alerta_erro: localToMigrate.emailAlertaErro || '',
           filtros_salvos: localToMigrate.filtrosSalvos || [],
           preferencias: localToMigrate.preferencias || DEFAULT_CONFIG.preferencias,
         }
@@ -195,6 +208,9 @@ export function useConfiguracoes() {
           sge_token: updated.sgeToken,
           gemini_api_key: updated.geminiApiKey,
           logo_url: updated.logoUrl,
+          resend_api_key: updated.resendApiKey,
+          email_alerta_turma_nova: updated.emailAlertaTurmaNova,
+          email_alerta_erro: updated.emailAlertaErro,
           filtros_salvos: updated.filtrosSalvos,
           preferencias: updated.preferencias,
           user_id: user.id,
@@ -220,6 +236,7 @@ export function useConfiguracoes() {
       } catch (e: any) {
         console.warn('Erro ao salvar configurações no Supabase:', e)
         setError(e.message)
+        reportSupabaseError('Salvar configurações', e)
       }
     }
 

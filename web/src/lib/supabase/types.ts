@@ -10,10 +10,36 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      acesso_paginas: {
+        Row: {
+          paginas: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          paginas?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          paginas?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acesso_paginas_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aprendizado_estudo: {
         Row: {
           amostra_reunioes: number | null
@@ -297,6 +323,7 @@ export type Database = {
       configuracoes: {
         Row: {
           created_at: string
+          email_alerta_erro: string | null
           email_alerta_turma_nova: string | null
           filtros_salvos: Json
           gemini_api_key: string | null
@@ -311,6 +338,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          email_alerta_erro?: string | null
           email_alerta_turma_nova?: string | null
           filtros_salvos?: Json
           gemini_api_key?: string | null
@@ -325,6 +353,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          email_alerta_erro?: string | null
           email_alerta_turma_nova?: string | null
           filtros_salvos?: Json
           gemini_api_key?: string | null
@@ -794,6 +823,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      metas_negocio: {
+        Row: {
+          ano: number
+          contexto: string | null
+          created_at: string
+          escopo: string
+          id: string
+          metrica: string
+          periodo: number
+          updated_at: string
+          valor_meta: number
+        }
+        Insert: {
+          ano: number
+          contexto?: string | null
+          created_at?: string
+          escopo: string
+          id?: string
+          metrica: string
+          periodo?: number
+          updated_at?: string
+          valor_meta: number
+        }
+        Update: {
+          ano?: number
+          contexto?: string | null
+          created_at?: string
+          escopo?: string
+          id?: string
+          metrica?: string
+          periodo?: number
+          updated_at?: string
+          valor_meta?: number
+        }
+        Relationships: []
       }
       motivos_perda: {
         Row: {

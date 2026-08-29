@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import type { AprendizadoMaterial } from '@/types/crm'
 import type { Database } from '@/lib/supabase/types'
+import { reportSupabaseError } from '@/utils/reportError'
 
 type Row = Database['public']['Tables']['aprendizado_material']['Row']
 
@@ -87,6 +88,7 @@ export function useAprendizadoMaterial() {
         return mapped
       } catch (e) {
         console.warn('Erro ao salvar material de aprendizado:', e)
+        reportSupabaseError('Salvar material de aprendizado', e)
         return null
       }
     },
@@ -119,6 +121,7 @@ export function useAprendizadoMaterial() {
         setMateriais((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)))
       } catch (e) {
         console.warn('Erro ao atualizar material de aprendizado:', e)
+        reportSupabaseError('Atualizar material de aprendizado', e)
       }
     },
     [isAuthenticated],
@@ -133,6 +136,7 @@ export function useAprendizadoMaterial() {
         setMateriais((prev) => prev.filter((m) => m.id !== id))
       } catch (e) {
         console.warn('Erro ao excluir material de aprendizado:', e)
+        reportSupabaseError('Excluir material de aprendizado', e)
       }
     },
     [isAuthenticated],

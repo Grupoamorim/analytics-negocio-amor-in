@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import type { Lead, LeadStatus, LeadSource } from '@/types/crm'
 import type { Database } from '@/lib/supabase/types'
+import { reportSupabaseError } from '@/utils/reportError'
 
 type TurmaRow = Database['public']['Tables']['turmas']['Row']
 type TurmaInsert = Database['public']['Tables']['turmas']['Insert']
@@ -180,6 +181,7 @@ export function useTurmas() {
       } catch (e: any) {
         console.warn('Erro ao salvar turma no Supabase, salvando em cache local:', e)
         setError(e.message)
+        reportSupabaseError('Criar turma', e)
       }
     }
 
@@ -250,6 +252,7 @@ export function useTurmas() {
       } catch (e: any) {
         console.warn('Erro ao atualizar turma no Supabase:', e)
         setError(e.message)
+        reportSupabaseError('Atualizar turma', e)
       }
     }
 
@@ -278,6 +281,7 @@ export function useTurmas() {
       } catch (e: any) {
         console.warn('Erro ao excluir turma do Supabase:', e)
         setError(e.message)
+        reportSupabaseError('Excluir turma', e)
       }
     }
 

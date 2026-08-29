@@ -167,6 +167,9 @@ export default function Admin() {
   // Notification Preferences
   const [notifyOnNewLead, setNotifyOnNewLead] = useState(true)
   const [notifyOnDealWon, setNotifyOnDealWon] = useState(true)
+  const [resendApiKey, setResendApiKey] = useState('')
+  const [emailAlertaTurmaNova, setEmailAlertaTurmaNova] = useState('')
+  const [emailAlertaErro, setEmailAlertaErro] = useState('')
   const [autoSyncSGE, setAutoSyncSGE] = useState(false)
 
   // Logo da marca
@@ -511,6 +514,9 @@ export default function Admin() {
       setGeminiKey(config.geminiApiKey || '')
       if (config.geminiApiKey) saveGeminiApiKey(config.geminiApiKey)
       if (config.logoUrl) setLogoPreview(config.logoUrl)
+      setResendApiKey(config.resendApiKey || '')
+      setEmailAlertaTurmaNova(config.emailAlertaTurmaNova || '')
+      setEmailAlertaErro(config.emailAlertaErro || '')
       if (config.preferencias) {
         if (config.preferencias.notifyOnNewLead !== undefined)
           setNotifyOnNewLead(config.preferencias.notifyOnNewLead)
@@ -679,6 +685,9 @@ export default function Admin() {
   const handleSavePreferences = async () => {
     try {
       await updateConfig({
+        resendApiKey,
+        emailAlertaTurmaNova,
+        emailAlertaErro,
         preferencias: { ...config.preferencias, notifyOnNewLead, notifyOnDealWon, autoSyncSGE },
       })
       toast({
@@ -1753,6 +1762,52 @@ export default function Admin() {
                   <p className="text-xs text-slate-500">Verificar novos contratos faturados no SGE periodicamente.</p>
                 </div>
                 <Switch checked={autoSyncSGE} onCheckedChange={setAutoSyncSGE} />
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-white/[0.06]">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">Alertas por e-mail (Resend)</Label>
+                  <p className="text-xs text-slate-500">
+                    Usado pra avisar de turma nova sem cadastro no Mapa de Mercado e pra avisar
+                    quando algum salvamento no site falhar.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="resend-api-key">Resend API Key</Label>
+                    <Input
+                      id="resend-api-key"
+                      type="password"
+                      placeholder="re_••••••••••••••••••"
+                      value={resendApiKey}
+                      onChange={(e) => setResendApiKey(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email-alerta-turma-nova">E-mail: turma sem cadastro</Label>
+                    <Input
+                      id="email-alerta-turma-nova"
+                      type="email"
+                      placeholder="seuemail@exemplo.com"
+                      value={emailAlertaTurmaNova}
+                      onChange={(e) => setEmailAlertaTurmaNova(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="email-alerta-erro">E-mail: erro ao salvar</Label>
+                    <Input
+                      id="email-alerta-erro"
+                      type="email"
+                      placeholder="seuemail@exemplo.com"
+                      value={emailAlertaErro}
+                      onChange={(e) => setEmailAlertaErro(e.target.value)}
+                    />
+                    <p className="text-xs text-slate-500">
+                      Se um insert/update/delete no Supabase falhar, chega um e-mail aqui e uma
+                      notificação (sino) pra todo admin.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end pt-4 border-t border-white/[0.06]">

@@ -22,6 +22,7 @@ import NotFound from '@/pages/NotFound'
 import Captacao from '@/pages/Captacao'
 import CaptacaoForm from '@/pages/CaptacaoForm'
 import Contatos from '@/pages/Contatos'
+import Clientes from '@/pages/Clientes'
 import Adesoes from '@/pages/Adesoes'
 import Financeiro from '@/pages/Financeiro'
 import DRE from '@/pages/DRE'
@@ -85,6 +86,7 @@ const App = () => (
               <Route path="/pipeline" element={<RotaComPermissao path="/pipeline"><Pipeline /></RotaComPermissao>} />
               <Route path="/leads" element={<RotaComPermissao path="/leads"><Leads /></RotaComPermissao>} />
               <Route path="/contatos" element={<RotaComPermissao path="/contatos"><Contatos /></RotaComPermissao>} />
+              <Route path="/clientes" element={<RotaComPermissao path="/clientes"><Clientes /></RotaComPermissao>} />
               <Route path="/probabilidade" element={<RotaComPermissao path="/probabilidade"><Probability /></RotaComPermissao>} />
               <Route path="/transcricoes" element={<RotaComPermissao path="/transcricoes"><Transcripts /></RotaComPermissao>} />
               <Route path="/notas" element={<RotaComPermissao path="/notas"><Notes /></RotaComPermissao>} />
