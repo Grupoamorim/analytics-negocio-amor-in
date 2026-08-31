@@ -34,6 +34,7 @@ import { analyzeTranscriptWithGemini, getGeminiApiKey } from '@/utils/geminiApi'
 import { analyzeTranscriptText } from '@/utils/probabilityEngine'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import { parseMeetingTitle } from '@/utils/meetingTitleParser'
+import { matchesSearch } from '@/utils/searchMatch'
 import AprendizadoMaterialPanel from '@/components/AprendizadoMaterialPanel'
 
 export default function Transcripts() {
@@ -90,20 +91,17 @@ export default function Transcripts() {
   // Transcrições filtradas
   const filteredTranscripts = useMemo(() => {
     const base = transcripts.filter((t) => {
-      const q = searchQuery.toLowerCase().trim()
-      const matchesSearch =
-        !q ||
-        t.title.toLowerCase().includes(q) ||
-        t.company.toLowerCase().includes(q) ||
-        (t.contactName && t.contactName.toLowerCase().includes(q)) ||
-        (t.content && t.content.toLowerCase().includes(q))
+      const matchBusca = matchesSearch(
+        [t.title, t.company, t.contactName, t.content],
+        searchQuery,
+      )
 
       const matchesType =
         filterType === 'all' ||
         (filterType === 'comissao' && t.meetingType === 'Reunião Comissão') ||
         (filterType === 'turma' && t.meetingType === 'Reunião Turma')
 
-      return matchesSearch && matchesType
+      return matchBusca && matchesType
     })
     return sortByField(base, sortField, sortDirection, (t, f) => (t as any)[f])
   }, [transcripts, searchQuery, filterType, sortField, sortDirection])
@@ -167,14 +165,14 @@ export default function Transcripts() {
 
   // Helper para buscar turmas filtradas para autocomplete
   const getFilteredLeads = (searchStr: string) => {
-    const q = searchStr.toLowerCase().trim()
-    if (!q) return leads.slice(0, 8)
+    if (!searchStr.trim()) return leads.slice(0, 8)
     return leads
-      .filter((l) => {
-        const full =
-          `${l.empresa || ''} ${l.curso} ${l.faculdade} ${l.turma} ${l.cidade}`.toLowerCase()
-        return full.includes(q)
-      })
+      .filter((l) =>
+        matchesSearch(
+          [l.empresa, l.curso, l.faculdade, l.turma, l.cidade, l.anoFormatura],
+          searchStr,
+        ),
+      )
       .slice(0, 10)
   }
 

@@ -111,6 +111,7 @@ import {
   fetchTemplatesAtivos,
 } from '@/utils/pacoteCatalogo'
 import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
+import { matchesSearch } from '@/utils/searchMatch'
 import { fetchCidadeFaculdades, ensureCidadeFaculdade, CidadeFaculdadesMap } from '@/utils/mercadoFaculdades'
 import {
   listarDuracaoCursos,
@@ -607,22 +608,26 @@ export default function LeadsPage() {
   // Filter logic (combining general filters + saved filters + column filters with logical AND)
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      const q = search.toLowerCase().trim()
-      const matchesSearch =
-        !q ||
-        (lead.curso || '').toLowerCase().includes(q) ||
-        (lead.faculdade || '').toLowerCase().includes(q) ||
-        (lead.turma || '').toLowerCase().includes(q) ||
-        (lead.cidade || '').toLowerCase().includes(q) ||
-        (lead.empresa && lead.empresa.toLowerCase().includes(q)) ||
-        (lead.closer && lead.closer.toLowerCase().includes(q)) ||
-        (lead.sdr && lead.sdr.toLowerCase().includes(q)) ||
-        (lead.comoConheceu && lead.comoConheceu.toLowerCase().includes(q)) ||
-        (lead.contatoNome && lead.contatoNome.toLowerCase().includes(q)) ||
-        (lead.observacoes && lead.observacoes.toLowerCase().includes(q))
+      const matchBusca = matchesSearch(
+        [
+          getFullTurmaName(lead),
+          lead.curso,
+          lead.faculdade,
+          lead.turma,
+          lead.anoFormatura,
+          lead.cidade,
+          lead.empresa,
+          lead.closer,
+          lead.sdr,
+          lead.comoConheceu,
+          lead.contatoNome,
+          lead.observacoes,
+        ],
+        search,
+      )
 
       const matchesConcluida = showConcluidas || !lead.concluida
-      if (!matchesSearch || !matchesConcluida) return false
+      if (!matchBusca || !matchesConcluida) return false
 
       // Valor do lead em cada dimensão de filtro
       const valOf = (key: FilterKey): string => {

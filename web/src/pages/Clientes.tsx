@@ -5,6 +5,7 @@ import { useClientes } from '@/hooks/useClientes'
 import { getTurmaDisplayName } from '@/types/crm'
 import InlineEditText from '@/components/InlineEditText'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
+import { matchesSearch } from '@/utils/searchMatch'
 
 const SORT_OPTIONS = [
   { value: 'nome', label: 'Nome (A-Z)' },
@@ -39,9 +40,7 @@ export default function Clientes() {
     const base = enriched.filter((c) => {
       if (turmaFilter !== 'Todas' && c.turmaId !== turmaFilter) return false
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        const haystack = [c.nome, c.email, c.telefone, c.turmaNome].join(' ').toLowerCase()
-        if (!haystack.includes(q)) return false
+        if (!matchesSearch([c.nome, c.email, c.telefone, c.turmaNome], searchQuery)) return false
       }
       return true
     })

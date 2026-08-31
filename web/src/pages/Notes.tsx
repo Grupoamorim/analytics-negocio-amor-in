@@ -17,7 +17,8 @@ import {
   CheckCircle,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
-import { Note, NoteType, Priority } from '@/types/crm'
+import { Note, NoteType, Priority, getFullTurmaName } from '@/types/crm'
+import { matchesSearch } from '@/utils/searchMatch'
 import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
@@ -60,12 +61,21 @@ export default function Notes() {
       if (selectedLeadId !== 'Todos' && note.leadId !== selectedLeadId) return false
       if (selectedType !== 'Todos' && note.type !== selectedType) return false
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
         const lead = leads.find((l) => l.id === note.leadId)
-        const matchContent = note.content.toLowerCase().includes(q)
-        const matchCompany = lead?.faculdade.toLowerCase().includes(q) ?? false
-        const matchLeadName = lead?.curso.toLowerCase().includes(q) ?? false
-        if (!matchContent && !matchCompany && !matchLeadName) return false
+        if (
+          !matchesSearch(
+            [
+              note.content,
+              lead ? getFullTurmaName(lead) : '',
+              lead?.faculdade,
+              lead?.curso,
+              lead?.cidade,
+              lead?.anoFormatura,
+            ],
+            searchQuery,
+          )
+        )
+          return false
       }
       return true
     })

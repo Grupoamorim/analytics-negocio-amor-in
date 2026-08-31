@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, Search, Trash2, X, Users, Phone, Mail } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
-import { getTurmaDisplayName } from '@/types/crm'
+import { getTurmaDisplayName, getFullTurmaName } from '@/types/crm'
+import { matchesSearch } from '@/utils/searchMatch'
 import { useToast } from '@/hooks/use-toast'
 import LastEditedBy from '@/components/LastEditedBy'
 import InlineEditText from '@/components/InlineEditText'
@@ -42,19 +43,23 @@ export default function Contatos() {
     const base = contacts.filter((c) => {
       if (turmaFilter !== 'Todas' && c.leadId !== turmaFilter) return false
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
         const lead = leadById.get(c.leadId)
-        const haystack = [
-          c.nome,
-          c.telefone,
-          c.email,
-          lead ? getTurmaDisplayName(lead) : '',
-          lead?.faculdade || '',
-          lead?.curso || '',
-        ]
-          .join(' ')
-          .toLowerCase()
-        if (!haystack.includes(q)) return false
+        if (
+          !matchesSearch(
+            [
+              c.nome,
+              c.telefone,
+              c.email,
+              lead ? getFullTurmaName(lead) : '',
+              lead?.faculdade,
+              lead?.curso,
+              lead?.cidade,
+              lead?.anoFormatura,
+            ],
+            searchQuery,
+          )
+        )
+          return false
       }
       return true
     })

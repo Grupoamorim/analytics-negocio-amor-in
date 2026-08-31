@@ -27,6 +27,11 @@ export const PAGINAS: PaginaDef[] = [
 
 export const TODAS_PAGINAS: string[] = PAGINAS.map((p) => p.path)
 
+/** Páginas do setor comercial — usado para saber se um usuário tem acesso comercial. */
+export const PAGINAS_COMERCIAL: string[] = PAGINAS.filter((p) => p.grupo === 'Comercial').map(
+  (p) => p.path,
+)
+
 /** Conjunto padrão para um usuário não-admin recém-criado (comercial, sem financeiro). */
 export const PAGINAS_PADRAO_COMERCIAL: string[] = [
   '/',
@@ -47,6 +52,20 @@ export const PAGINAS_FINANCEIRO: string[] = [
   '/dre',
   '/projecoes',
 ]
+
+/**
+ * Um usuário tem acesso comercial se for admin, ou se as páginas liberadas para
+ * ele incluírem ao menos uma aba do grupo Comercial. `paginasConfiguradas` vazio
+ * ou ausente = padrão comercial (todo mundo comum começa comercial).
+ */
+export function temAcessoComercial(role: string, paginasConfiguradas?: string[] | null): boolean {
+  if (role === 'admin') return true
+  const paginas =
+    !paginasConfiguradas || paginasConfiguradas.length === 0
+      ? PAGINAS_PADRAO_COMERCIAL
+      : paginasConfiguradas
+  return paginas.some((p) => PAGINAS_COMERCIAL.includes(p))
+}
 
 export function labelDaPagina(path: string): string {
   return PAGINAS.find((p) => p.path === path)?.label || path

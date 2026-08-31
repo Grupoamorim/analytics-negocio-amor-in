@@ -63,6 +63,7 @@ import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import LastEditedBy from '@/components/LastEditedBy'
 import { getSGELinkForLead } from '@/utils/sgeIntegration'
 import { fetchMotivosPerdaAtivos } from '@/utils/motivosPerda'
+import { matchesSearch } from '@/utils/searchMatch'
 import { notificarNovoResponsavel } from '@/utils/notificacoes'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
@@ -278,7 +279,6 @@ export default function Pipeline() {
   }
 
   const filteredDeals = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
     return deals.filter((d) => {
       // Turma já formada (ano de formatura passou) some do Funil — não tem mais
       // o que prospectar/negociar nela.
@@ -289,23 +289,23 @@ export default function Pipeline() {
       for (const { key } of FUNIL_FILTER_DEFS) {
         if (advFilters[key] && (!lead || lead[key] !== advFilters[key])) return false
       }
-      if (q) {
-        const haystack = [
-          lead ? getFullTurmaName(lead) : d.title,
-          lead?.faculdade,
-          lead?.curso,
-          lead?.cidade,
-          lead?.anoFormatura,
-          lead?.empresa,
-          lead?.turma,
-          d.contactName,
-          d.company,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-        if (!haystack.includes(q)) return false
-      }
+      if (
+        !matchesSearch(
+          [
+            lead ? getFullTurmaName(lead) : d.title,
+            lead?.faculdade,
+            lead?.curso,
+            lead?.cidade,
+            lead?.anoFormatura,
+            lead?.empresa,
+            lead?.turma,
+            d.contactName,
+            d.company,
+          ],
+          searchQuery,
+        )
+      )
+        return false
       return true
     })
   }, [deals, leadById, selectedEmpresas, advFilters, searchQuery])
@@ -346,10 +346,12 @@ export default function Pipeline() {
   }, [leads, deals])
 
   const leadsFiltradosParaCriar = useMemo(() => {
-    const q = creatingSearch.trim().toLowerCase()
-    if (!q) return leadsSemFunil
+    if (!creatingSearch.trim()) return leadsSemFunil
     return leadsSemFunil.filter((l) =>
-      `${getTurmaDisplayName(l)} ${l.faculdade} ${l.curso} ${l.cidade}`.toLowerCase().includes(q),
+      matchesSearch(
+        [getFullTurmaName(l), l.faculdade, l.curso, l.cidade, l.anoFormatura, l.empresa, l.turma],
+        creatingSearch,
+      ),
     )
   }, [leadsSemFunil, creatingSearch])
 

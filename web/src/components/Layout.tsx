@@ -28,7 +28,8 @@ import {
   ShieldCheck,
   UserPlus,
 } from 'lucide-react'
-import { getTurmaDisplayName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
+import { getTurmaDisplayName, getFullTurmaName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
+import { matchesSearch } from '@/utils/searchMatch'
 import { useCRM } from '@/context/CRMContext'
 import { TeamMember, CARGO_LABEL } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
@@ -182,22 +183,16 @@ export default function Layout() {
   // Resultados da busca global
   const searchResults = React.useMemo(() => {
     if (!searchQuery.trim()) return { leads: [], deals: [] }
-    const q = searchQuery.toLowerCase().trim()
     const matchedLeads = leads
-      .filter(
-        (l) =>
-          l.curso.toLowerCase().includes(q) ||
-          l.faculdade.toLowerCase().includes(q) ||
-          l.cidade.toLowerCase().includes(q),
+      .filter((l) =>
+        matchesSearch(
+          [getFullTurmaName(l), l.curso, l.faculdade, l.cidade, l.turma, l.anoFormatura, l.empresa],
+          searchQuery,
+        ),
       )
       .slice(0, 4)
     const matchedDeals = deals
-      .filter(
-        (d) =>
-          d.title.toLowerCase().includes(q) ||
-          d.company.toLowerCase().includes(q) ||
-          d.contactName.toLowerCase().includes(q),
-      )
+      .filter((d) => matchesSearch([d.title, d.company, d.contactName], searchQuery))
       .slice(0, 4)
     return { leads: matchedLeads, deals: matchedDeals }
   }, [searchQuery, leads, deals])

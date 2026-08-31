@@ -19,6 +19,9 @@ import { loadLeads, updateLead, deleteLead } from '@/utils/captacaoStorage'
 import { CaptacaoLead, normalizeTurma, extractTurmaNumber } from '@/types/captacao'
 import { formatPhoneBR } from '@/utils/phoneMask'
 import { fetchVendedoresAtivos } from '@/utils/vendedores'
+import { matchesSearch } from '@/utils/searchMatch'
+import { useAcesso } from '@/context/AcessoContext'
+import { temAcessoComercial } from '@/utils/paginas'
 import { useToast } from '@/hooks/use-toast'
 import MarketMap from '@/components/MarketMap'
 import AIInsightsButton from '@/components/AIInsightsButton'
@@ -135,12 +138,23 @@ export default function Captacao() {
   }
 
   const filteredLeads = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim()
     return leads
-      .filter((l) => {
-        if (!q) return true
-        return l.nome.toLowerCase().includes(q) || l.email.toLowerCase().includes(q)
-      })
+      .filter((l) =>
+        matchesSearch(
+          [
+            l.nome,
+            l.email,
+            l.telefone,
+            l.curso,
+            l.faculdade,
+            l.turma,
+            l.cidade,
+            l.anoFormatura,
+            l.sdr,
+          ],
+          searchQuery,
+        ),
+      )
       .sort((a, b) => {
         let va: string | number = a[sortField]
         let vb: string | number = b[sortField]
@@ -622,10 +636,22 @@ function EditLeadModal({ lead, onClose, onSave }: EditModalProps) {
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [vendedoresOpcoes, setVendedoresOpcoes] = useState<string[]>([])
+  const { usuarios, acessosPorUsuario } = useAcesso()
 
   useEffect(() => {
     fetchVendedoresAtivos().then(setVendedoresOpcoes)
   }, [])
+
+  // Opções de Vendedor/SDR = vendedores cadastrados no Admin + todo usuário do
+  // sistema habilitado a alguma aba comercial (admin conta como comercial).
+  const opcoesVendedor = useMemo(() => {
+    const nomes = new Set<string>(vendedoresOpcoes)
+    for (const u of usuarios) {
+      if (temAcessoComercial(u.role, acessosPorUsuario[u.id])) nomes.add(u.nome)
+    }
+    if (form.sdr) nomes.add(form.sdr) // mantém o valor atual mesmo se não estiver na lista
+    return Array.from(nomes).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [vendedoresOpcoes, usuarios, acessosPorUsuario, form.sdr])
 
   const set = (field: keyof typeof form, value: string) => {
     setForm((f) => ({ ...f, [field]: value }))
@@ -775,7 +801,7 @@ function EditLeadModal({ lead, onClose, onSave }: EditModalProps) {
               className="w-full bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
             >
               <option value="">Não informado</option>
-              {vendedoresOpcoes.map((v) => (
+              {opcoesVendedor.map((v) => (
                 <option key={v} value={v}>
                   {v}
                 </option>
