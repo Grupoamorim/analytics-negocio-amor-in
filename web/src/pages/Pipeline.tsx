@@ -46,6 +46,7 @@ import {
   TeamMember,
   PipelineStage,
   getTurmaDisplayName,
+  getFullTurmaName,
   DEFAULT_CHECKLIST_ITEMS,
   FUNNEL_STAGE_BY_ID,
   daysInCurrentStage,
@@ -163,6 +164,9 @@ export default function Pipeline() {
   const leadById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads])
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
 
+  // Busca livre por turma (nome, faculdade, curso, cidade, ano, empresa).
+  const [searchQuery, setSearchQuery] = useState('')
+
   // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
   const empresaOptions = useMemo(() => {
@@ -265,14 +269,16 @@ export default function Pipeline() {
     if (activeSavedFunilFilterId === id) setActiveSavedFunilFilterId(null)
   }
 
-  const hasActiveAdvFilter = Object.values(advFilters).some(Boolean)
+  const hasActiveAdvFilter = Object.values(advFilters).some(Boolean) || Boolean(searchQuery)
 
   const clearAdvFilters = () => {
     setAdvFilters({ curso: '', faculdade: '', cidade: '', anoFormatura: '' })
+    setSearchQuery('')
     setActiveSavedFunilFilterId(null)
   }
 
   const filteredDeals = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
     return deals.filter((d) => {
       // Turma já formada (ano de formatura passou) some do Funil — não tem mais
       // o que prospectar/negociar nela.
@@ -283,9 +289,26 @@ export default function Pipeline() {
       for (const { key } of FUNIL_FILTER_DEFS) {
         if (advFilters[key] && (!lead || lead[key] !== advFilters[key])) return false
       }
+      if (q) {
+        const haystack = [
+          lead ? getFullTurmaName(lead) : d.title,
+          lead?.faculdade,
+          lead?.curso,
+          lead?.cidade,
+          lead?.anoFormatura,
+          lead?.empresa,
+          lead?.turma,
+          d.contactName,
+          d.company,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
       return true
     })
-  }, [deals, leadById, selectedEmpresas, advFilters])
+  }, [deals, leadById, selectedEmpresas, advFilters, searchQuery])
 
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.order - b.order), [stages])
 
@@ -657,6 +680,26 @@ export default function Pipeline() {
               </button>
             )}
           </div>
+        </div>
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar turma por nome, faculdade, curso, cidade, ano..."
+            className="w-full bg-[#0a0f14] border border-white/[0.08] rounded-lg pl-9 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              title="Limpar busca"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {FUNIL_FILTER_DEFS.map(({ key, label }) => (
