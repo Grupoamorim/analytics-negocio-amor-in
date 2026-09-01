@@ -106,6 +106,13 @@
     --chart-5: 0 84% 60%;
   }
 
+  /* Cor de texto padrão (faltava): sem isso, componentes shadcn como Input/
+     Select que herdam `text-foreground` ficavam com texto preto no fundo
+     escuro — ex: modal de Cadastrar Nova Turma. */
+  body {
+    color: hsl(var(--foreground));
+  }
+
   /* NEVER REMOVE THIS */
   section[aria-label='Notifications alt+T'] {
     padding: 0 !important;
