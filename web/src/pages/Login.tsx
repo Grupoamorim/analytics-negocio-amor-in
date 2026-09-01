@@ -14,7 +14,20 @@ export default function Login() {
   const [modo, setModo] = useState<'entrar' | 'criar' | 'recuperar'>('entrar')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState('')
+  const [erro, setErro] = useState(() => {
+    try {
+      const inativo =
+        new URLSearchParams(window.location.search).get('inativo') === '1' ||
+        sessionStorage.getItem('acesso_inativo') === '1'
+      if (inativo) {
+        sessionStorage.removeItem('acesso_inativo')
+        return 'Seu acesso está desativado. Fale com um administrador para reativar.'
+      }
+    } catch {
+      // ignora
+    }
+    return ''
+  })
   const [aviso, setAviso] = useState('')
   const [enviando, setEnviando] = useState(false)
 

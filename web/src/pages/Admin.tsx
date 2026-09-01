@@ -231,7 +231,15 @@ export default function Admin() {
     }
     const novoAtivo = p.ativo === false // estava inativo → reativa
     const acao = novoAtivo ? 'reativar' : 'inativar'
-    if (!confirm(`Deseja ${acao} o acesso de "${p.nome || p.email}"?${novoAtivo ? '' : ' A pessoa é desconectada e não consegue mais entrar até ser reativada.'}`)) {
+    const avisoAdmin = !novoAtivo && p.role === 'admin' ? ' ATENÇÃO: é um ADMINISTRADOR — ele perde o acesso total até ser reativado por outro admin.' : ''
+    if (
+      !confirm(
+        `Deseja ${acao} o acesso de "${p.nome || p.email}"?` +
+          (novoAtivo
+            ? ''
+            : ` A pessoa é desconectada e não consegue mais entrar (fica "entra e cai") até ser reativada.${avisoAdmin}`),
+      )
+    ) {
       return
     }
     setSalvandoId(p.id)

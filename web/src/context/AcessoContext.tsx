@@ -95,12 +95,21 @@ export const AcessoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       db.from('acesso_paginas').select('user_id, paginas'),
     ])
 
-    // Usuário inativado por um admin: desconecta na hora.
+    // Usuário inativado por um admin: desconecta e avisa (senão fica só
+    // "entra e cai" sem explicação).
     const meuPerfilRaw = (perfis || []).find((p: any) => p.id === userId)
     if (meuPerfilRaw && meuPerfilRaw.ativo === false) {
+      try {
+        sessionStorage.setItem('acesso_inativo', '1')
+      } catch {
+        // ignora
+      }
       await supabase.auth.signOut()
       setRole('')
       setBuscaConcluida(true)
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.assign('/login?inativo=1')
+      }
       return
     }
 
