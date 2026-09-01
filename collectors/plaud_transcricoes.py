@@ -8,12 +8,16 @@ Roda de graca no GitHub Actions (nao gasta token do Claude). So a analise
 de sentimento/probabilidade usa IA (Gemini) - o resto e regra determinística.
 
 Fluxo:
-  1. Loga na API do Plaud (nao-oficial, engenharia reversa do web.plaud.ai):
-     POST https://api.plaud.ai/auth/access-token  (username/password)
-     -> devolve um JWT que dura ~30 dias. O token e guardado em cache
-        (arquivo .plaud_token.json, persistido entre runs via actions/cache)
-        pra NAO relogar toda hora - cada login novo desconecta o app do
-        celular do Lucas.
+  1. Autentica na API do Plaud (nao-oficial, engenharia reversa do web.plaud.ai).
+     Duas formas:
+       a) PLAUD_TOKEN: cola o JWT direto do web.plaud.ai (localStorage). Nao
+          precisa de senha, nao desconecta o app do celular. Dura ~30 dias e
+          NAO se renova - quando faltar < 5 dias o job avisa no log; ai o
+          Lucas cola um token novo no secret.
+       b) PLAUD_EMAIL + PLAUD_PASSWORD: POST /auth/access-token. Renova
+          sozinho, mas cada login novo cria uma sessao e desloga o celular.
+     O token e guardado em cache (.plaud_token.json, persistido entre runs
+     via actions/cache) pra nao reautenticar toda hora.
   2. Lista as gravacoes (GET /file/simple/web).
   3. So processa gravacao cujo NOME (que o Lucas renomeia no app do Plaud)
      contenha "(PR-S)" ou "(PR-F)" E "Apresentacao" E ("Comissao" ou
@@ -45,6 +49,9 @@ log = logging.getLogger("plaud_transcricoes")
 
 PLAUD_EMAIL     = os.getenv("PLAUD_EMAIL", "").strip()
 PLAUD_PASSWORD  = os.getenv("PLAUD_PASSWORD", "").strip()
+# Modo token: cola o JWT do web.plaud.ai direto (nao precisa de senha). Dura
+# ~30 dias e NAO se renova sozinho - quando faltar pouco, o job avisa no log.
+PLAUD_TOKEN     = os.getenv("PLAUD_TOKEN", "").strip()
 PLAUD_REGION    = os.getenv("PLAUD_REGION", "us").strip().lower()
 PLAUD_TOKEN_FILE = os.getenv("PLAUD_TOKEN_FILE", ".plaud_token.json").strip()
 SUPABASE_URL    = os.getenv("SUPABASE_URL", "")
@@ -108,9 +115,26 @@ def _salvar_token_cache(token, region):
         log.warning(f"Não consegui salvar cache do token: {e}")
 
 
+def _avisar_expiracao(token):
+    exp = _jwt_exp(token)
+    if not exp:
+        return
+    dias = (exp - time.time()) / 86400
+    if dias < 5:
+        log.warning(
+            f"⚠️  TOKEN DO PLAUD EXPIRA EM {dias:.1f} DIA(S). "
+            f"Pegue um novo em web.plaud.ai e atualize o secret PLAUD_TOKEN."
+        )
+
+
 def plaud_login():
     """Loga com email/senha e devolve (token, region). Cada login novo cria uma
     sessão nova no Plaud e desloga o app do celular - por isso o cache."""
+    if not (PLAUD_EMAIL and PLAUD_PASSWORD):
+        raise RuntimeError(
+            "Sem PLAUD_EMAIL/PLAUD_PASSWORD e o PLAUD_TOKEN colado expirou ou foi "
+            "rejeitado. Cole um token novo do web.plaud.ai no secret PLAUD_TOKEN."
+        )
     region = PLAUD_REGION if PLAUD_REGION in BASE_URLS else "us"
     base = BASE_URLS[region]
     r = requests.post(
@@ -144,12 +168,19 @@ def plaud_login():
 
 class PlaudAPI:
     def __init__(self):
-        tok, reg = _carregar_token_cache()
-        if tok:
-            self.token, self.region = tok, reg
+        cache_tok, cache_reg = _carregar_token_cache()
+        # Ordem: cache válido > PLAUD_TOKEN colado > login com senha.
+        if cache_tok and _jwt_exp(cache_tok) >= _jwt_exp(PLAUD_TOKEN):
+            self.token, self.region = cache_tok, cache_reg
             log.info("Usando token do Plaud em cache.")
+        elif PLAUD_TOKEN and _jwt_exp(PLAUD_TOKEN) - time.time() > 3600:
+            self.token = PLAUD_TOKEN
+            self.region = PLAUD_REGION if PLAUD_REGION in BASE_URLS else "us"
+            _salvar_token_cache(self.token, self.region)
+            log.info("Usando PLAUD_TOKEN colado (modo token, sem senha).")
         else:
             self.token, self.region = plaud_login()
+        _avisar_expiracao(self.token)
 
     @property
     def base(self):
@@ -297,11 +328,13 @@ def analisar_com_gemini(client, nome_turma, transcricao):
 
 def main():
     faltando = [n for n, v in [
-        ("PLAUD_EMAIL", PLAUD_EMAIL), ("PLAUD_PASSWORD", PLAUD_PASSWORD),
         ("SUPABASE_URL", SUPABASE_URL), ("SUPABASE_SERVICE_KEY", SUPABASE_KEY),
     ] if not v]
     if faltando:
         log.error(f"Faltando variáveis de ambiente: {', '.join(faltando)} - abortando.")
+        return
+    if not (PLAUD_TOKEN or (PLAUD_EMAIL and PLAUD_PASSWORD)):
+        log.error("Configure PLAUD_TOKEN (colado do web.plaud.ai) OU PLAUD_EMAIL+PLAUD_PASSWORD - abortando.")
         return
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)

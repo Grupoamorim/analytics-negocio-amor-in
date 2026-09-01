@@ -35,6 +35,7 @@ jobs:
 
       - name: Executar coletor Plaud
         env:
+          PLAUD_TOKEN:          ${{ secrets.PLAUD_TOKEN }}
           PLAUD_EMAIL:          ${{ secrets.PLAUD_EMAIL }}
           PLAUD_PASSWORD:       ${{ secrets.PLAUD_PASSWORD }}
           PLAUD_REGION:         ${{ secrets.PLAUD_REGION }}
