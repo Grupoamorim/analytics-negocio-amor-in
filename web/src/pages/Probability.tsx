@@ -503,10 +503,29 @@ function AprendizadoTab({
     () => new Set(perdidos.map((d) => d.leadId).filter(Boolean) as string[]),
     [perdidos],
   )
+  const ganhos = useMemo(() => deals.filter((d) => d.outcome === 'ganho'), [deals])
+  const ganhoLeadIds = useMemo(
+    () => new Set(ganhos.map((d) => d.leadId).filter(Boolean) as string[]),
+    [ganhos],
+  )
 
   const objecoesGerais = useMemo(
     () => tally(transcripts.flatMap((t) => t.geminiAnalysis?.pontosAtencao || [])),
     [transcripts],
+  )
+  // ---- Lado positivo: o que faz o cliente fechar ----
+  const fortesGerais = useMemo(
+    () => tally(transcripts.flatMap((t) => t.geminiAnalysis?.pontosFortes || [])),
+    [transcripts],
+  )
+  const puxamFechamento = useMemo(
+    () =>
+      tally(
+        transcripts
+          .filter((t) => t.leadId && ganhoLeadIds.has(t.leadId))
+          .flatMap((t) => t.geminiAnalysis?.pontosFortes || []),
+      ),
+    [transcripts, ganhoLeadIds],
   )
   const travamFechamento = useMemo(
     () =>
@@ -529,6 +548,26 @@ function AprendizadoTab({
 
   return (
     <div className="space-y-5">
+      <Painel
+        cor="emerald"
+        titulo="O que faz a turma fechar"
+        sub={`Pontos fortes mais citados nas reuniões de turmas que Ganharam — amostra: ${ganhos.length} turmas fechadas`}
+        icon={CheckCircle2}
+        itens={puxamFechamento}
+        vazio={
+          ganhos.length > 0
+            ? `${ganhos.length} turmas fechadas, mas ainda sem reunião analisada delas.`
+            : 'Nenhuma turma fechada com reunião analisada ainda.'
+        }
+      />
+      <Painel
+        cor="emerald"
+        titulo="O que a turma mais valoriza / elogia"
+        sub={`Pontos fortes mais citados em TODAS as reuniões — amostra: ${reunioesAnalisadas} reuniões analisadas`}
+        icon={Sparkles}
+        itens={fortesGerais}
+        vazio="Nenhuma reunião analisada ainda."
+      />
       <Painel
         titulo="O que trava o avanço de fase"
         sub={`Objeções e pontos de atenção mais citados nas reuniões — amostra: ${reunioesAnalisadas} reuniões analisadas`}
@@ -599,17 +638,22 @@ function Painel({
   icon: Icon,
   itens,
   vazio,
+  cor = 'rose',
 }: {
   titulo: string
   sub: string
   icon: typeof AlertTriangle
   itens: { texto: string; n: number }[]
   vazio: string
+  cor?: 'rose' | 'emerald'
 }) {
+  const iconCor = cor === 'emerald' ? 'text-emerald-400' : 'text-rose-400'
+  const badgeCor =
+    cor === 'emerald' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
   return (
     <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
       <h3 className="font-semibold text-white text-sm flex items-center gap-2 mb-1">
-        <Icon className="w-4 h-4 text-rose-400" /> {titulo}
+        <Icon className={`w-4 h-4 ${iconCor}`} /> {titulo}
       </h3>
       <p className="text-xs text-slate-400 mb-3">{sub}</p>
       {itens.length === 0 ? (
@@ -618,7 +662,9 @@ function Painel({
         <ul className="space-y-1.5">
           {itens.map((o, i) => (
             <li key={i} className="flex items-center gap-2 text-xs text-slate-300">
-              <span className="inline-flex items-center justify-center min-w-[24px] h-5 rounded bg-rose-500/15 text-rose-300 font-bold text-[10px]">
+              <span
+                className={`inline-flex items-center justify-center min-w-[24px] h-5 rounded font-bold text-[10px] ${badgeCor}`}
+              >
                 {o.n}
               </span>
               {o.texto}
