@@ -1,8 +1,12 @@
 """
 Plaud -> Transcricoes  (reunioes presenciais)
 =============================================
-Roda de graca no GitHub Actions (nao gasta token do Claude). So a analise
-de sentimento/probabilidade usa Gemini - o resto e regra deterministica.
+Roda de graca no GitHub Actions (nao gasta token do Claude).
+
+O Plaud no plano GRATIS so guarda o AUDIO - nao transcreve. Entao este
+collector baixa o mp3 do Plaud e manda pro Gemini transcrever (chamada em
+texto puro) + analisar (JSON). Se a conta do Plaud for paga e ja tiver a
+transcricao pronta, usa ela direto.
 
 COMO A TURMA E DESCOBERTA (sem IA lendo a transcricao):
   Cruza o HORARIO da gravacao do Plaud com o EVENTO da agenda do Google
@@ -187,7 +191,8 @@ class PlaudAPI:
         lista = data.get("data_file_list") or data.get("data") or []
         return [g for g in lista if not g.get("is_trash")]
 
-    def transcricao(self, file_id):
+    def transcricao_pronta(self, file_id):
+        """Transcrição que o Plaud já fez (só plano pago). Vazia no grátis."""
         data = self._get(f"/file/detail/{file_id}")
         raw = data.get("data") or data
         melhor = ""
@@ -196,6 +201,32 @@ class PlaudAPI:
             if len(c) > len(melhor):
                 melhor = c
         return melhor
+
+    def url_audio(self, file_id):
+        for path in (f"/file/temp-url/{file_id}?is_opus=false", f"/file/temp-url/{file_id}"):
+            try:
+                d = self._get(path)
+                u = d.get("url") or (d.get("data") or {}).get("url") if isinstance(d.get("data"), dict) else d.get("data")
+                if isinstance(u, str) and u.startswith("http"):
+                    return u
+            except Exception:
+                continue
+        return None
+
+    def baixar_audio(self, file_id):
+        u = self.url_audio(file_id)
+        if u:
+            r = requests.get(u, timeout=120)
+            r.raise_for_status()
+            return r.content
+        # fallback: download direto pela API
+        r = requests.get(
+            f"{self.base}/file/download/{file_id}",
+            headers={"User-Agent": USER_AGENT, "Authorization": f"Bearer {self.token}"},
+            timeout=120,
+        )
+        r.raise_for_status()
+        return r.content
 
 
 # ── helpers da gravacao ───────────────────────────────────
@@ -333,6 +364,25 @@ def nome_completo_turma(t):
     return " ".join(str(p) for p in partes if p)
 
 
+def transcrever_audio_gemini(client, nome_turma, audio_bytes):
+    """Plaud grátis não transcreve — o Gemini transcreve o áudio direto.
+    Chamada em TEXTO puro (não JSON) pra não quebrar num campo gigante."""
+    from google.genai import types
+    parte_audio = types.Part.from_bytes(data=audio_bytes, mime_type="audio/mpeg")
+    prompt = (
+        f'Transcreva em português o áudio desta reunião presencial de vendas de '
+        f'formatura da Amor In Formaturas com a turma "{nome_turma}". Marque quem '
+        'fala ("Vendedor:", "Aluno:", "Comissão:" quando der pra distinguir, senão '
+        '"Speaker 1/2/3:") e ponha [mm:ss] no começo de cada fala. Transcreva do '
+        'início ao fim, sem resumir. Devolva só a transcrição.'
+    )
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL, contents=[parte_audio, prompt],
+        config={"max_output_tokens": 50000},
+    )
+    return (resp.text or "").strip()
+
+
 def analisar_com_gemini(client, nome_turma, transcricao):
     prompt = (
         "Você é um analista especialista em vendas de formatura e SDR educacional.\n"
@@ -371,7 +421,10 @@ def main():
         from google import genai
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
     else:
-        log.warning("GEMINI_API_KEY não configurado - transcrições salvas sem análise.")
+        log.warning(
+            "GEMINI_API_KEY não configurado - como o Plaud grátis não transcreve, "
+            "gravações sem transcrição do Plaud serão puladas."
+        )
 
     eventos = carregar_eventos_agenda()
     log.info(f"{len(eventos)} evento(s) na agenda.")
@@ -428,24 +481,40 @@ def main():
             pulados.append((nome_grav, f"turma {nome_completo_turma(turma)} já tem {len(ja)} gravações Plaud (limite {MAX_GRAVACOES_POR_TURMA})"))
             continue
 
-        if not (g.get("is_trans", True)):
-            pulados.append((nome_grav, "gravação ainda sem transcrição no Plaud"))
-            continue
+        nome_turma_full = nome_completo_turma(turma)
+
+        # 1) Transcrição: usa a do Plaud se existir (plano pago); senão o
+        #    Gemini transcreve o áudio (Plaud grátis não transcreve).
+        transcricao = ""
         try:
-            transcricao = api.transcricao(fid)
-        except Exception as e:
-            pulados.append((nome_grav, f"erro Plaud: {e}"))
-            continue
+            transcricao = api.transcricao_pronta(fid)
+        except Exception:
+            pass
         if not transcricao.strip():
-            pulados.append((nome_grav, "transcrição vazia no Plaud"))
+            if not gemini_client:
+                pulados.append((nome_grav, "Plaud não transcreveu e não há GEMINI_API_KEY pra transcrever o áudio"))
+                continue
+            try:
+                audio = api.baixar_audio(fid)
+            except Exception as e:
+                pulados.append((nome_grav, f"não consegui baixar o áudio do Plaud: {e}"))
+                continue
+            try:
+                transcricao = transcrever_audio_gemini(gemini_client, nome_turma_full, audio)
+            except Exception as e:
+                pulados.append((nome_grav, f"falha ao transcrever áudio no Gemini: {e}"))
+                continue
+        if not transcricao.strip():
+            pulados.append((nome_grav, "transcrição vazia"))
             continue
 
+        # 2) Análise
         analise = None
         if gemini_client:
             try:
-                analise = analisar_com_gemini(gemini_client, nome_completo_turma(turma), transcricao)
+                analise = analisar_com_gemini(gemini_client, nome_turma_full, transcricao)
             except Exception as e:
-                log.warning(f"Falha Gemini (salvo sem análise): {e}")
+                log.warning(f"Falha Gemini análise (salvo sem análise): {e}")
 
         rotulo = melhor_parsed["rotulo"]
         titulo = f"[Plaud] (PR-F) Apresentação {rotulo} {nome_completo_turma(turma)}"
