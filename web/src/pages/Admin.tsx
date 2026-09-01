@@ -134,6 +134,7 @@ export default function Admin() {
   }
   const [enviandoConvite, setEnviandoConvite] = useState(false)
   const [resetandoSenhaId, setResetandoSenhaId] = useState<string | null>(null)
+  const [reenviandoEmailId, setReenviandoEmailId] = useState<string | null>(null)
 
   // Vendedores / SDR
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
@@ -304,6 +305,39 @@ export default function Admin() {
       })
     } finally {
       setResetandoSenhaId(null)
+    }
+  }
+
+  async function handleReenviarEmail(p: Perfil) {
+    if (!confirm(`Reenviar o e-mail de acesso pra ${p.email}?`)) return
+    setReenviandoEmailId(p.id)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Sessão expirada, faça login novamente.')
+
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { resend: true, email: p.email },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+
+      toast({
+        title: 'E-mail reenviado',
+        description:
+          data?.resent === 'senha'
+            ? `${p.email} já tinha confirmado o e-mail — mandamos um link pra redefinir a senha.`
+            : `${p.email} vai receber de novo o convite pra definir a senha. Se não chegar, peça pra conferir o spam.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao reenviar',
+        description: err.message || 'Não foi possível reenviar o e-mail.',
+        variant: 'destructive',
+      })
+    } finally {
+      setReenviandoEmailId(null)
     }
   }
 
@@ -1046,6 +1080,14 @@ export default function Admin() {
                                 {editandoAcessoId === p.id ? 'Fechar acessos' : `Acessos (${resumoAcesso})`}
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => handleReenviarEmail(p)}
+                              disabled={reenviandoEmailId === p.id}
+                              className="text-[11px] text-slate-400 hover:text-orange-400 underline decoration-dotted"
+                            >
+                              {reenviandoEmailId === p.id ? 'Reenviando...' : 'Reenviar e-mail'}
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleResetarSenha(p)}
