@@ -630,8 +630,10 @@ export interface AnalysisKeyword {
  * A análise da reunião (base) manda no número; o funil só tempera.
  */
 export interface ProbBreakdown {
-  /** Probabilidade da reunião mais recente (Gemini) — o alicerce do número. */
+  /** Média da probabilidade das reuniões analisadas da turma (até as 4 mais recentes) — o alicerce do número. */
   base: number
+  /** Nº de reuniões analisadas que entraram na média de `base`. */
+  amostraReunioes?: number
   /** Sem reunião analisada: `base` veio do padrão do estágio, é chute. */
   semReuniao: boolean
   /** Sem base pra estimar ainda (não qualificada ou sem reunião analisada) — mostra "—". */

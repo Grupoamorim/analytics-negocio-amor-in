@@ -271,8 +271,9 @@ function VisaoGeral({
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 text-sm text-slate-300 flex gap-3">
         <Info className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
         <p>
-          A probabilidade de cada turma é calculada pelo motor: base na análise da reunião mais
-          recente, ajustada levemente por portão de fase vencido e pela velocidade dentro da coluna
+          A probabilidade de cada turma é calculada pelo motor: base na <span className="font-semibold text-slate-200">média das análises das reuniões</span> da turma
+          (até as 4 mais recentes — comissão, turma, turma B, matutino/noturno contam igual), ajustada
+          levemente por portão de fase vencido e pela velocidade dentro da coluna
           (turma parada cai, turma rápida sobe). Veja a conta de cada turma na aba{' '}
           <span className="font-semibold text-white">Motor</span>.
         </p>
@@ -334,9 +335,10 @@ function MotorTab({ linhas }: { linhas: LinhaMotor[] }) {
           <Gauge className="w-4 h-4 text-orange-400" /> Como o número é calculado
         </h3>
         <p className="text-slate-400 text-xs leading-relaxed">
-          <span className="font-semibold text-slate-200">final = base da reunião + portão de fase + velocidade + curso/faculdade</span>{' '}
-          (limitado entre {MOTOR_WEIGHTS.min}% e {MOTOR_WEIGHTS.max}%). A base é a probabilidade da
-          reunião mais recente (Gemini). Sem reunião analisada, a base é o padrão da fase — e o número
+          <span className="font-semibold text-slate-200">final = base das reuniões + portão de fase + velocidade + curso/faculdade</span>{' '}
+          (limitado entre {MOTOR_WEIGHTS.min}% e {MOTOR_WEIGHTS.max}%). A base é a <span className="font-semibold text-slate-200">média
+          da probabilidade das reuniões analisadas</span> da turma (Gemini), considerando até as 4 mais
+          recentes. Sem reunião analisada, a base é o padrão da fase — e o número
           fica marcado como <span className="italic">sem reunião</span>.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -416,6 +418,9 @@ function MotorTab({ linhas }: { linhas: LinhaMotor[] }) {
                   <td className="py-2 px-2 text-slate-400">{stageNome(deal.stageId)}</td>
                   <td className="py-2 px-2 text-right text-slate-300">
                     {b.base}%{b.semReuniao && <span className="text-slate-500"> *</span>}
+                    {!b.semReuniao && (b.amostraReunioes ?? 0) > 1 && (
+                      <span className="text-slate-500"> · média de {b.amostraReunioes}</span>
+                    )}
                   </td>
                   <td className="py-2 px-2 text-right text-emerald-400">
                     {b.ajustePortao ? `+${b.ajustePortao}` : '—'}

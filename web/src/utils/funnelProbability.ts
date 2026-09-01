@@ -86,6 +86,30 @@ export function transcriptProbabilidade(t?: Transcript | null): number | undefin
   return undefined
 }
 
+/** N máximo de reuniões (as mais recentes) que entram na média da base. */
+export const MAX_REUNIOES_NA_MEDIA = 4
+
+/**
+ * Média da probabilidade das reuniões analisadas de uma turma — até as
+ * `MAX_REUNIOES_NA_MEDIA` mais recentes (por data). Comissão, turma, turma B,
+ * matutino/noturno: cada gravação analisada conta igual. Devolve também
+ * quantas reuniões entraram na conta.
+ */
+export function mediaTranscriptProbabilidade(
+  transcripts?: Array<Transcript | null> | null,
+): { media: number; n: number } | undefined {
+  if (!transcripts || transcripts.length === 0) return undefined
+  const ordenadas = [...transcripts]
+    .filter((t): t is Transcript => !!t)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, MAX_REUNIOES_NA_MEDIA)
+  const probs = ordenadas
+    .map((t) => transcriptProbabilidade(t))
+    .filter((p): p is number => typeof p === 'number')
+  if (probs.length === 0) return undefined
+  return { media: probs.reduce((s, p) => s + p, 0) / probs.length, n: probs.length }
+}
+
 /** Soma dos bônus de portão pelos estágios que a turma já venceu (pela posição atual). */
 function bonusPortao(stageId: string): number {
   const idx = STAGE_ORDER.indexOf(stageId)
@@ -146,6 +170,8 @@ function naoAvaliavel(motivo: string, semReuniao: boolean): { score: number; bre
 export interface ComputeArgs {
   deal: Deal
   latestTranscript?: Transcript | null
+  /** Todas as reuniões analisadas da turma. Quando presente, a base vira a MÉDIA das até 4 mais recentes. */
+  transcripts?: Array<Transcript | null> | null
   /** Taxa de fechamento do recorte mais específico disponível (curso+faculdade > curso > faculdade). */
   cursoFacRate?: CursoFacRate | null
 }
@@ -156,8 +182,13 @@ export interface ComputeArgs {
 export function computeDealProbability({
   deal,
   latestTranscript,
+  transcripts,
   cursoFacRate,
 }: ComputeArgs): { score: number; breakdown: ProbBreakdown } {
+  // A base é a MÉDIA das até 4 reuniões analisadas mais recentes da turma
+  // (comissão + turma + turma B + matutino/noturno contam igual). Sem lista,
+  // cai pro comportamento antigo (só a reunião mais recente).
+  const media = mediaTranscriptProbabilidade(transcripts)
   const stageId = deal.stageId || 'stage-1'
   const stageIdx = STAGE_ORDER.indexOf(stageId)
   const stageMeta = FUNNEL_STAGE_BY_ID[stageId] || FUNNEL_STAGES[0]
@@ -180,7 +211,8 @@ export function computeDealProbability({
     }
   }
 
-  const tProb = transcriptProbabilidade(latestTranscript)
+  const tProb = media ? media.media : transcriptProbabilidade(latestTranscript)
+  const amostraReunioes = media ? media.n : latestTranscript && tProb !== undefined ? 1 : 0
   const semReuniao = tProb === undefined
 
   // Portão 1: só conta a partir da Qualificação do Contato marcada.
@@ -223,6 +255,7 @@ export function computeDealProbability({
     score: final,
     breakdown: {
       base: Math.round(base),
+      amostraReunioes,
       semReuniao: false,
       ajustePortao: pPortao,
       ajusteVelocidade: pVel,

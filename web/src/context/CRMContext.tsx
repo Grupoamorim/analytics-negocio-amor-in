@@ -361,14 +361,19 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [deals, leadById],
   )
 
-  const latestTranscriptForDeal = useCallback(
-    (deal: Deal): CallTranscript | undefined => {
-      if (!deal.leadId) return undefined
+  const transcriptsForDeal = useCallback(
+    (deal: Deal): CallTranscript[] => {
+      if (!deal.leadId) return []
       return transcripts
         .filter((t) => t.leadId === deal.leadId)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     },
     [transcripts],
+  )
+
+  const latestTranscriptForDeal = useCallback(
+    (deal: Deal): CallTranscript | undefined => transcriptsForDeal(deal)[0],
+    [transcriptsForDeal],
   )
 
   /**
@@ -385,12 +390,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         computeDealProbability({
           deal: d,
           latestTranscript: latestTranscriptForDeal(d) as any,
+          transcripts: transcriptsForDeal(d) as any,
           cursoFacRate: closeRateFor(lead?.curso, lead?.faculdade),
         }),
       )
     }
     return m
-  }, [deals, leadById, latestTranscriptForDeal, closeRateFor])
+  }, [deals, leadById, latestTranscriptForDeal, transcriptsForDeal, closeRateFor])
 
   /** Recalcula e persiste a probabilidade única de uma turma. */
   const recomputeDealProbability = useCallback(
@@ -403,9 +409,14 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         opts?.overrideTranscript && opts.overrideTranscript.leadId === deal.leadId
           ? opts.overrideTranscript
           : undefined
+      // Reunião nova ainda não está no estado `transcripts` — junta na lista pra
+      // média já contar com ela (dedupe por id).
+      const base = transcriptsForDeal(deal)
+      const lista = override && !base.some((t) => t.id === override.id) ? [override, ...base] : base
       const { score, breakdown } = computeDealProbability({
         deal,
         latestTranscript: (override || latestTranscriptForDeal(deal)) as any,
+        transcripts: lista as any,
         cursoFacRate: closeRateFor(lead?.curso, lead?.faculdade),
       })
       if (deal.probability === score && deal.probBreakdown?.final === breakdown.final) {
@@ -414,7 +425,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await updateDealRaw(deal.id, { probability: score, probBreakdown: breakdown })
       return { score }
     },
-    [leadById, latestTranscriptForDeal, closeRateFor, updateDealRaw],
+    [leadById, latestTranscriptForDeal, transcriptsForDeal, closeRateFor, updateDealRaw],
   )
 
   const recomputeAllProbabilities = useCallback(async (): Promise<void> => {
