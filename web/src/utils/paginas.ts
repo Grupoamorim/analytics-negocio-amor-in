@@ -54,6 +54,22 @@ export const PAGINAS_FINANCEIRO: string[] = [
 ]
 
 /**
+ * Conjunto de abas que já vem marcado ao escolher um cargo (no convite ou ao
+ * editar o acesso de alguém). É só um ponto de partida — o admin pode marcar/
+ * desmarcar o que quiser por cima.
+ */
+export const PAGINAS_PADRAO_POR_CARGO: Record<string, string[]> = {
+  admin: TODAS_PAGINAS,
+  financeiro: [...PAGINAS_FINANCEIRO, '/relatorios'],
+  comercial: PAGINAS_PADRAO_COMERCIAL,
+  membro: ['/', '/leads', '/probabilidade', '/notas'],
+}
+
+export function paginasPadraoPorCargo(role: string): string[] {
+  return PAGINAS_PADRAO_POR_CARGO[role] ?? PAGINAS_PADRAO_COMERCIAL
+}
+
+/**
  * Um usuário tem acesso comercial se for admin, ou se as páginas liberadas para
  * ele incluírem ao menos uma aba do grupo Comercial. `paginasConfiguradas` vazio
  * ou ausente = padrão comercial (todo mundo comum começa comercial).

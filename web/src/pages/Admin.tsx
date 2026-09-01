@@ -17,7 +17,12 @@ import { useToast } from '@/hooks/use-toast'
 import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { useAuth } from '@/hooks/useAuth'
 import { useAcesso } from '@/context/AcessoContext'
-import { PAGINAS, PAGINAS_PADRAO_COMERCIAL, PAGINAS_FINANCEIRO } from '@/utils/paginas'
+import {
+  PAGINAS,
+  PAGINAS_PADRAO_COMERCIAL,
+  PAGINAS_FINANCEIRO,
+  paginasPadraoPorCargo,
+} from '@/utils/paginas'
 import MetasAdmin from '@/components/admin/MetasAdmin'
 import { translateAuthError } from '@/lib/authErrors'
 import {
@@ -62,6 +67,7 @@ import {
   removerTemplate,
 } from '@/utils/pacoteCatalogo'
 import { supabase } from '@/lib/supabase/client'
+import { redefinirSenhaUrl } from '@/lib/appUrl'
 import {
   ShieldCheck,
   Users,
@@ -118,7 +124,14 @@ export default function Admin() {
   const [conviteEmail, setConviteEmail] = useState('')
   const [conviteNome, setConviteNome] = useState('')
   const [conviteRole, setConviteRole] = useState<Perfil['role']>('membro')
-  const [convitePaginas, setConvitePaginas] = useState<string[]>(PAGINAS_PADRAO_COMERCIAL)
+  const [convitePaginas, setConvitePaginas] = useState<string[]>(() => paginasPadraoPorCargo('membro'))
+  // Guarda se o admin já mexeu na seleção — se sim, trocar de cargo não sobrescreve.
+  const [convitePaginasTocado, setConvitePaginasTocado] = useState(false)
+
+  function escolherConviteRole(role: Perfil['role']) {
+    setConviteRole(role)
+    if (!convitePaginasTocado) setConvitePaginas(paginasPadraoPorCargo(role))
+  }
   const [enviandoConvite, setEnviandoConvite] = useState(false)
   const [resetandoSenhaId, setResetandoSenhaId] = useState<string | null>(null)
 
@@ -238,7 +251,8 @@ export default function Admin() {
 
   function abrirEditorAcesso(p: Perfil) {
     const atual = acessosPorUsuario[p.id]
-    setRascunhoAcesso(atual && atual.length ? atual : PAGINAS_PADRAO_COMERCIAL)
+    // Sem acesso customizado ainda: começa do padrão do cargo da pessoa.
+    setRascunhoAcesso(atual && atual.length ? atual : paginasPadraoPorCargo(p.role))
     setEditandoAcessoId((cur) => (cur === p.id ? null : p.id))
   }
 
@@ -272,13 +286,15 @@ export default function Admin() {
     if (!confirm(`Enviar e-mail de redefinição de senha pra ${p.email}?`)) return
     setResetandoSenhaId(p.id)
     try {
+      // Nunca window.location.origin aqui: o link vai por e-mail pra outra
+      // pessoa e o admin pode estar no localhost.
       const { error } = await supabase.auth.resetPasswordForEmail(p.email, {
-        redirectTo: `${window.location.origin}/redefinir-senha`,
+        redirectTo: redefinirSenhaUrl(),
       })
       if (error) throw error
       toast({
         title: 'E-mail enviado',
-        description: `${p.email} vai receber o link pra definir uma nova senha.`,
+        description: `${p.email} vai receber o link pra definir uma nova senha. Se não chegar em alguns minutos, peça pra conferir o spam.`,
       })
     } catch (err: any) {
       toast({
@@ -320,7 +336,8 @@ export default function Admin() {
       setConviteEmail('')
       setConviteNome('')
       setConviteRole('membro')
-      setConvitePaginas(PAGINAS_PADRAO_COMERCIAL)
+      setConvitePaginas(paginasPadraoPorCargo('membro'))
+      setConvitePaginasTocado(false)
       const { data: perfisAtualizados } = await supabase.from('profiles').select('*').order('created_at')
       setPerfis((perfisAtualizados || []) as Perfil[])
       recarregarAcesso()
@@ -911,7 +928,7 @@ export default function Admin() {
               />
               <select
                 value={conviteRole}
-                onChange={(e) => setConviteRole(e.target.value as Perfil['role'])}
+                onChange={(e) => escolherConviteRole(e.target.value as Perfil['role'])}
                 className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-2 text-slate-200 text-xs"
               >
                 {CARGOS.map((c) => (
@@ -935,7 +952,19 @@ export default function Admin() {
               ) : (
                 <div className="w-full">
                   <p className="text-[11px] text-slate-400 mb-1.5">
-                    Abas do menu que essa pessoa vai poder ver (dá pra mudar depois):
+                    Já vem marcado o padrão do cargo <strong className="text-slate-200">{CARGOS.find((c) => c.value === conviteRole)?.label}</strong> — marque/desmarque o que quiser (dá pra mudar depois também).{' '}
+                    {convitePaginasTocado && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConvitePaginas(paginasPadraoPorCargo(conviteRole))
+                          setConvitePaginasTocado(false)
+                        }}
+                        className="text-orange-400 hover:text-orange-300 underline decoration-dotted"
+                      >
+                        voltar ao padrão do cargo
+                      </button>
+                    )}
                   </p>
                   <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                     {PAGINAS.map((pg) => (
@@ -943,13 +972,14 @@ export default function Admin() {
                         <input
                           type="checkbox"
                           checked={convitePaginas.includes(pg.path)}
-                          onChange={() =>
+                          onChange={() => {
+                            setConvitePaginasTocado(true)
                             setConvitePaginas((prev) =>
                               prev.includes(pg.path)
                                 ? prev.filter((x) => x !== pg.path)
                                 : [...prev, pg.path],
                             )
-                          }
+                          }}
                           className="accent-orange-500"
                         />
                         {pg.label}
@@ -1074,6 +1104,13 @@ export default function Admin() {
                                 >
                                   {salvandoAcessoId === p.id ? 'Salvando...' : 'Salvar acessos'}
                                 </Button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRascunhoAcesso(paginasPadraoPorCargo(p.role))}
+                                  className="text-[11px] text-slate-400 hover:text-white underline decoration-dotted"
+                                >
+                                  Padrão do cargo ({CARGOS.find((c) => c.value === p.role)?.label})
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => setRascunhoAcesso(PAGINAS.map((x) => x.path))}

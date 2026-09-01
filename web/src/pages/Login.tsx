@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
 import { translateAuthError } from '@/lib/authErrors'
+import { redefinirSenhaUrl } from '@/lib/appUrl'
 
 export default function Login() {
   const { isAuthenticated, loading, signIn, signUp } = useAuth()
@@ -36,7 +37,7 @@ export default function Login() {
         else setAviso('Conta criada! Verifique seu e-mail para confirmar o acesso, se solicitado.')
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/redefinir-senha`,
+          redirectTo: redefinirSenhaUrl(),
         })
         if (error) setErro(translateAuthError(error.message))
         else setAviso('Se esse e-mail tiver uma conta, enviamos um link para redefinir a senha.')
