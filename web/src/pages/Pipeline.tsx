@@ -83,6 +83,7 @@ import {
   adicionarItemCatalogo,
 } from '@/utils/pacoteCatalogo'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
+import AgendarReuniaoModal from '@/components/AgendarReuniaoModal'
 import {
   listarDuracaoCursos,
   acharDuracaoAnos,
@@ -1598,6 +1599,7 @@ function DealDetailModal({
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
   const [mostrarApresentacao, setMostrarApresentacao] = useState(false)
+  const [agendarReuniaoOpen, setAgendarReuniaoOpen] = useState(false)
 
   useEffect(() => {
     if (!lead) return
@@ -1825,6 +1827,21 @@ function DealDetailModal({
         </div>
 
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+          {lead && (
+            <button
+              type="button"
+              onClick={() => setAgendarReuniaoOpen(true)}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 text-xs font-semibold py-2 transition-colors"
+            >
+              <Calendar className="w-3.5 h-3.5" />{' '}
+              {deal.stageId === 'stage-3'
+                ? 'Agendar reunião de comissão'
+                : deal.stageId === 'stage-4'
+                  ? 'Agendar reunião de turma'
+                  : 'Agendar reunião'}
+            </button>
+          )}
+
           {/* Detalhes da turma */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div
@@ -2709,6 +2726,15 @@ function DealDetailModal({
           pacotes={pacotes}
           sgeLink={sgeLink}
           onClose={() => setMostrarApresentacao(false)}
+        />
+      )}
+
+      {lead && (
+        <AgendarReuniaoModal
+          lead={lead}
+          stageId={deal.stageId}
+          open={agendarReuniaoOpen}
+          onOpenChange={setAgendarReuniaoOpen}
         />
       )}
     </div>

@@ -2529,6 +2529,7 @@ export default function LeadsPage() {
         <SelectedLeadDetail
           key={selectedLead.id}
           lead={selectedLead}
+          stageId={dealByLeadId.get(selectedLead.id)?.stageId}
           onClose={() => setSelectedLead(null)}
           onPatch={(patch) => {
             updateLead(selectedLead.id, patch)
@@ -2576,11 +2577,13 @@ export default function LeadsPage() {
 // ---------------------------------------------------------------------------
 function SelectedLeadDetail({
   lead,
+  stageId,
   onClose,
   onPatch,
   onOpenFullForm,
 }: {
   lead: Lead
+  stageId?: string
   onClose: () => void
   onPatch: (patch: Partial<Lead>) => void
   onOpenFullForm: () => void
@@ -2774,7 +2777,12 @@ function SelectedLeadDetail({
           onClick={() => setAgendarReuniaoOpen(true)}
           className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-300 hover:bg-orange-500/20 text-xs font-semibold py-2 transition-colors"
         >
-          <Calendar className="w-3.5 h-3.5" /> Agendar reunião
+          <Calendar className="w-3.5 h-3.5" />{' '}
+          {stageId === 'stage-3'
+            ? 'Agendar reunião de comissão'
+            : stageId === 'stage-4'
+              ? 'Agendar reunião de turma'
+              : 'Agendar reunião'}
         </button>
 
         <div className="space-y-4 py-2 text-xs">
@@ -3208,6 +3216,7 @@ function SelectedLeadDetail({
 
     <AgendarReuniaoModal
       lead={lead}
+      stageId={stageId}
       open={agendarReuniaoOpen}
       onOpenChange={setAgendarReuniaoOpen}
     />
