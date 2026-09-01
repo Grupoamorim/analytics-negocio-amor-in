@@ -1,0 +1,53 @@
+name: Plaud -> Transcricoes
+
+on:
+  schedule:
+    - cron: '23 * * * *'   # a cada hora (offset pra nao bater com os outros syncs)
+  workflow_dispatch:
+
+# Uma execucao por vez - o cache do token nao pode ser escrito em paralelo.
+concurrency:
+  group: plaud-transcricoes
+  cancel-in-progress: false
+
+jobs:
+  plaud-transcricoes:
+    name: Plaud (presencial) -> Supabase + Gemini
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install requests supabase google-genai
+
+      # Persiste o JWT do Plaud entre execucoes. Cada login novo cria uma
+      # sessao nova e desloga o app do celular do Lucas - o token dura ~30
+      # dias, entao so relogamos ~1x/mes em vez de toda hora.
+      - name: Restaurar token do Plaud (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: .plaud_token.json
+          key: plaud-token-${{ github.run_id }}
+          restore-keys: |
+            plaud-token-
+
+      - name: Executar coletor Plaud
+        env:
+          PLAUD_EMAIL:          ${{ secrets.PLAUD_EMAIL }}
+          PLAUD_PASSWORD:       ${{ secrets.PLAUD_PASSWORD }}
+          PLAUD_REGION:         ${{ secrets.PLAUD_REGION }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY:       ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL:         ${{ secrets.GEMINI_MODEL }}
+        run: python collectors/plaud_transcricoes.py
+
+      # Salva o token (possivelmente renovado) pro proximo run.
+      - name: Salvar token do Plaud (cache)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .plaud_token.json
+          key: plaud-token-${{ github.run_id }}

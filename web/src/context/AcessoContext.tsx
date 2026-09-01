@@ -91,9 +91,18 @@ export const AcessoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // `acesso_paginas` é nova e ainda não está no types.ts gerado — cast como o resto do projeto faz.
     const db = supabase as any
     const [{ data: perfis }, { data: acessos }] = await Promise.all([
-      supabase.from('profiles').select('id, nome, email, role').order('nome'),
+      supabase.from('profiles').select('id, nome, email, role, ativo').order('nome'),
       db.from('acesso_paginas').select('user_id, paginas'),
     ])
+
+    // Usuário inativado por um admin: desconecta na hora.
+    const meuPerfilRaw = (perfis || []).find((p: any) => p.id === userId)
+    if (meuPerfilRaw && meuPerfilRaw.ativo === false) {
+      await supabase.auth.signOut()
+      setRole('')
+      setBuscaConcluida(true)
+      return
+    }
 
     const listaUsuarios: UsuarioSistema[] = (perfis || []).map((p: any) => ({
       id: p.id,

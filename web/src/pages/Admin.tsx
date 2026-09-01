@@ -87,6 +87,7 @@ interface Perfil {
   email: string
   nome: string
   role: 'admin' | 'financeiro' | 'comercial' | 'membro'
+  ativo?: boolean
   created_at: string
 }
 
@@ -203,6 +204,36 @@ export default function Admin() {
     await supabase.from('profiles').update({ role }).eq('id', id)
     setPerfis((prev) => prev.map((p) => (p.id === id ? { ...p, role } : p)))
     setSalvandoId(null)
+  }
+
+  async function toggleAtivo(p: Perfil) {
+    if (p.id === user?.id) {
+      toast({
+        title: 'Você não pode inativar a si mesmo',
+        description: 'Peça a outro administrador para fazer isso.',
+        variant: 'destructive',
+      })
+      return
+    }
+    const novoAtivo = p.ativo === false // estava inativo → reativa
+    const acao = novoAtivo ? 'reativar' : 'inativar'
+    if (!confirm(`Deseja ${acao} o acesso de "${p.nome || p.email}"?${novoAtivo ? '' : ' A pessoa é desconectada e não consegue mais entrar até ser reativada.'}`)) {
+      return
+    }
+    setSalvandoId(p.id)
+    const { error } = await supabase.from('profiles').update({ ativo: novoAtivo }).eq('id', p.id)
+    setSalvandoId(null)
+    if (error) {
+      toast({ title: `Erro ao ${acao}`, description: error.message, variant: 'destructive' })
+      return
+    }
+    setPerfis((prev) => prev.map((x) => (x.id === p.id ? { ...x, ativo: novoAtivo } : x)))
+    toast({
+      title: novoAtivo ? 'Usuário reativado' : 'Usuário inativado',
+      description: novoAtivo
+        ? `${p.nome || p.email} pode entrar de novo.`
+        : `${p.nome || p.email} perde o acesso na próxima vez que abrir o sistema.`,
+    })
   }
 
   function abrirEditorAcesso(p: Perfil) {
@@ -952,7 +983,13 @@ export default function Admin() {
                       <Fragment key={p.id}>
                         <tr className="border-b border-white/[0.04]">
                           <td className="py-2.5 text-slate-200">
-                            {p.nome} {p.id === user?.id && <span className="text-orange-400 text-xs">(você)</span>}
+                            <span className={p.ativo === false ? 'line-through text-slate-500' : ''}>{p.nome}</span>{' '}
+                            {p.id === user?.id && <span className="text-orange-400 text-xs">(você)</span>}
+                            {p.ativo === false && (
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide bg-red-500/15 text-red-300 rounded px-1.5 py-0.5">
+                                Inativo
+                              </span>
+                            )}
                           </td>
                           <td className="py-2.5 text-slate-400">{p.email}</td>
                           <td className="py-2.5">
@@ -987,6 +1024,24 @@ export default function Admin() {
                             >
                               {resetandoSenhaId === p.id ? 'Enviando...' : 'Resetar senha'}
                             </button>
+                            {p.id !== user?.id && (
+                              <button
+                                type="button"
+                                onClick={() => toggleAtivo(p)}
+                                disabled={salvandoId === p.id}
+                                className={`text-[11px] underline decoration-dotted ${
+                                  p.ativo === false
+                                    ? 'text-emerald-400 hover:text-emerald-300'
+                                    : 'text-slate-400 hover:text-red-400'
+                                }`}
+                              >
+                                {salvandoId === p.id
+                                  ? '...'
+                                  : p.ativo === false
+                                    ? 'Reativar'
+                                    : 'Inativar'}
+                              </button>
+                            )}
                           </td>
                         </tr>
                         {!ehAdmin && editandoAcessoId === p.id && (
