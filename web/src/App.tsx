@@ -13,6 +13,7 @@ import Login from '@/pages/Login'
 import RedefinirSenha from '@/pages/RedefinirSenha'
 import Index from '@/pages/Index'
 import PainelFinanceiro from '@/pages/PainelFinanceiro'
+import Agenda from '@/pages/Agenda'
 import Pipeline from '@/pages/Pipeline'
 import Leads from '@/pages/Leads'
 import Probability from '@/pages/Probability'
@@ -83,6 +84,7 @@ const App = () => (
             >
               <Route path="/" element={<RotaComPermissao path="/"><Index /></RotaComPermissao>} />
               <Route path="/painel-financeiro" element={<RotaComPermissao path="/painel-financeiro"><PainelFinanceiro /></RotaComPermissao>} />
+              <Route path="/agenda" element={<RotaComPermissao path="/agenda"><Agenda /></RotaComPermissao>} />
               <Route path="/pipeline" element={<RotaComPermissao path="/pipeline"><Pipeline /></RotaComPermissao>} />
               <Route path="/leads" element={<RotaComPermissao path="/leads"><Leads /></RotaComPermissao>} />
               <Route path="/contatos" element={<RotaComPermissao path="/contatos"><Contatos /></RotaComPermissao>} />

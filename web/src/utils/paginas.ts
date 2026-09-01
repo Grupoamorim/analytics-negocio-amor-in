@@ -11,6 +11,7 @@ export interface PaginaDef {
 export const PAGINAS: PaginaDef[] = [
   { path: '/', label: 'Painel Comercial', grupo: 'Comercial' },
   { path: '/painel-financeiro', label: 'Painel Financeiro', grupo: 'Financeiro' },
+  { path: '/agenda', label: 'Agenda', grupo: 'Comercial' },
   { path: '/captacao', label: 'Mapa de Mercado', grupo: 'Comercial' },
   { path: '/pipeline', label: 'Funil Amor In', grupo: 'Comercial' },
   { path: '/leads', label: 'Turmas', grupo: 'Comercial' },
@@ -35,6 +36,7 @@ export const PAGINAS_COMERCIAL: string[] = PAGINAS.filter((p) => p.grupo === 'Co
 /** Conjunto padrão para um usuário não-admin recém-criado (comercial, sem financeiro). */
 export const PAGINAS_PADRAO_COMERCIAL: string[] = [
   '/',
+  '/agenda',
   '/captacao',
   '/pipeline',
   '/leads',
@@ -62,7 +64,7 @@ export const PAGINAS_PADRAO_POR_CARGO: Record<string, string[]> = {
   admin: TODAS_PAGINAS,
   financeiro: [...PAGINAS_FINANCEIRO, '/relatorios'],
   comercial: PAGINAS_PADRAO_COMERCIAL,
-  membro: ['/', '/leads', '/probabilidade', '/notas'],
+  membro: ['/', '/agenda', '/leads', '/probabilidade', '/notas'],
 }
 
 export function paginasPadraoPorCargo(role: string): string[] {

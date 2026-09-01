@@ -27,6 +27,7 @@ import {
   Link as LinkIcon,
   ShieldCheck,
   UserPlus,
+  CalendarClock,
 } from 'lucide-react'
 import { getTurmaDisplayName, getFullTurmaName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { matchesSearch } from '@/utils/searchMatch'
@@ -50,6 +51,7 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
     section: 'Comercial',
     items: [
       { path: '/', label: 'Painel Comercial', icon: LayoutDashboard },
+      { path: '/agenda', label: 'Agenda', icon: CalendarClock },
       { path: '/captacao', label: 'Mapa de Mercado', icon: QrCode },
       { path: '/pipeline', label: 'Funil Amor In', icon: Kanban },
       { path: '/leads', label: 'Turmas', icon: GraduationCap },

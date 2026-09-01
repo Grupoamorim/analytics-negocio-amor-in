@@ -28,6 +28,7 @@ import {
   Check,
   Presentation,
   Filter,
+  Calendar,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import { useAcesso } from '@/context/AcessoContext'
@@ -96,6 +97,7 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import LastEditedBy from '@/components/LastEditedBy'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
+import AgendarReuniaoModal from '@/components/AgendarReuniaoModal'
 import {
   PacoteTurma,
   listarPacotes,
@@ -2602,6 +2604,7 @@ function SelectedLeadDetail({
   const [gerandoMensagem, setGerandoMensagem] = useState(false)
   const [copiado, setCopiado] = useState(false)
   const [mostrarApresentacao, setMostrarApresentacao] = useState(false)
+  const [agendarReuniaoOpen, setAgendarReuniaoOpen] = useState(false)
   const [cursosConhecidos, setCursosConhecidos] = useState<string[]>([])
   const [cidadeFaculdades, setCidadeFaculdades] = useState<CidadeFaculdadesMap>({})
   const [duracaoCursos, setDuracaoCursos] = useState<DuracaoCurso[]>([])
@@ -2765,6 +2768,14 @@ function SelectedLeadDetail({
           </div>
           <LastEditedBy email={lead.updatedByEmail} updatedAt={lead.updatedAt} className="mt-1" />
         </DialogHeader>
+
+        <button
+          type="button"
+          onClick={() => setAgendarReuniaoOpen(true)}
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-300 hover:bg-orange-500/20 text-xs font-semibold py-2 transition-colors"
+        >
+          <Calendar className="w-3.5 h-3.5" /> Agendar reunião
+        </button>
 
         <div className="space-y-4 py-2 text-xs">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
@@ -3194,6 +3205,12 @@ function SelectedLeadDetail({
         onClose={() => setMostrarApresentacao(false)}
       />
     )}
+
+    <AgendarReuniaoModal
+      lead={lead}
+      open={agendarReuniaoOpen}
+      onOpenChange={setAgendarReuniaoOpen}
+    />
     </>
   )
 }

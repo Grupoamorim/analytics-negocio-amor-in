@@ -1510,6 +1510,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          ativo: boolean
           created_at: string
           email: string | null
           id: string
@@ -1518,6 +1519,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ativo?: boolean
           created_at?: string
           email?: string | null
           id: string
@@ -1526,6 +1528,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ativo?: boolean
           created_at?: string
           email?: string | null
           id?: string
@@ -1534,6 +1537,78 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      reunioes_agendadas: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          descricao: string | null
+          fim: string
+          gcal_event_id: string | null
+          gcal_html_link: string | null
+          id: string
+          inicio: string
+          modalidade: string
+          responsavel: string | null
+          status: string
+          texto_extra: string | null
+          tipo_reuniao: string
+          titulo: string
+          turma_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          fim: string
+          gcal_event_id?: string | null
+          gcal_html_link?: string | null
+          id?: string
+          inicio: string
+          modalidade?: string
+          responsavel?: string | null
+          status?: string
+          texto_extra?: string | null
+          tipo_reuniao?: string
+          titulo: string
+          turma_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          fim?: string
+          gcal_event_id?: string | null
+          gcal_html_link?: string | null
+          id?: string
+          inicio?: string
+          modalidade?: string
+          responsavel?: string | null
+          status?: string
+          texto_extra?: string | null
+          tipo_reuniao?: string
+          titulo?: string
+          turma_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reunioes_agendadas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reunioes_agendadas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sge_adesoes: {
         Row: {
