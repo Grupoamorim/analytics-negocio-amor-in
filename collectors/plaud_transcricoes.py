@@ -16,8 +16,9 @@ Fluxo:
         celular do Lucas.
   2. Lista as gravacoes (GET /file/simple/web).
   3. So processa gravacao cujo NOME (que o Lucas renomeia no app do Plaud)
-     contenha "(PR-S)" ou "(PR-F)" E ("Comissao" ou "Turma"). As gravacoes
-     com nome automatico do Plaud sao ignoradas (nao da pra saber a turma).
+     contenha "(PR-S)" ou "(PR-F)" E "Apresentacao" E ("Comissao" ou
+     "Turma") - mesma regra do fluxo Fathom. As gravacoes com nome
+     automatico do Plaud sao ignoradas (nao da pra saber a turma).
   4. Casa o nome com a tabela `turmas` no Supabase (fuzzy: curso+faculdade+
      turma+ano_formatura contidos no texto). Se nao achar exatamente UMA,
      pula e reporta (nunca inventa - regra do projeto).
@@ -209,10 +210,13 @@ def epoch_ms_gravacao(g):
 # ── parse do nome (espelha o parser do Fathom, mas presencial) ──
 def parse_nome(nome):
     """So aceita reuniao presencial de venda: precisa ter (PR-S) ou (PR-F)
-    E ("Comissao" ou "Turma")."""
+    E "Apresentacao" E ("Comissao" ou "Turma") - mesma regra do fluxo Fathom."""
     n = (nome or "").strip()
 
     if not re.search(r"\(pr-[sf]\)", n, re.I):
+        return None
+
+    if not re.search(r"apresenta[cç][aã]o", n, re.I):
         return None
 
     tipo = None
