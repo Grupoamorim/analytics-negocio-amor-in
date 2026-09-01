@@ -56,11 +56,14 @@ Deno.serve(async (req) => {
     .eq('turma_id', ap.turma_id)
     .order('valor', { ascending: false })
 
+  const { data: logo } = await admin.from('logo_marca_publica').select('logo_url').maybeSingle()
+
   return json({
     titulo: ap.titulo || (turma ? nomeCompletoTurma(turma) : 'Apresentação'),
     nomeTurma: turma ? nomeCompletoTurma(turma) : '',
     empresa: turma?.empresa || 'AIF',
     mensagem: ap.mensagem || null,
+    logoUrl: logo?.logo_url || null,
     fotos: ap.fotos || [],
     pacotes: (pacotes || []).map((p: any) => ({
       nome: p.nome,
