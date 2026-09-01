@@ -216,6 +216,19 @@ export default function Layout() {
     setMobileMenuOpen(false)
   }, [location.pathname])
 
+  // Favicon da aba do navegador: usa o ícone enviado em Administração > Marca,
+  // se houver. Sem isso, fica o favicon estático (a pena da marca) do index.html.
+  useEffect(() => {
+    const url = configuracoes.faviconUrl
+    if (!url) return
+    const links = document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]')
+    links.forEach((l) => l.parentNode?.removeChild(l))
+    const link = document.createElement('link')
+    link.rel = 'icon'
+    link.href = url
+    document.head.appendChild(link)
+  }, [configuracoes.faviconUrl])
+
   // Ícone da marca configurado (usa o logo enviado em Configurações > Marca, se houver)
   const BrandIconComponent = () => {
     if (configuracoes.logoUrl) {

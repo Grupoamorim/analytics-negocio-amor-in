@@ -325,6 +325,7 @@ export type Database = {
           created_at: string
           email_alerta_erro: string | null
           email_alerta_turma_nova: string | null
+          favicon_url: string | null
           filtros_salvos: Json
           gemini_api_key: string | null
           id: string
@@ -340,6 +341,7 @@ export type Database = {
           created_at?: string
           email_alerta_erro?: string | null
           email_alerta_turma_nova?: string | null
+          favicon_url?: string | null
           filtros_salvos?: Json
           gemini_api_key?: string | null
           id?: string
@@ -355,6 +357,7 @@ export type Database = {
           created_at?: string
           email_alerta_erro?: string | null
           email_alerta_turma_nova?: string | null
+          favicon_url?: string | null
           filtros_salvos?: Json
           gemini_api_key?: string | null
           id?: string

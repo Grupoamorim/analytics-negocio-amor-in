@@ -38,6 +38,7 @@ export interface ConfiguracoesData {
   sgeToken: string
   geminiApiKey: string
   logoUrl: string
+  faviconUrl: string
   resendApiKey: string
   emailAlertaTurmaNova: string
   emailAlertaErro: string
@@ -55,6 +56,7 @@ const DEFAULT_CONFIG: ConfiguracoesData = {
   sgeToken: '',
   geminiApiKey: '',
   logoUrl: '',
+  faviconUrl: '',
   resendApiKey: '',
   emailAlertaTurmaNova: '',
   emailAlertaErro: '',
@@ -72,6 +74,7 @@ function mapRowToConfig(row: ConfiguracaoRow): ConfiguracoesData {
     sgeToken: row.sge_token || '',
     geminiApiKey: row.gemini_api_key || '',
     logoUrl: row.logo_url || '',
+    faviconUrl: row.favicon_url || '',
     resendApiKey: row.resend_api_key || '',
     emailAlertaTurmaNova: row.email_alerta_turma_nova || '',
     emailAlertaErro: row.email_alerta_erro || '',
@@ -144,6 +147,7 @@ export function useConfiguracoes() {
           sge_token: localToMigrate.sgeToken || '',
           gemini_api_key: localToMigrate.geminiApiKey || '',
           logo_url: localToMigrate.logoUrl || '',
+          favicon_url: localToMigrate.faviconUrl || '',
           resend_api_key: localToMigrate.resendApiKey || '',
           email_alerta_turma_nova: localToMigrate.emailAlertaTurmaNova || '',
           email_alerta_erro: localToMigrate.emailAlertaErro || '',
@@ -208,6 +212,7 @@ export function useConfiguracoes() {
           sge_token: updated.sgeToken,
           gemini_api_key: updated.geminiApiKey,
           logo_url: updated.logoUrl,
+          favicon_url: updated.faviconUrl,
           resend_api_key: updated.resendApiKey,
           email_alerta_turma_nova: updated.emailAlertaTurmaNova,
           email_alerta_erro: updated.emailAlertaErro,

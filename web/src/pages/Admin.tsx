@@ -177,6 +177,11 @@ export default function Admin() {
   const [logoPreview, setLogoPreview] = useState('')
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
+  // Favicon (ícone da aba do navegador)
+  const [faviconFile, setFaviconFile] = useState<File | null>(null)
+  const [faviconPreview, setFaviconPreview] = useState('')
+  const [uploadingFavicon, setUploadingFavicon] = useState(false)
+
   // Status de conexão das integrações
   const [sgeStatus, setSgeStatus] = useState<{ ok: boolean; message: string } | null>(null)
   const [testingSGE, setTestingSGE] = useState(false)
@@ -514,6 +519,7 @@ export default function Admin() {
       setGeminiKey(config.geminiApiKey || '')
       if (config.geminiApiKey) saveGeminiApiKey(config.geminiApiKey)
       if (config.logoUrl) setLogoPreview(config.logoUrl)
+      if (config.faviconUrl) setFaviconPreview(config.faviconUrl)
       setResendApiKey(config.resendApiKey || '')
       setEmailAlertaTurmaNova(config.emailAlertaTurmaNova || '')
       setEmailAlertaErro(config.emailAlertaErro || '')
@@ -676,6 +682,78 @@ export default function Admin() {
     } catch {
       toast({
         title: 'Erro ao remover logo',
+        description: 'Tente novamente em instantes.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const FAVICON_TYPES = ['image/png', 'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon']
+
+  const handleSelectFavicon = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!FAVICON_TYPES.includes(file.type) && !file.name.toLowerCase().endsWith('.ico')) {
+      toast({
+        title: 'Formato inválido',
+        description: 'Envie um arquivo PNG, SVG ou ICO (quadrado, idealmente 512x512).',
+        variant: 'destructive',
+      })
+      return
+    }
+    setFaviconFile(file)
+    setFaviconPreview(URL.createObjectURL(file))
+  }
+
+  const handleUploadFavicon = async () => {
+    if (!faviconFile || !user) return
+    setUploadingFavicon(true)
+    try {
+      const ext = faviconFile.name.toLowerCase().endsWith('.ico')
+        ? 'ico'
+        : faviconFile.type === 'image/svg+xml'
+          ? 'svg'
+          : 'png'
+      const path = `${user.id}/favicon.${ext}`
+      const { error: uploadErr } = await supabase.storage
+        .from('logos')
+        .upload(path, faviconFile, { upsert: true, contentType: faviconFile.type || 'image/png' })
+      if (uploadErr) throw uploadErr
+
+      const { data } = supabase.storage.from('logos').getPublicUrl(path)
+      const publicUrl = `${data.publicUrl}?v=${Date.now()}`
+
+      await updateConfig({ faviconUrl: publicUrl })
+      setFaviconFile(null)
+      toast({
+        title: 'Ícone da aba atualizado',
+        description: 'O favicon foi enviado. Pode levar um hard-refresh (Ctrl+Shift+R) para aparecer.',
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao enviar o ícone',
+        description: err.message || 'Não foi possível enviar a imagem.',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingFavicon(false)
+    }
+  }
+
+  const handleRemoveFavicon = async () => {
+    try {
+      if (user) {
+        await supabase.storage
+          .from('logos')
+          .remove([`${user.id}/favicon.png`, `${user.id}/favicon.svg`, `${user.id}/favicon.ico`])
+      }
+      await updateConfig({ faviconUrl: '' })
+      setFaviconPreview('')
+      setFaviconFile(null)
+      toast({ title: 'Ícone da aba removido', description: 'Voltou para o favicon padrão (a pena da marca).' })
+    } catch {
+      toast({
+        title: 'Erro ao remover o ícone',
         description: 'Tente novamente em instantes.',
         variant: 'destructive',
       })
@@ -1721,6 +1799,71 @@ export default function Admin() {
                 >
                   <Save className="h-4 w-4 mr-1.5" />
                   {uploadingLogo ? 'Enviando...' : 'Salvar Logo'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <ImageIcon className="h-5 w-5 text-orange-400" />
+                <CardTitle>Ícone da aba do navegador (favicon)</CardTitle>
+              </div>
+              <CardDescription>
+                É o símbolo que aparece na aba do navegador, ao lado do nome do site. Envie a pena da
+                marca em PNG quadrado (512x512), SVG ou ICO — de preferência com fundo transparente.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isAuthenticated && (
+                <p className="text-xs text-amber-400">
+                  Faça login na aba "Banco de Dados" para poder enviar o ícone.
+                </p>
+              )}
+
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-xl border border-dashed border-white/[0.15] bg-[repeating-conic-gradient(#1b1f2a_0%_25%,#0a0f14_0%_50%)] bg-[length:12px_12px] flex items-center justify-center overflow-hidden shrink-0">
+                  {faviconPreview ? (
+                    <img src={faviconPreview} alt="Favicon atual" className="w-full h-full object-contain" />
+                  ) : (
+                    <ImageIcon className="w-6 h-6 text-slate-600" />
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Input
+                    id="favicon-file"
+                    type="file"
+                    accept="image/png,image/svg+xml,image/x-icon,.ico"
+                    onChange={handleSelectFavicon}
+                    disabled={!isAuthenticated}
+                  />
+                  <p className="text-xs text-slate-500">
+                    PNG 512x512, SVG ou ICO. Pode precisar de um hard-refresh (Ctrl+Shift+R) para o
+                    navegador trocar o ícone em cache.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/[0.06]">
+                {faviconPreview && (
+                  <Button
+                    variant="outline"
+                    onClick={handleRemoveFavicon}
+                    disabled={!isAuthenticated || uploadingFavicon}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                    Remover
+                  </Button>
+                )}
+                <Button
+                  onClick={handleUploadFavicon}
+                  disabled={!isAuthenticated || !faviconFile || uploadingFavicon}
+                  className="bg-orange-500 hover:bg-orange-600"
+                >
+                  <Save className="h-4 w-4 mr-1.5" />
+                  {uploadingFavicon ? 'Enviando...' : 'Salvar ícone'}
                 </Button>
               </div>
             </CardContent>
