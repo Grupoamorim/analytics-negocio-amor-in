@@ -15,7 +15,8 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install supabase
+          cache-dependency-path: collectors/requirements.txt
+      - run: pip install -r collectors/requirements.txt
       - name: Executar conclusao automatica de turmas
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}

@@ -15,7 +15,8 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install requests supabase python-dotenv google-genai
+          cache-dependency-path: collectors/requirements.txt
+      - run: pip install -r collectors/requirements.txt
       - name: Executar coletor SGE
         env:
           SGE_CNPJ:             ${{ secrets.SGE_CNPJ }}

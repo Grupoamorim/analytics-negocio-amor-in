@@ -1,0 +1,11 @@
+# Dependências dos coletores rodados pelo GitHub Actions (.github/workflows/).
+# Este arquivo também serve de chave pro cache de pip do actions/setup-python —
+# sem ele, o setup-python com cache:'pip' quebra ("No file matched to
+# **/requirements.txt"), que foi o que derrubou TODOS os workflows quando o
+# requirements.txt do legado Streamlit foi removido.
+requests
+supabase
+python-dotenv
+google-genai
+google-api-python-client
+google-auth

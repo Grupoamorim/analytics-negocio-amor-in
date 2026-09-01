@@ -20,7 +20,8 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install requests supabase google-genai
+          cache-dependency-path: collectors/requirements.txt
+      - run: pip install -r collectors/requirements.txt
 
       # Persiste o JWT do Plaud entre execucoes. Cada login novo cria uma
       # sessao nova e desloga o app do celular do Lucas - o token dura ~30

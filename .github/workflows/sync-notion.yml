@@ -15,7 +15,8 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install requests supabase python-dotenv
+          cache-dependency-path: collectors/requirements.txt
+      - run: pip install -r collectors/requirements.txt
       - name: Executar coletor Notion
         env:
           NOTION_TOKEN:          ${{ secrets.NOTION_TOKEN }}

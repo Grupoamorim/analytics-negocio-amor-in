@@ -19,7 +19,8 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install supabase google-api-python-client google-auth
+          cache-dependency-path: collectors/requirements.txt
+      - run: pip install -r collectors/requirements.txt
       - id: auth
         name: Autenticar no Google Cloud (Workload Identity Federation - sem chave JSON)
         uses: google-github-actions/auth@v2

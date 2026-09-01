@@ -15,7 +15,8 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install requests supabase
+          cache-dependency-path: collectors/requirements.txt
+      - run: pip install -r collectors/requirements.txt
       - name: Executar deteccao de turma fechada
         env:
           SGE_CNPJ:             ${{ secrets.SGE_CNPJ }}
