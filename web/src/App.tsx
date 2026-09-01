@@ -14,6 +14,7 @@ import RedefinirSenha from '@/pages/RedefinirSenha'
 import Index from '@/pages/Index'
 import PainelFinanceiro from '@/pages/PainelFinanceiro'
 import Agenda from '@/pages/Agenda'
+import ApresentacaoPublica from '@/pages/ApresentacaoPublica'
 import Pipeline from '@/pages/Pipeline'
 import Leads from '@/pages/Leads'
 import Probability from '@/pages/Probability'
@@ -110,6 +111,7 @@ const App = () => (
               />
             </Route>
             <Route path="/captacao/form" element={<CaptacaoForm />} />
+            <Route path="/p/:token" element={<ApresentacaoPublica />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>

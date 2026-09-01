@@ -169,6 +169,57 @@ export type Database = {
         }
         Relationships: []
       }
+      apresentacao_publica: {
+        Row: {
+          created_at: string
+          fotos: string[]
+          id: string
+          mensagem: string | null
+          publicada: boolean
+          titulo: string | null
+          token: string
+          turma_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fotos?: string[]
+          id?: string
+          mensagem?: string | null
+          publicada?: boolean
+          titulo?: string | null
+          token?: string
+          turma_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fotos?: string[]
+          id?: string
+          mensagem?: string | null
+          publicada?: boolean
+          titulo?: string | null
+          token?: string
+          turma_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apresentacao_publica_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: true
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apresentacao_publica_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: true
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       captacao_leads: {
         Row: {
           ano_formatura: string

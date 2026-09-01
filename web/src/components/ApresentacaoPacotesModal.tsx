@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, ChevronLeft, ChevronRight, Printer, Instagram, Phone, Mail } from 'lucide-react'
 import type { Lead } from '@/types/crm'
 import { getFullTurmaName } from '@/types/crm'
 import type { PacoteTurma } from '@/utils/pacotesTurma'
 import type { SGELink } from '@/utils/sgeIntegration'
+import { fotosDaTurma } from '@/utils/apresentacaoPublica'
 
 const ORANGE = '#f97316'
 
@@ -25,7 +26,15 @@ export default function ApresentacaoPacotesModal({
   onClose,
 }: ApresentacaoPacotesModalProps) {
   const pacotesOrdenados = [...pacotes].sort((a, b) => b.valor - a.valor)
-  const totalSlides = 1 + pacotesOrdenados.length + 1
+  const [fotos, setFotos] = useState<string[]>([])
+  useEffect(() => {
+    fotosDaTurma(lead.id).then(setFotos).catch(() => {})
+  }, [lead.id])
+  const temFotos = fotos.length > 0
+  // capa + (fotos?) + pacotes + contato
+  const totalSlides = 1 + (temFotos ? 1 : 0) + pacotesOrdenados.length + 1
+  const idxFotos = temFotos ? 1 : -1
+  const idxContato = totalSlides - 1
   const [index, setIndex] = useState(0)
 
   const irPara = (i: number) => setIndex(Math.max(0, Math.min(totalSlides - 1, i)))
@@ -59,10 +68,11 @@ export default function ApresentacaoPacotesModal({
 
       <div id="apresentacao-print-area" className="w-full h-full flex items-center justify-center">
         {index === 0 && <SlideCapa lead={lead} />}
-        {index > 0 && index <= pacotesOrdenados.length && (
-          <SlidePacote pacote={pacotesOrdenados[index - 1]} />
+        {index === idxFotos && <SlideFotos fotos={fotos} />}
+        {index > idxFotos && index < idxContato && (
+          <SlidePacote pacote={pacotesOrdenados[index - 1 - (temFotos ? 1 : 0)]} />
         )}
-        {index === totalSlides - 1 && <SlideContato lead={lead} sgeLink={sgeLink} />}
+        {index === idxContato && <SlideContato lead={lead} sgeLink={sgeLink} />}
       </div>
 
       {!!totalSlides && (
@@ -124,6 +134,26 @@ function SlideCapa({ lead }: { lead: Lead }) {
         <h1 className="text-3xl sm:text-4xl font-bold">{getFullTurmaName(lead)}</h1>
         <div className="w-16 h-px bg-white/20 my-6" />
         <div className="text-sm text-slate-400 uppercase tracking-[0.2em]">Orçamento de Pacotes</div>
+      </div>
+    </SlideShell>
+  )
+}
+
+function SlideFotos({ fotos }: { fotos: string[] }) {
+  return (
+    <SlideShell>
+      <div className="flex-1 overflow-y-auto">
+        <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-3">Nossas fotos</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {fotos.map((url) => (
+            <img
+              key={url}
+              src={url}
+              alt=""
+              className="w-full aspect-square object-cover rounded-lg border border-white/10"
+            />
+          ))}
+        </div>
       </div>
     </SlideShell>
   )

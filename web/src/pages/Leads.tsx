@@ -98,6 +98,7 @@ import { cn } from '@/lib/utils'
 import LastEditedBy from '@/components/LastEditedBy'
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
 import AgendarReuniaoModal from '@/components/AgendarReuniaoModal'
+import ApresentacaoPublicaPanel from '@/components/ApresentacaoPublicaPanel'
 import {
   PacoteTurma,
   listarPacotes,
@@ -3190,6 +3191,10 @@ function SelectedLeadDetail({
                 )}
               </div>
             )}
+          </div>
+
+          <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+            <ApresentacaoPublicaPanel turmaId={lead.id} />
           </div>
         </div>
 
