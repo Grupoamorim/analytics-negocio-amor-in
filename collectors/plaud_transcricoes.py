@@ -28,7 +28,7 @@ Fluxo:
      pula e reporta (nunca inventa - regra do projeto).
   5. Puxa a transcricao (GET /file/detail/<id> -> pre_download_content_list).
   6. Analisa com Gemini (probabilidade/sentimento/resumo/pontos).
-  7. Grava em `transcricoes` (Supabase). Dedup por `url` = plaud:<file_id>.
+  7. Grava em `transcricoes` (Supabase). Dedup por `url` = https://web.plaud.ai/file/<file_id>.
 
 Reunioes online (Fathom, tag (ON)) sao outro fluxo - collectors/fathom_transcricoes.py.
 """
@@ -370,7 +370,7 @@ def main():
             # nome automático do Plaud ou fora do padrão -> nem reporta (ruído)
             continue
 
-        url_plaud = f"plaud:{fid}"
+        url_plaud = f"https://web.plaud.ai/file/{fid}"
         existente = sb.table("transcricoes").select("id").eq("url", url_plaud).limit(1).execute()
         if existente.data:
             continue  # já processado
