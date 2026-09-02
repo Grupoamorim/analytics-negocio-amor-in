@@ -296,7 +296,7 @@ const MANUAL_ORDER_KEY = 'turmas_manual_order'
 
 export default function LeadsPage() {
   const { leads, deals, members, addLead, updateLead, deleteLead, updateDeal } = useCRM()
-  const { usuarios: usuariosSistema } = useAcesso()
+  const { usuarios: usuariosSistema, podeGerenciarTurmas } = useAcesso()
   // Credenciais do SGE vêm sempre do Supabase (mesma fonte usada em Configurações),
   // nunca do localStorage — assim, cadastrar uma vez funciona em qualquer dispositivo.
   const { config: sgeAppConfig } = useConfiguracoes()
@@ -2074,15 +2074,17 @@ export default function LeadsPage() {
                             <Edit2 className="h-4 w-4" />
                           </Button>
 
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-500 hover:text-rose-600"
-                            onClick={() => setDeleteConfirmId(lead.id)}
-                            title="Excluir Turma"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {podeGerenciarTurmas && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-500 hover:text-rose-600"
+                              onClick={() => setDeleteConfirmId(lead.id)}
+                              title="Excluir Turma"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

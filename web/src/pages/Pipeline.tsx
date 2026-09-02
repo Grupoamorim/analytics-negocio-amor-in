@@ -67,6 +67,7 @@ import { matchesSearch } from '@/utils/searchMatch'
 import { notificarNovoResponsavel } from '@/utils/notificacoes'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { useAcesso } from '@/context/AcessoContext'
 import {
   PacoteTurma,
   listarPacotes,
@@ -134,6 +135,7 @@ export default function Pipeline() {
     marcarRespondeu,
   } = useCRM()
   const { toast } = useToast()
+  const { podeGerenciarTurmas } = useAcesso()
 
   const [draggingDealId, setDraggingDealId] = useState<string | null>(null)
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
@@ -1006,7 +1008,7 @@ export default function Pipeline() {
                               <span className="font-bold text-emerald-400 text-xs">
                                 R$ {(deal.value / 1000).toFixed(0)}k
                               </span>
-                              {stage.id === 'stage-1' && (
+                              {stage.id === 'stage-1' && podeGerenciarTurmas && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1516,6 +1518,7 @@ function DealDetailModal({
 }: DealDetailModalProps) {
   const { toast } = useToast()
   const { user } = useAuth()
+  const { podeGerenciarTurmas } = useAcesso()
   const [novoContatoNome, setNovoContatoNome] = useState('')
   const [novoContatoTelefone, setNovoContatoTelefone] = useState('')
   const [linkInput, setLinkInput] = useState(proposalLink)
@@ -1809,14 +1812,16 @@ function DealDetailModal({
             >
               <Copy className="w-4 h-4" />
             </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              title="Apagar turma"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {podeGerenciarTurmas && (
+              <button
+                type="button"
+                onClick={onDelete}
+                title="Apagar turma"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}

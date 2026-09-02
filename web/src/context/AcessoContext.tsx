@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
-import { PAGINAS_PADRAO_COMERCIAL, TODAS_PAGINAS } from '@/utils/paginas'
+import { PAGINAS_PADRAO_COMERCIAL, TODAS_PAGINAS, podeGerenciarTurmas as calcPodeGerenciarTurmas } from '@/utils/paginas'
 
 export interface UsuarioSistema {
   id: string
@@ -24,6 +24,8 @@ interface AcessoContextType {
   email: string
   role: string
   isAdmin: boolean
+  /** admin ou comercial_admin — pode apagar/gerenciar turmas. */
+  podeGerenciarTurmas: boolean
 
   /** Todos os perfis do sistema — usado em dropdowns (SDR/closer/vendedor) e no filtro. */
   usuarios: UsuarioSistema[]
@@ -79,6 +81,7 @@ export const AcessoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const userId = user?.id ?? null
   const email = user?.email ?? ''
   const isAdmin = role === 'admin'
+  const podeGerenciarTurmas = calcPodeGerenciarTurmas(role)
 
   const carregar = useCallback(async () => {
     if (authLoading) return
@@ -208,6 +211,7 @@ export const AcessoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     email,
     role,
     isAdmin,
+    podeGerenciarTurmas,
     usuarios,
     paginasPermitidas,
     podeVer,

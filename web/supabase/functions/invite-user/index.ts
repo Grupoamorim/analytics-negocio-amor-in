@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
   const paginas = Array.isArray(body.paginas)
     ? (body.paginas as unknown[]).filter((p): p is string => typeof p === 'string')
     : null
-  const CARGOS_VALIDOS = ['admin', 'financeiro', 'comercial', 'membro']
+  const CARGOS_VALIDOS = ['admin', 'comercial_admin', 'financeiro', 'comercial', 'membro']
 
   if (!email || !email.includes('@')) return json({ error: 'E-mail inválido' }, 400)
 

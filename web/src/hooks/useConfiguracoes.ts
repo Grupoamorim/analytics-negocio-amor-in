@@ -115,18 +115,29 @@ export function useConfiguracoes() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase
-        .from('configuracoes')
+      // Config "pública": o que todo usuário logado precisa (logo, favicon,
+      // chave do Gemini, preferências). A tabela `configuracoes` em si (com
+      // sge_token, resend_api_key...) só é legível por admin.
+      const { data: pub, error: pubErr } = await (supabase as any)
+        .from('config_publica')
         .select('*')
-        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (pubErr) throw pubErr
+
+      // Colunas secretas: só volta pra admin (RLS). Pra não-admin vem vazio,
+      // sem erro.
+      const { data: secreto } = await supabase
+        .from('configuracoes')
+        .select('id, sge_token, resend_api_key, email_alerta_turma_nova, email_alerta_erro')
         .limit(1)
         .maybeSingle()
 
-      if (err) throw err
+      const data = pub ? { ...(secreto || {}), ...pub } : null
 
       if (data) {
-        setConfigId(data.id)
-        const mapped = mapRowToConfig(data)
+        setConfigId((data as any).id)
+        const mapped = mapRowToConfig(data as any)
         setConfig(mapped)
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped))
         mirrorToLegacyStorage(mapped)

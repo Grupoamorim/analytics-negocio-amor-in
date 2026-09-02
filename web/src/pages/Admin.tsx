@@ -92,13 +92,14 @@ interface Perfil {
   id: string
   email: string
   nome: string
-  role: 'admin' | 'financeiro' | 'comercial' | 'membro'
+  role: 'admin' | 'comercial_admin' | 'financeiro' | 'comercial' | 'membro'
   ativo?: boolean
   created_at: string
 }
 
 const CARGOS: { value: Perfil['role']; label: string }[] = [
   { value: 'admin', label: 'Administrador' },
+  { value: 'comercial_admin', label: 'Comercial (gerente) — pode apagar turmas' },
   { value: 'financeiro', label: 'Financeiro' },
   { value: 'comercial', label: 'Comercial' },
   { value: 'membro', label: 'Membro' },

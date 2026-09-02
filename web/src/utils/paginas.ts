@@ -62,6 +62,7 @@ export const PAGINAS_FINANCEIRO: string[] = [
  */
 export const PAGINAS_PADRAO_POR_CARGO: Record<string, string[]> = {
   admin: TODAS_PAGINAS,
+  comercial_admin: PAGINAS_PADRAO_COMERCIAL,
   financeiro: [...PAGINAS_FINANCEIRO, '/relatorios'],
   comercial: PAGINAS_PADRAO_COMERCIAL,
   membro: ['/', '/agenda', '/leads', '/probabilidade', '/notas'],
@@ -76,8 +77,13 @@ export function paginasPadraoPorCargo(role: string): string[] {
  * ele incluírem ao menos uma aba do grupo Comercial. `paginasConfiguradas` vazio
  * ou ausente = padrão comercial (todo mundo comum começa comercial).
  */
+/** Quem pode apagar/gerenciar turmas (espelha a função pode_gerenciar_turmas() do banco). */
+export function podeGerenciarTurmas(role: string): boolean {
+  return role === 'admin' || role === 'comercial_admin'
+}
+
 export function temAcessoComercial(role: string, paginasConfiguradas?: string[] | null): boolean {
-  if (role === 'admin') return true
+  if (role === 'admin' || role === 'comercial_admin') return true
   const paginas =
     !paginasConfiguradas || paginasConfiguradas.length === 0
       ? PAGINAS_PADRAO_COMERCIAL
