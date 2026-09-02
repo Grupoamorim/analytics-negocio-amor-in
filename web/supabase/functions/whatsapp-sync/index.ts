@@ -118,6 +118,7 @@ Deno.serve(async (req) => {
       // tenta casar o nome do grupo com uma turma (sem exigir o prefixo AIF/AFF...)
       const nomeGrupoNorm = norm(body.grupo_nome || '')
       let turmaId: string | null = null
+      let temSemelhanca = false
       if (nomeGrupoNorm) {
         const { data: turmas } = await admin
           .from('turmas')
@@ -127,16 +128,31 @@ Deno.serve(async (req) => {
           return toks.length >= 2 && toks.every((tok) => nomeGrupoNorm.includes(tok))
         })
         if (candidatas.length === 1) turmaId = candidatas[0].id
+        // semelhança fraca: nome do grupo contém curso/faculdade de alguma turma,
+        // ou uma palavra típica de grupo de formatura.
+        const palavrasFormatura = ['turma', 'comissao', 'formatura', 'formandos', 'formando']
+        temSemelhanca =
+          palavrasFormatura.some((p) => nomeGrupoNorm.includes(p)) ||
+          (turmas || []).some((t: any) => {
+            const alvos = [norm(String(t.curso || '')), norm(String(t.faculdade || ''))].filter(
+              (s) => s.length >= 4,
+            )
+            return alvos.some((s) => nomeGrupoNorm.includes(s))
+          })
       }
 
-      await admin.from('conversa_grupos').upsert({
-        grupo_wa_id: body.grupo_wa_id,
-        grupo_nome: body.grupo_nome || '',
-        turma_id: turmaId,
-        vinculo: turmaId ? 'auto' : 'pendente',
-        criado_por: vendedorId,
-        updated_at: new Date().toISOString(),
-      })
+      // Só registra pendência de grupo que pareça ser de turma. Grupo pessoal
+      // (família, amigos, outro negócio) não vira nem linha no banco.
+      if (turmaId || temSemelhanca) {
+        await admin.from('conversa_grupos').upsert({
+          grupo_wa_id: body.grupo_wa_id,
+          grupo_nome: body.grupo_nome || '',
+          turma_id: turmaId,
+          vinculo: turmaId ? 'auto' : 'pendente',
+          criado_por: vendedorId,
+          updated_at: new Date().toISOString(),
+        })
+      }
 
       if (turmaId) return json({ ok: true, origem: 'grupo', turma_id: turmaId, grupo_nome: body.grupo_nome })
       return json({ ok: true, vincular: true, motivo: 'grupo sem turma vinculada' })
