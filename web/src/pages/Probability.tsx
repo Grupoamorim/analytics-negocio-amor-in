@@ -31,6 +31,7 @@ import {
   type EstudoEscopo,
 } from '@/utils/aprendizadoEngine'
 import { getGeminiApiKey, getGeminiModel } from '@/utils/geminiApi'
+import ConversasMetricasPanel from '@/components/ConversasMetricasPanel'
 
 type Tab = 'geral' | 'motor' | 'aprendizado' | 'relatorio'
 
@@ -586,6 +587,8 @@ function AprendizadoTab({
             : 'Nenhuma turma perdida registrada ainda.'
         }
       />
+
+      <ConversasMetricasPanel deals={deals} />
 
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
         <h3 className="font-semibold text-white text-sm flex items-center gap-2 mb-1">

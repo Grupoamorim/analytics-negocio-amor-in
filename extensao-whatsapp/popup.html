@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    :root { color-scheme: light dark; }
+    body { width: 320px; margin: 0; font: 13px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f10; color: #f5f5f5; }
+    header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: #f97316; color: #fff; }
+    header b { font-size: 14px; }
+    main { padding: 14px; }
+    label { display: block; margin: 8px 0 3px; font-size: 12px; color: #bbb; }
+    input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #333; border-radius: 6px;
+      background: #1a1a1c; color: #fff; }
+    button { width: 100%; margin-top: 10px; padding: 9px; border: 0; border-radius: 6px; cursor: pointer;
+      background: #f97316; color: #fff; font-weight: 600; }
+    button.sec { background: #2a2a2c; color: #ddd; font-weight: 400; }
+    .linha { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #222; }
+    .muted { color: #888; font-size: 12px; }
+    .erro { color: #f87171; margin-top: 8px; font-size: 12px; }
+    .ok { color: #34d399; }
+    ul { margin: 6px 0 0; padding-left: 16px; }
+    a { color: #fb923c; }
+    .toggle { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .toggle input { width: auto; }
+  </style>
+</head>
+<body>
+  <header>🪶 <b>Amor In Gestão</b> · Conversas</header>
+  <main>
+    <section id="deslogado" hidden>
+      <p class="muted">Entre com o mesmo login do CRM. As conversas do WhatsApp Web aberto neste navegador serão arquivadas por turma.</p>
+      <label>E-mail</label>
+      <input id="email" type="email" autocomplete="username" />
+      <label>Senha</label>
+      <input id="senha" type="password" autocomplete="current-password" />
+      <button id="btnLogin">Entrar</button>
+      <div id="erroLogin" class="erro"></div>
+    </section>
+
+    <section id="logado" hidden>
+      <div class="linha"><span>Conectado</span><b id="emailLogado" class="ok"></b></div>
+      <div class="linha"><span>Arquivadas hoje</span><b id="salvasHoje">0</b></div>
+      <div class="linha"><span>Última sincronização</span><span id="ultimaSync" class="muted">—</span></div>
+
+      <div class="toggle">
+        <input id="autoSync" type="checkbox" />
+        <label for="autoSync" style="margin:0">Sincronizar automaticamente</label>
+      </div>
+
+      <button id="btnAgora">Sincronizar a conversa aberta agora</button>
+
+      <div id="pendentes" hidden>
+        <p class="muted" style="margin-top:14px">Grupos abertos que ainda não batem com nenhuma turma. Alinhe manualmente no CRM (aba <b>Conversas</b> da turma):</p>
+        <ul id="listaPendentes"></ul>
+      </div>
+
+      <button id="btnAbrirCrm" class="sec" style="margin-top:14px">Abrir o CRM</button>
+      <button id="btnLogout" class="sec">Sair</button>
+    </section>
+  </main>
+  <script src="config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

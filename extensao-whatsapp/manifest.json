@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Amor In Gestão — Conversas do WhatsApp",
+  "version": "1.0.0",
+  "description": "Arquiva as conversas de WhatsApp das comissões e alunos de formatura no CRM Amor In Gestão, por turma.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://mpodlzptnhvskqmbcsdv.supabase.co/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Amor In Gestão — Conversas"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["config.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["vendor/wppconnect-wa.js", "wa-inject.js"],
+      "matches": ["https://web.whatsapp.com/*"]
+    }
+  ]
+}

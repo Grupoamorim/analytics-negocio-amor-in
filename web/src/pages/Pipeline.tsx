@@ -86,6 +86,7 @@ import {
 import ApresentacaoPacotesModal from '@/components/ApresentacaoPacotesModal'
 import AgendarReuniaoModal from '@/components/AgendarReuniaoModal'
 import ApresentacaoPublicaPanel from '@/components/ApresentacaoPublicaPanel'
+import ConversasTurmaPanel from '@/components/ConversasTurmaPanel'
 import {
   listarDuracaoCursos,
   acharDuracaoAnos,
@@ -2403,6 +2404,12 @@ function DealDetailModal({
           {lead && (
             <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06]">
               <ApresentacaoPublicaPanel turmaId={lead.id} />
+            </div>
+          )}
+
+          {lead && (
+            <div className="p-3 rounded-lg bg-[#0a0f14] border border-white/[0.06]">
+              <ConversasTurmaPanel lead={lead} />
             </div>
           )}
 

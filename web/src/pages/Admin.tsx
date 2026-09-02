@@ -86,6 +86,8 @@ import {
   GraduationCap,
   TrendingDown,
   Package,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react'
 
 interface Perfil {
@@ -926,12 +928,13 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="usuarios" className="space-y-4">
-        <TabsList className="grid grid-cols-3 sm:grid-cols-9 w-full max-w-5xl bg-[#111820] border border-white/[0.06]">
+        <TabsList className="grid grid-cols-3 sm:grid-cols-10 w-full max-w-6xl bg-[#111820] border border-white/[0.06]">
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
           <TabsTrigger value="metas">Metas</TabsTrigger>
           <TabsTrigger value="vendedores">Vendedores/SDR</TabsTrigger>
           <TabsTrigger value="turmas">Turmas</TabsTrigger>
           <TabsTrigger value="integracoes">Integrações</TabsTrigger>
+          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="supabase">Banco de Dados</TabsTrigger>
           <TabsTrigger value="ia">IA</TabsTrigger>
           <TabsTrigger value="marca">Marca</TabsTrigger>
@@ -1642,6 +1645,86 @@ export default function Admin() {
                     Salvar Credenciais SGE
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ABA: WHATSAPP */}
+        <TabsContent value="whatsapp" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <MessageSquare className="h-5 w-5 text-orange-400" />
+                <CardTitle>Extensão de Conversas do WhatsApp</CardTitle>
+              </div>
+              <CardDescription>
+                Extensão do Chrome que arquiva as conversas de WhatsApp das comissões e alunos
+                no CRM, por turma — igual à do Moskit. O vendedor abre o WhatsApp Web pelo QR
+                code normal e as mensagens (inclusive áudios, transcritos pelo Gemini) ficam
+                salvas na aba <strong>Conversas</strong> de cada turma.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5 text-sm text-slate-300">
+              <div className="space-y-2">
+                <p className="font-semibold text-slate-200">1. Criar a conta de desenvolvedor do Google (uma vez, US$ 5)</p>
+                <p className="text-slate-400">
+                  É a taxa única do Google pra publicar qualquer extensão. Pague com o cartão da
+                  empresa logado na conta <code className="text-orange-300">adm@lucasamorim.com.br</code>.
+                </p>
+                <a
+                  href="https://chrome.google.com/webstore/devconsole/register"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-orange-400 hover:underline"
+                >
+                  Abrir o Chrome Web Store Developer Console <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-semibold text-slate-200">2. Subir a extensão</p>
+                <p className="text-slate-400">
+                  O código pronto está no repositório, na pasta{' '}
+                  <code className="text-orange-300">extensao-whatsapp/</code>. Gere o .zip e suba
+                  no console:
+                </p>
+                <pre className="bg-[#0a0f14] border border-white/10 rounded-lg p-3 text-xs text-slate-300 overflow-x-auto">
+cd extensao-whatsapp
+zip -r ../amorin-whatsapp.zip . -x "*.DS_Store"
+                </pre>
+                <p className="text-slate-400">
+                  Em <strong>Visibilidade</strong>, escolha <strong>Não listada</strong> — o time
+                  instala pelo link, sem aparecer na busca da loja.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-semibold text-slate-200">3. Testar agora, sem esperar a aprovação</p>
+                <ol className="list-decimal pl-5 space-y-1 text-slate-400">
+                  <li>Chrome → <code className="text-orange-300">chrome://extensions</code> → ligar <strong>Modo do desenvolvedor</strong>.</li>
+                  <li><strong>Carregar sem compactação</strong> → escolher a pasta <code className="text-orange-300">extensao-whatsapp/</code>.</li>
+                  <li>Abrir <code className="text-orange-300">web.whatsapp.com</code> e logar no WhatsApp.</li>
+                  <li>Clicar no ícone da extensão → entrar com o mesmo e-mail/senha do CRM.</li>
+                  <li>Abrir uma conversa de uma turma cadastrada — em ~45s as mensagens aparecem na aba Conversas da turma.</li>
+                </ol>
+              </div>
+
+              <div className="flex items-start gap-2 text-xs px-3 py-2 rounded-lg border bg-emerald-500/10 text-emerald-300 border-emerald-500/20">
+                <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  Backend já pronto: tabelas <code>conversas_whatsapp</code> / <code>conversa_grupos</code> e a
+                  função <code>whatsapp-sync</code> estão no ar. A transcrição de áudio usa a mesma
+                  chave do Gemini já configurada na aba IA — nenhum custo de Claude.
+                </span>
+              </div>
+
+              <div className="flex items-start gap-2 text-xs px-3 py-2 rounded-lg border bg-amber-500/10 text-amber-300 border-amber-500/20">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  Grupos que não baterem sozinhos com uma turma ficam pendentes — dá pra
+                  vinculá-los manualmente na aba Conversas de cada turma.
+                </span>
               </div>
             </CardContent>
           </Card>
