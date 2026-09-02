@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   UserPlus,
   CalendarClock,
+  MessageSquare,
 } from 'lucide-react'
 import { getTurmaDisplayName, getFullTurmaName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { matchesSearch } from '@/utils/searchMatch'
@@ -59,6 +60,7 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
       { path: '/clientes', label: 'Clientes', icon: GraduationCap },
       { path: '/probabilidade', label: 'Probabilidade', icon: BrainCircuit },
       { path: '/transcricoes', label: 'Transcrições', icon: FileText },
+      { path: '/whatsapp-comercial', label: 'WhatsApp Comercial', icon: MessageSquare },
       { path: '/notas', label: 'Notas', icon: StickyNote },
     ],
   },

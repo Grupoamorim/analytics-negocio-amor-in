@@ -119,6 +119,13 @@
       window.postMessage({ __amorin: 'res', reqId, payload, erro: erro ? String(erro) : null }, '*');
     try {
       if (req === 'ping') return responder({ pronto });
+      if (req === 'status') {
+        let autenticado = false;
+        try {
+          autenticado = !!(window.WPP && window.WPP.conn && (await window.WPP.conn.isAuthenticated()));
+        } catch (_) {}
+        return responder({ pronto, autenticado });
+      }
       if (req === 'ativo') return responder(await chatAtivo());
       if (req === 'mensagens') return responder(await mensagens(params.chatId, params));
       responder(null, 'req desconhecido: ' + req);

@@ -18,6 +18,42 @@ async function getPref() {
   return o[PREF_KEY] || { autoSync: true };
 }
 
+// Recebe a sessão que o painel leu do localStorage do CRM (o vendedor já está
+// logado lá — não precisa logar de novo na extensão).
+async function sessaoDoCrm(s) {
+  if (!s || !s.access_token || !s.refresh_token) return { ok: false };
+  await setSessao({
+    access_token: s.access_token,
+    refresh_token: s.refresh_token,
+    expira_em: s.expira_em || Date.now() + 3000 * 1000,
+    email: s.email || null,
+  });
+  return { ok: true };
+}
+
+// abre (ou foca) a aba do WhatsApp Web
+async function abrirWhatsApp() {
+  const abas = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+  if (abas.length) {
+    await chrome.tabs.update(abas[0].id, { active: true });
+    if (abas[0].windowId) await chrome.windows.update(abas[0].windowId, { focused: true });
+    return { ok: true, jaAberto: true };
+  }
+  await chrome.tabs.create({ url: CFG.WHATSAPP_URL });
+  return { ok: true, jaAberto: false };
+}
+
+async function mandarProWhatsApp(cmd) {
+  const abas = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+  if (!abas.length) return { ok: false, erro: 'WhatsApp Web não está aberto' };
+  try {
+    await chrome.tabs.sendMessage(abas[0].id, { cmd });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, erro: String(e) };
+  }
+}
+
 // ---- Auth ----
 async function login(email, senha) {
   const r = await fetch(`${CFG.SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -107,6 +143,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       case 'login':
         sendResponse(await login(msg.email, msg.senha));
         break;
+      case 'sessao_do_crm':
+        sendResponse(await sessaoDoCrm(msg.sessao));
+        break;
+      case 'abrir_whatsapp':
+        sendResponse(await abrirWhatsApp());
+        break;
+      case 'varrer_wa':
+        sendResponse(await mandarProWhatsApp('varrer_agora'));
+        break;
+      case 'whatsapp_aberto': {
+        const abas = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+        sendResponse({ aberto: abas.length > 0 });
+        break;
+      }
       case 'logout':
         await limparSessao();
         sendResponse({ ok: true });

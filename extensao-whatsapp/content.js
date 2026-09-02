@@ -67,9 +67,20 @@
     if (varrendo) return;
     varrendo = true;
     try {
+      // registra o estado da conexão do WhatsApp pro painel do CRM mostrar
+      // (roda sempre, mesmo sem sessão do CRM ainda)
+      try {
+        const st = await pedir('status')
+        const e0 = await getEstado()
+        e0.waPronto = !!(st && st.pronto)
+        e0.waAutenticado = !!(st && st.autenticado)
+        e0.waVistoEm = new Date().toISOString()
+        await setEstado(e0)
+      } catch (_) {}
+
       const cfg = await bg('config', {});
       if (!cfg || !cfg.temSessao) return;          // sem login no CRM
-      if (cfg.autoSync === false) return;           // desligado no popup
+      if (cfg.autoSync === false) return;           // desligado no painel
 
       const ativo = await pedir('ativo').catch(() => null);
       if (!ativo || !ativo.id) return;

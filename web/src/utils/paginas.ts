@@ -18,6 +18,7 @@ export const PAGINAS: PaginaDef[] = [
   { path: '/contatos', label: 'Contatos', grupo: 'Comercial' },
   { path: '/probabilidade', label: 'Probabilidade', grupo: 'Comercial' },
   { path: '/transcricoes', label: 'Transcrições', grupo: 'Comercial' },
+  { path: '/whatsapp-comercial', label: 'WhatsApp Comercial', grupo: 'Comercial' },
   { path: '/notas', label: 'Notas', grupo: 'Comercial' },
   { path: '/adesoes', label: 'Adesões', grupo: 'Financeiro' },
   { path: '/financeiro', label: 'Financeiro', grupo: 'Financeiro' },
@@ -43,6 +44,7 @@ export const PAGINAS_PADRAO_COMERCIAL: string[] = [
   '/contatos',
   '/probabilidade',
   '/transcricoes',
+  '/whatsapp-comercial',
   '/notas',
 ]
 
@@ -65,7 +67,7 @@ export const PAGINAS_PADRAO_POR_CARGO: Record<string, string[]> = {
   comercial_admin: PAGINAS_PADRAO_COMERCIAL,
   financeiro: [...PAGINAS_FINANCEIRO, '/relatorios'],
   comercial: PAGINAS_PADRAO_COMERCIAL,
-  membro: ['/', '/agenda', '/leads', '/probabilidade', '/notas'],
+  membro: ['/', '/agenda', '/leads', '/probabilidade', '/whatsapp-comercial', '/notas'],
 }
 
 export function paginasPadraoPorCargo(role: string): string[] {

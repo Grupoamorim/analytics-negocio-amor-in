@@ -19,6 +19,7 @@ import Pipeline from '@/pages/Pipeline'
 import Leads from '@/pages/Leads'
 import Probability from '@/pages/Probability'
 import Transcripts from '@/pages/Transcripts'
+import WhatsappComercial from '@/pages/WhatsappComercial'
 import Notes from '@/pages/Notes'
 import NotFound from '@/pages/NotFound'
 import Captacao from '@/pages/Captacao'
@@ -92,6 +93,7 @@ const App = () => (
               <Route path="/clientes" element={<RotaComPermissao path="/clientes"><Clientes /></RotaComPermissao>} />
               <Route path="/probabilidade" element={<RotaComPermissao path="/probabilidade"><Probability /></RotaComPermissao>} />
               <Route path="/transcricoes" element={<RotaComPermissao path="/transcricoes"><Transcripts /></RotaComPermissao>} />
+              <Route path="/whatsapp-comercial" element={<RotaComPermissao path="/whatsapp-comercial"><WhatsappComercial /></RotaComPermissao>} />
               <Route path="/notas" element={<RotaComPermissao path="/notas"><Notes /></RotaComPermissao>} />
               <Route path="/captacao" element={<RotaComPermissao path="/captacao"><Captacao /></RotaComPermissao>} />
               <Route path="/mapa-mercado" element={<Navigate to="/captacao?tab=mapa" replace />} />
