@@ -1697,6 +1697,23 @@ zip -r ../amorin-whatsapp.zip . -x "*.DS_Store"
                   Em <strong>Visibilidade</strong>, escolha <strong>Não listada</strong> — o time
                   instala pelo link, sem aparecer na busca da loja.
                 </p>
+                <p className="text-slate-400">
+                  Na aba <strong>Privacidade</strong> do formulário da loja, cole esta URL de
+                  política de privacidade (já publicada):
+                </p>
+                <a
+                  href="https://www.grupoamorin.com.br/privacidade-extensao.html"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-orange-400 hover:underline break-all"
+                >
+                  grupoamorin.com.br/privacidade-extensao.html <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+                <p className="text-slate-400 text-xs">
+                  Justificativa das permissões, se pedirem: <em>“ferramenta interna da empresa;
+                  lê as mensagens de WhatsApp de contatos/grupos vinculados a turmas do CRM para
+                  arquivamento e continuidade do atendimento comercial”.</em>
+                </p>
               </div>
 
               <div className="space-y-2">
