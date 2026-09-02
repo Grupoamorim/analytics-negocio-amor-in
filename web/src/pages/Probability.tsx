@@ -32,6 +32,7 @@ import {
 } from '@/utils/aprendizadoEngine'
 import { getGeminiApiKey, getGeminiModel } from '@/utils/geminiApi'
 import ConversasMetricasPanel from '@/components/ConversasMetricasPanel'
+import MetricasComerciaisPanel from '@/components/MetricasComerciaisPanel'
 
 type Tab = 'geral' | 'motor' | 'aprendizado' | 'relatorio'
 
@@ -166,15 +167,21 @@ export default function Probability() {
       </div>
 
       {tab === 'geral' && (
-        <VisaoGeral
-          media={mediaGeral}
-          total={avaliaveis.length}
-          totalFunil={dealsComBreakdown.length - avaliaveis.length}
-          histogram={histogram}
-          ganhos={ganhos}
-          perdidos={perdidos}
-          reunioes={reunioesAnalisadas}
-        />
+        <div className="space-y-5">
+          <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+            <h3 className="font-semibold text-white text-sm mb-3">Métricas comerciais</h3>
+            <MetricasComerciaisPanel />
+          </div>
+          <VisaoGeral
+            media={mediaGeral}
+            total={avaliaveis.length}
+            totalFunil={dealsComBreakdown.length - avaliaveis.length}
+            histogram={histogram}
+            ganhos={ganhos}
+            perdidos={perdidos}
+            reunioes={reunioesAnalisadas}
+          />
+        </div>
       )}
       {tab === 'motor' && <MotorTab linhas={dealsComBreakdown} />}
       {tab === 'aprendizado' && (

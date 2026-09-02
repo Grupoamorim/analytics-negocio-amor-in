@@ -22,6 +22,7 @@ import SectionTitle from '@/components/dashboard/SectionTitle'
 import InfoHint from '@/components/dashboard/InfoHint'
 import PaceBand from '@/components/dashboard/PaceBand'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import MetricasComerciaisPanel from '@/components/MetricasComerciaisPanel'
 import { useMetasNegocio } from '@/hooks/useMetasNegocio'
 import { getTurmaDisplayName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import {
@@ -244,6 +245,16 @@ export default function Index() {
           icon={Gauge}
           ajuda="Média da probabilidade calculada pelo motor (Probabilidade) entre todas as turmas em atendimento. Caindo = funil esfriando; subindo = negociações amadurecendo."
         />
+      </div>
+
+      {/* ============ Métricas comerciais (automáticas) ============ */}
+      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">
+        <SectionTitle ajuda="Prazo médio da turma no funil até fechar, tempo em cada fase, conversão por fase e turmas sem resposta. Tudo calculado sozinho a partir do histórico das turmas.">
+          Métricas comerciais
+        </SectionTitle>
+        <div className="mt-4">
+          <MetricasComerciaisPanel />
+        </div>
       </div>
 
       {/* ============ Funil aberto ============ */}

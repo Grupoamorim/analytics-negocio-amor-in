@@ -581,6 +581,159 @@ export type Database = {
           },
         ]
       }
+      conversa_grupos: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          grupo_nome: string
+          grupo_wa_id: string
+          ignorar: boolean
+          turma_id: string | null
+          ultima_sync: string | null
+          updated_at: string
+          vinculo: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          grupo_nome: string
+          grupo_wa_id: string
+          ignorar?: boolean
+          turma_id?: string | null
+          ultima_sync?: string | null
+          updated_at?: string
+          vinculo?: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          grupo_nome?: string
+          grupo_wa_id?: string
+          ignorar?: boolean
+          turma_id?: string | null
+          ultima_sync?: string | null
+          updated_at?: string
+          vinculo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversa_grupos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversa_grupos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversa_grupos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversas_whatsapp: {
+        Row: {
+          autor_nome: string | null
+          autor_telefone: string | null
+          chat_wa_id: string
+          contato_id: string | null
+          created_at: string
+          de_mim: boolean
+          direcao: string
+          enviada_em: string
+          grupo_nome: string | null
+          id: string
+          midia_url: string | null
+          origem: string
+          raw: Json | null
+          texto: string | null
+          tipo: string
+          transcrito: boolean
+          turma_id: string | null
+          vendedor_id: string | null
+          wa_msg_id: string
+        }
+        Insert: {
+          autor_nome?: string | null
+          autor_telefone?: string | null
+          chat_wa_id: string
+          contato_id?: string | null
+          created_at?: string
+          de_mim?: boolean
+          direcao?: string
+          enviada_em: string
+          grupo_nome?: string | null
+          id?: string
+          midia_url?: string | null
+          origem?: string
+          raw?: Json | null
+          texto?: string | null
+          tipo?: string
+          transcrito?: boolean
+          turma_id?: string | null
+          vendedor_id?: string | null
+          wa_msg_id: string
+        }
+        Update: {
+          autor_nome?: string | null
+          autor_telefone?: string | null
+          chat_wa_id?: string
+          contato_id?: string | null
+          created_at?: string
+          de_mim?: boolean
+          direcao?: string
+          enviada_em?: string
+          grupo_nome?: string | null
+          id?: string
+          midia_url?: string | null
+          origem?: string
+          raw?: Json | null
+          texto?: string | null
+          tipo?: string
+          transcrito?: boolean
+          turma_id?: string | null
+          vendedor_id?: string | null
+          wa_msg_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversas_whatsapp_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_whatsapp_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_whatsapp_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_whatsapp_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_notion: {
         Row: {
           created_at: string | null
@@ -647,6 +800,8 @@ export type Database = {
           probabilidade: number | null
           probability: number | null
           responsavel: string | null
+          sem_resposta: boolean
+          sem_resposta_desde: string | null
           stage: string
           tipo_contrato: string | null
           titulo: string | null
@@ -671,6 +826,8 @@ export type Database = {
           probabilidade?: number | null
           probability?: number | null
           responsavel?: string | null
+          sem_resposta?: boolean
+          sem_resposta_desde?: string | null
           stage?: string
           tipo_contrato?: string | null
           titulo?: string | null
@@ -695,6 +852,8 @@ export type Database = {
           probabilidade?: number | null
           probability?: number | null
           responsavel?: string | null
+          sem_resposta?: boolean
+          sem_resposta_desde?: string | null
           stage?: string
           tipo_contrato?: string | null
           titulo?: string | null
@@ -1745,6 +1904,83 @@ export type Database = {
           },
         ]
       }
+      sem_resposta_episodios: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          curso: string | null
+          deal_id: string | null
+          dias: number | null
+          empresa: string | null
+          encerrou_em: string | null
+          encerrou_por: string | null
+          faculdade: string | null
+          id: string
+          iniciou_em: string
+          stage_id: string | null
+          turma_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          curso?: string | null
+          deal_id?: string | null
+          dias?: number | null
+          empresa?: string | null
+          encerrou_em?: string | null
+          encerrou_por?: string | null
+          faculdade?: string | null
+          id?: string
+          iniciou_em?: string
+          stage_id?: string | null
+          turma_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          curso?: string | null
+          deal_id?: string | null
+          dias?: number | null
+          empresa?: string | null
+          encerrou_em?: string | null
+          encerrou_por?: string | null
+          faculdade?: string | null
+          id?: string
+          iniciou_em?: string
+          stage_id?: string | null
+          turma_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sem_resposta_episodios_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sem_resposta_episodios_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sem_resposta_episodios_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sem_resposta_episodios_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sge_adesoes: {
         Row: {
           cliente: string | null
@@ -2486,6 +2722,36 @@ export type Database = {
       }
     }
     Views: {
+      config_publica: {
+        Row: {
+          favicon_url: string | null
+          filtros_salvos: Json | null
+          gemini_api_key: string | null
+          id: string | null
+          logo_url: string | null
+          preferencias: Json | null
+          sge_cnpj: string | null
+        }
+        Insert: {
+          favicon_url?: string | null
+          filtros_salvos?: Json | null
+          gemini_api_key?: string | null
+          id?: string | null
+          logo_url?: string | null
+          preferencias?: Json | null
+          sge_cnpj?: string | null
+        }
+        Update: {
+          favicon_url?: string | null
+          filtros_salvos?: Json | null
+          gemini_api_key?: string | null
+          id?: string | null
+          logo_url?: string | null
+          preferencias?: Json | null
+          sge_cnpj?: string | null
+        }
+        Relationships: []
+      }
       logo_marca_publica: {
         Row: {
           logo_url: string | null
@@ -2568,6 +2834,7 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }
+      pode_gerenciar_turmas: { Args: never; Returns: boolean }
       sync_normalized_from_sge: { Args: never; Returns: undefined }
     }
     Enums: {
@@ -2587,12 +2854,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2616,11 +2883,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2641,11 +2908,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2666,11 +2933,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2683,11 +2950,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

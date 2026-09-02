@@ -182,6 +182,10 @@ export interface Deal {
   outcome?: DealOutcome | null
   /** Motivo da recusa, preenchido quando outcome === 'perdido'. */
   lostReason?: string
+  /** Turma sumiu / parou de responder — fica com a fase atual, só marcada. */
+  semResposta?: boolean
+  /** Desde quando está sem resposta (ISO). */
+  semRespostaDesde?: string
   expectedCloseDate?: string
   contractType?: string
   assignedTo?: string

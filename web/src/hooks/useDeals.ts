@@ -159,6 +159,8 @@ function mapRowToDeal(row: any & { updated_by_profile?: { email: string | null }
     stageHistory,
     outcome: (row.outcome as any) || null,
     lostReason: row.lost_reason || undefined,
+    semResposta: !!row.sem_resposta,
+    semRespostaDesde: row.sem_resposta_desde || undefined,
     probBreakdown: (row.prob_breakdown as any) || undefined,
     probAtualizadaEm: row.prob_atualizada_em || undefined,
     createdAt,
@@ -333,6 +335,9 @@ export function useDeals() {
         }
         if (updates.outcome !== undefined) updatePayload.outcome = updates.outcome
         if (updates.lostReason !== undefined) updatePayload.lost_reason = updates.lostReason
+        if (updates.semResposta !== undefined) updatePayload.sem_resposta = updates.semResposta
+        if (updates.semRespostaDesde !== undefined)
+          updatePayload.sem_resposta_desde = updates.semRespostaDesde || null
         if (updates.expectedCloseDate !== undefined)
           updatePayload.data_previsao_fechamento = updates.expectedCloseDate
         if (updates.contractType !== undefined) updatePayload.tipo_contrato = updates.contractType

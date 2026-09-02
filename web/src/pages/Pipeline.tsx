@@ -37,6 +37,7 @@ import {
   ChevronDown,
   Filter,
   BookmarkPlus,
+  MessageSquareOff,
 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import {
@@ -50,6 +51,7 @@ import {
   DEFAULT_CHECKLIST_ITEMS,
   FUNNEL_STAGE_BY_ID,
   daysInCurrentStage,
+  daysBetween,
   currentStageEnteredAt,
   formatBRDate,
   metaProgresso,
@@ -134,6 +136,8 @@ export default function Pipeline() {
     deleteContact,
     marcarNaoResponde,
     marcarRespondeu,
+    marcarSemResposta,
+    reativarSemResposta,
   } = useCRM()
   const { toast } = useToast()
   const { podeGerenciarTurmas } = useAcesso()
@@ -944,6 +948,10 @@ export default function Pipeline() {
                     const probInfo = dealProbById.get(deal.id)
                     const bd = probInfo?.breakdown
                     const motorProb = probInfo?.score ?? deal.probability
+                    const semResp = !!deal.semResposta && stage.id !== 'stage-6'
+                    const diasSemResp = semResp && deal.semRespostaDesde
+                      ? daysBetween(deal.semRespostaDesde, new Date().toISOString())
+                      : null
 
                     return (
                       <div
@@ -955,16 +963,16 @@ export default function Pipeline() {
                           setSelectedDealId(deal.id)
                           setHighlightDealId(null)
                         }}
-                        className={`group bg-[#111820] rounded-lg border p-3 cursor-pointer hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/5 transition-all ${
-                          draggingDealId === deal.id ? 'opacity-40' : ''
-                        } ${
-                          isHighlight
-                            ? 'border-orange-500 ring-2 ring-orange-500/40'
-                            : 'border-white/[0.08]'
+                        className={`group rounded-lg border p-3 cursor-pointer transition-all ${
+                          semResp
+                            ? 'bg-pink-950/40 border-pink-500/60 hover:border-pink-400'
+                            : 'bg-[#111820] border-white/[0.08] hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/5'
+                        } ${draggingDealId === deal.id ? 'opacity-40' : ''} ${
+                          isHighlight ? 'border-orange-500 ring-2 ring-orange-500/40' : ''
                         }`}
                         style={{
-                          borderTop: `3px solid ${cardAccentColor}`,
-                          borderLeft: `4px solid ${cardAccentColor}`,
+                          borderTop: `3px solid ${semResp ? '#ec4899' : cardAccentColor}`,
+                          borderLeft: `4px solid ${semResp ? '#ec4899' : cardAccentColor}`,
                         }}
                         title={
                           stage.id === 'stage-6'
@@ -976,6 +984,24 @@ export default function Pipeline() {
                                 : 'Dentro do prazo saudável neste estágio'
                         }
                       >
+                        {semResp && (
+                          <div className="-mx-3 -mt-3 mb-2 px-3 py-1 bg-pink-500/20 border-b border-pink-500/30 flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-pink-300">
+                              Sem resposta{diasSemResp != null ? ` · há ${diasSemResp}d` : ''}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                reativarSemResposta(deal.id)
+                              }}
+                              className="text-[9px] text-pink-200 hover:text-white underline decoration-dotted"
+                            >
+                              reativar
+                            </button>
+                          </div>
+                        )}
+
                         {/* Nome da turma + outcome badge */}
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex items-center gap-2 min-w-0">
@@ -1021,6 +1047,20 @@ export default function Pipeline() {
                                   className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-opacity"
                                 >
                                   <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                              {stage.id !== 'stage-1' && stage.id !== 'stage-6' && !semResp && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    marcarSemResposta(deal.id)
+                                  }}
+                                  title="Marcar como sem resposta (turma sumiu)"
+                                  aria-label="Marcar sem resposta"
+                                  className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-pink-400 transition-opacity"
+                                >
+                                  <MessageSquareOff className="w-3 h-3" />
                                 </button>
                               )}
                             </div>
@@ -1520,6 +1560,7 @@ function DealDetailModal({
   const { toast } = useToast()
   const { user } = useAuth()
   const { podeGerenciarTurmas } = useAcesso()
+  const { marcarSemResposta, reativarSemResposta } = useCRM()
   const [novoContatoNome, setNovoContatoNome] = useState('')
   const [novoContatoTelefone, setNovoContatoTelefone] = useState('')
   const [linkInput, setLinkInput] = useState(proposalLink)
@@ -1834,6 +1875,33 @@ function DealDetailModal({
         </div>
 
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+          {deal.stageId !== 'stage-6' &&
+            (deal.semResposta ? (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-pink-500/40 bg-pink-500/10 px-3 py-2">
+                <span className="text-pink-300 font-semibold">
+                  Sem resposta
+                  {deal.semRespostaDesde
+                    ? ` · há ${daysBetween(deal.semRespostaDesde, new Date().toISOString())} dias`
+                    : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => reativarSemResposta(deal.id)}
+                  className="text-xs text-pink-200 hover:text-white underline decoration-dotted"
+                >
+                  Reativar turma
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => marcarSemResposta(deal.id)}
+                className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-pink-500/25 bg-pink-500/5 text-pink-300 hover:bg-pink-500/15 text-xs font-semibold py-2 transition-colors"
+              >
+                <MessageSquareOff className="w-3.5 h-3.5" /> Marcar como sem resposta
+              </button>
+            ))}
+
           {lead && (
             <button
               type="button"

@@ -230,7 +230,10 @@ export function computeDealProbability({
   const base = tProb as number
 
   const aPortao = bonusPortao(stageId)
-  const vel = ajusteVelocidade(deal, stageMeta)
+  // Turma "sem resposta" (sumiu): trata como estagnada, independente do relógio.
+  const vel = deal.semResposta
+    ? { valor: MOTOR_WEIGHTS.velocidade.estagnada, label: 'sem resposta' }
+    : ajusteVelocidade(deal, stageMeta)
   const cf = ajusteCursoFac(cursoFacRate)
 
   // O funil só tempera: no máx. ±8 e nunca mais que ~1/9 da base (garante que

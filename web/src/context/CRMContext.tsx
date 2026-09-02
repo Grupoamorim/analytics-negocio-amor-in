@@ -13,7 +13,7 @@ import type {
   FunilEvento,
   AprendizadoEstudo,
 } from '@/types/crm'
-import { FUNNEL_STAGE_BY_ID, daysInCurrentStage, DEFAULT_CHECKLIST_ITEMS } from '@/types/crm'
+import { FUNNEL_STAGE_BY_ID, daysInCurrentStage, daysBetween, DEFAULT_CHECKLIST_ITEMS } from '@/types/crm'
 import { INITIAL_ACTIVITIES, INITIAL_SETTINGS, INITIAL_STAGES, INITIAL_TASKS } from '@/data/seedData'
 import { useTurmas } from '@/hooks/useTurmas'
 import { useDeals } from '@/hooks/useDeals'
@@ -60,6 +60,10 @@ interface CRMContextType {
   deleteDeal: (id: string) => Promise<void>
   moveDealStage: (dealId: string, targetStageId: string) => Promise<void>
   toggleChecklistItem: (dealId: string, checklistKey: string, checked: boolean) => Promise<void>
+  /** Marca a turma como "sem resposta" (some/parou de responder) — fica na fase atual. */
+  marcarSemResposta: (dealId: string) => Promise<void>
+  /** Tira a marca de "sem resposta" e fecha o episódio no banco. */
+  reativarSemResposta: (dealId: string) => Promise<void>
 
   // Contatos
   addContact: (contact: Omit<Contact, 'id' | 'createdAt'>) => Promise<Contact>
@@ -440,6 +444,75 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     })
   }, [deals, recomputeDealProbability])
 
+  // ---- "Sem resposta" (turma que sumiu / parou de responder) ----
+  const db = supabase as any
+
+  async function fecharEpisodioSemResposta(dealId: string, encerrouPor: string) {
+    try {
+      const { data: aberto } = await db
+        .from('sem_resposta_episodios')
+        .select('id, iniciou_em')
+        .eq('deal_id', dealId)
+        .is('encerrou_em', null)
+        .order('iniciou_em', { ascending: false })
+        .limit(1)
+      const ep = aberto && aberto[0]
+      if (!ep) return
+      const agora = new Date().toISOString()
+      await db
+        .from('sem_resposta_episodios')
+        .update({
+          encerrou_em: agora,
+          encerrou_por: encerrouPor,
+          dias: daysBetween(ep.iniciou_em, agora),
+        })
+        .eq('id', ep.id)
+    } catch (e) {
+      console.warn('Erro ao fechar episódio sem-resposta:', e)
+    }
+  }
+  const daysBetweenIso = daysBetween
+
+  const marcarSemResposta = async (dealId: string): Promise<void> => {
+    const deal = deals.find((d) => d.id === dealId)
+    if (!deal || deal.semResposta) return
+    const lead = deal.leadId ? leadById.get(deal.leadId) : undefined
+    const agora = new Date().toISOString()
+    await updateDealRaw(dealId, { semResposta: true, semRespostaDesde: agora })
+    try {
+      await db.from('sem_resposta_episodios').insert({
+        deal_id: dealId,
+        turma_id: deal.leadId || null,
+        stage_id: deal.stageId || deal.stage || null,
+        curso: lead?.curso || null,
+        faculdade: lead?.faculdade || null,
+        empresa: lead?.empresa || deal.company || null,
+        iniciou_em: agora,
+      })
+    } catch (e) {
+      console.warn('Erro ao abrir episódio sem-resposta:', e)
+    }
+    addActivity({
+      type: 'estagio',
+      title: 'Turma marcada como sem resposta',
+      description: deal.title || 'Turma',
+      actorName: 'Usuário',
+    })
+  }
+
+  const reativarSemResposta = async (dealId: string): Promise<void> => {
+    const deal = deals.find((d) => d.id === dealId)
+    if (!deal || !deal.semResposta) return
+    await fecharEpisodioSemResposta(dealId, 'reativado')
+    await updateDealRaw(dealId, { semResposta: false, semRespostaDesde: undefined })
+    addActivity({
+      type: 'estagio',
+      title: 'Turma reativada (estava sem resposta)',
+      description: deal.title || 'Turma',
+      actorName: 'Usuário',
+    })
+  }
+
   // Pipeline stage movement and checklist
   const moveDealStage = async (dealId: string, targetStageId: string): Promise<void> => {
     const targetDeal = deals.find((d) => d.id === dealId)
@@ -447,6 +520,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const lead = targetDeal?.leadId ? leadById.get(targetDeal.leadId) : undefined
 
     await updateDealRaw(dealId, { stage: targetStageId as any, stageId: targetStageId })
+
+    // Se a turma estava "sem resposta", mudar de fase automaticamente reativa ela
+    // e fecha o episódio no banco (guardando quantos dias ficou parada).
+    if (targetDeal?.semResposta) {
+      await fecharEpisodioSemResposta(dealId, 'mudou_de_fase')
+      await updateDealRaw(dealId, { semResposta: false, semRespostaDesde: undefined })
+      const dias = targetDeal.semRespostaDesde
+        ? daysBetweenIso(targetDeal.semRespostaDesde, new Date().toISOString())
+        : null
+      addActivity({
+        type: 'estagio',
+        title: 'Turma reativada (estava sem resposta)',
+        description:
+          (targetDeal.title || 'Turma') +
+          (dias != null ? ` — ficou ${dias} dia(s) sem resposta` : ''),
+        actorName: 'Usuário',
+      })
+    }
 
     // Registro de aprendizado: transição de fase
     if (targetDeal) {
@@ -497,6 +588,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const outcomeChanged =
         updates.outcome !== undefined && updates.outcome !== (before?.outcome || null)
       if (outcomeChanged && before && (updates.outcome === 'ganho' || updates.outcome === 'perdido')) {
+        if (before.semResposta) {
+          await fecharEpisodioSemResposta(id, updates.outcome)
+          await updateDealRaw(id, { semResposta: false, semRespostaDesde: undefined })
+        }
         const lead = before.leadId ? leadById.get(before.leadId) : undefined
         const tProb = transcriptProbabilidade(latestTranscriptForDeal(before) as any)
         const probAntes = before.probability ?? before.probBreakdown?.final
@@ -886,6 +981,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteDeal,
     moveDealStage,
     toggleChecklistItem,
+    marcarSemResposta,
+    reativarSemResposta,
 
     addContact,
     updateContact,
