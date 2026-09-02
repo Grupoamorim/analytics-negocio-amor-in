@@ -108,7 +108,7 @@ export default function AgendarReuniaoModal({
   const nomeTurma = getFullTurmaName(lead)
   const tituloPreview = useMemo(() => {
     const extra = textoExtra.trim()
-    return `Apresentação ${extra ? extra + ' ' : ''}${tipo} ${nomeTurma} (${modalidade})`
+    return `(${modalidade}) Apresentação ${extra ? extra + ' ' : ''}${tipo} ${nomeTurma}`
   }, [textoExtra, tipo, nomeTurma, modalidade])
 
   // conflitos: sobreposição (grave) e folga < 1h antes/depois (aviso)

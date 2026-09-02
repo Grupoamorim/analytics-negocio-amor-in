@@ -7,8 +7,8 @@
 // monta o título no padrão do sistema e chama o Apps Script.
 //
 // Convenção do título (a mesma que os coletores de transcrição Plaud/Fathom
-// esperam):
-//   "Apresentação [texto extra] <Comissão|Turma...> <turma completa> (PR-F|PR-S|ON)"
+// esperam — eles casam o marcador em qualquer posição):
+//   "(PR-F|PR-S|ON) Apresentação [texto extra] <Comissão|Turma...> <turma completa>"
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const CORS = {
@@ -93,7 +93,9 @@ Deno.serve(async (req) => {
   const tipo = (tipo_reuniao || 'Turma').trim()
   const extra = (texto_extra || '').trim()
   const nomeTurma = nomeCompletoTurma(turma)
-  const titulo = `Apresentação ${extra ? extra + ' ' : ''}${tipo} ${nomeTurma} (${modalidade})`
+  // O marcador de modalidade fica NA FRENTE de todo o nome:
+  //   "(PR-F) Apresentação Comissão AIF Direito FAINOR Turma 43N 2030.1 Conquista"
+  const titulo = `(${modalidade}) Apresentação ${extra ? extra + ' ' : ''}${tipo} ${nomeTurma}`
 
   const descricao = [
     `Turma: ${nomeTurma}`,
