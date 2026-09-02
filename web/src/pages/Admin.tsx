@@ -99,7 +99,7 @@ interface Perfil {
 
 const CARGOS: { value: Perfil['role']; label: string }[] = [
   { value: 'admin', label: 'Administrador' },
-  { value: 'comercial_admin', label: 'Comercial (gerente) — pode apagar turmas' },
+  { value: 'comercial_admin', label: 'Adm Comercial — edita e apaga turmas' },
   { value: 'financeiro', label: 'Financeiro' },
   { value: 'comercial', label: 'Comercial' },
   { value: 'membro', label: 'Membro' },
