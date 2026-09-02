@@ -5,7 +5,12 @@
 import { supabase } from '@/lib/supabase/client'
 
 export async function fetchCursosConhecidos(): Promise<string[]> {
-  const { data, error } = await supabase.from('turmas').select('curso').not('curso', 'is', null)
+  // Lê da view pública `turmas_captacao` (a tabela `turmas` não é legível por
+  // anon — o formulário de captação é público).
+  const { data, error } = await (supabase as any)
+    .from('turmas_captacao')
+    .select('curso')
+    .not('curso', 'is', null)
   if (error || !data) return []
   const set = new Set<string>()
   for (const row of data) {

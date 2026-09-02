@@ -111,13 +111,13 @@ export default function CaptacaoForm() {
       return
     }
     setBuscando(true)
-    supabase
-      .from('turmas')
+    // View pública enxuta (só turmas ativas, colunas seguras). A tabela
+    // `turmas` não é mais legível por anon.
+    ;(supabase as any)
+      .from('turmas_captacao')
       .select('id, curso, faculdade, turma, ano_formatura, cidade, empresa')
       .eq('curso', cursoBusca)
-      .eq('concluida', false)
-      .not('funil_status', 'in', '("Convertido","Perdido")')
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         const encontradas: TurmaEncontrada[] = (data || []).map((t) => {
           const duracao = duracaoParaCurso(t.curso || '', t.faculdade || '')
           return {
