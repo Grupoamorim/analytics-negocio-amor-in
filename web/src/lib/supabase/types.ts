@@ -581,6 +581,77 @@ export type Database = {
           },
         ]
       }
+      conversa_dm: {
+        Row: {
+          chat_wa_id: string | null
+          contato_id: string | null
+          created_at: string
+          criado_por: string | null
+          ignorar: boolean | null
+          nome: string | null
+          telefone: string
+          turma_id: string | null
+          ultima_sync: string | null
+          updated_at: string
+          vinculo: string | null
+        }
+        Insert: {
+          chat_wa_id?: string | null
+          contato_id?: string | null
+          created_at?: string
+          criado_por?: string | null
+          ignorar?: boolean | null
+          nome?: string | null
+          telefone: string
+          turma_id?: string | null
+          ultima_sync?: string | null
+          updated_at?: string
+          vinculo?: string | null
+        }
+        Update: {
+          chat_wa_id?: string | null
+          contato_id?: string | null
+          created_at?: string
+          criado_por?: string | null
+          ignorar?: boolean | null
+          nome?: string | null
+          telefone?: string
+          turma_id?: string | null
+          ultima_sync?: string | null
+          updated_at?: string
+          vinculo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversa_dm_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversa_dm_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversa_dm_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversa_dm_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversa_grupos: {
         Row: {
           created_at: string

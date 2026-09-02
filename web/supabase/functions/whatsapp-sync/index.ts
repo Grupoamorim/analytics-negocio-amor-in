@@ -1,7 +1,9 @@
 // Recebe conversas do WhatsApp da extensão do Chrome e arquiva por turma.
 //  - acao "resolver": telefone/grupo -> { turma_id, contato_id, origem }
-//  - acao "salvar":  lote de mensagens -> upsert (dedupe por wa_msg_id),
-//                    transcrevendo os áudios com o Gemini.
+//  - acao "turmas":   lista de turmas pro seletor do widget do WhatsApp Web
+//  - acao "vincular": liga uma conversa (DM por telefone / grupo por nome) a uma turma
+//  - acao "salvar":   lote de mensagens -> upsert (dedupe por wa_msg_id),
+//                     transcrevendo os áudios com o Gemini.
 // A extensão manda o JWT do vendedor (login no CRM) no Authorization.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -17,23 +19,27 @@ const norm = (s: string) =>
   (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
 
 const soDigitos = (s: string) => (s || '').replace(/\D/g, '')
+const tail8 = (s: string) => soDigitos(s).slice(-8)
 
 function telefoneBate(a: string, b: string): boolean {
-  const x = soDigitos(a)
-  const y = soDigitos(b)
-  if (!x || !y) return false
-  const tailX = x.slice(-8)
-  const tailY = y.slice(-8)
-  return tailX.length === 8 && tailX === tailY
+  const x = tail8(a)
+  const y = tail8(b)
+  return x.length === 8 && x === y
 }
 
-// nome completo da turma, curso+faculdade+turma+ano como tokens-chave
 function tokensTurma(t: Record<string, any>): string[] {
   return [t.curso, t.faculdade, t.turma, t.ano_formatura]
     .filter((v) => v != null && String(v).trim() !== '')
     .map((v) => norm(String(v)))
     .flatMap((v) => v.split(' '))
     .filter(Boolean)
+}
+
+function nomeTurma(t: Record<string, any>): string {
+  return ['empresa', 'curso', 'faculdade', 'turma', 'ano_formatura', 'cidade']
+    .map((k) => t[k])
+    .filter((v) => v != null && String(v).trim() !== '')
+    .join(' ')
 }
 
 async function transcreverAudio(geminiKey: string, model: string, b64: string, mime: string): Promise<string> {
@@ -88,18 +94,36 @@ Deno.serve(async (req) => {
     return json({ error: 'Corpo inválido' }, 400)
   }
 
-  // ────────────────────────── RESOLVER ──────────────────────────
+  // ─── LISTA DE TURMAS (pro seletor do widget) ───
+  if (body.acao === 'turmas') {
+    const { data: turmas } = await admin
+      .from('turmas')
+      .select('id, empresa, curso, faculdade, turma, ano_formatura, cidade, concluida, funil_status')
+      .order('ano_formatura', { ascending: false })
+    const lista = (turmas || [])
+      .filter((t: any) => t.concluida !== true)
+      .map((t: any) => ({ id: t.id, nome: nomeTurma(t), funil_status: t.funil_status }))
+    return json({ ok: true, turmas: lista })
+  }
+
+  // ─── RESOLVER ───
   if (body.acao === 'resolver') {
     // --- Conversa direta (DM) ---
     if (body.telefone) {
-      const { data: contatos } = await admin
-        .from('contatos')
-        .select('id, nome, telefone, turma_id')
+      const { data: contatos } = await admin.from('contatos').select('id, nome, telefone, turma_id')
       const c = (contatos || []).find((x: any) => telefoneBate(x.telefone || '', body.telefone))
       if (c && c.turma_id) {
-        return json({ ok: true, origem: 'dm', turma_id: c.turma_id, contato_id: c.id, nome: c.nome })
+        return json({ ok: true, origem: 'dm', turma_id: c.turma_id, contato_id: c.id, nome: c.nome, vinculo: 'contato' })
       }
-      return json({ ok: true, vincular: true, motivo: c ? 'contato sem turma' : 'telefone não cadastrado' })
+      // vínculo manual salvo em conversa_dm (pelo telefone)
+      const t8 = tail8(body.telefone)
+      const { data: dms } = await admin.from('conversa_dm').select('*')
+      const dm = (dms || []).find((x: any) => tail8(x.telefone || '') === t8)
+      if (dm?.ignorar) return json({ ok: true, ignorar: true })
+      if (dm?.turma_id) {
+        return json({ ok: true, origem: 'dm', turma_id: dm.turma_id, contato_id: dm.contato_id || null, vinculo: 'manual' })
+      }
+      return json({ ok: true, vincular: true, origem: 'dm', motivo: c ? 'contato sem turma' : 'telefone não cadastrado' })
     }
 
     // --- Grupo ---
@@ -112,10 +136,9 @@ Deno.serve(async (req) => {
 
       if (existente?.ignorar) return json({ ok: true, ignorar: true })
       if (existente?.turma_id) {
-        return json({ ok: true, origem: 'grupo', turma_id: existente.turma_id, grupo_nome: existente.grupo_nome })
+        return json({ ok: true, origem: 'grupo', turma_id: existente.turma_id, grupo_nome: existente.grupo_nome, vinculo: existente.vinculo || 'manual' })
       }
 
-      // tenta casar o nome do grupo com uma turma (sem exigir o prefixo AIF/AFF...)
       const nomeGrupoNorm = norm(body.grupo_nome || '')
       let turmaId: string | null = null
       let temSemelhanca = false
@@ -128,21 +151,16 @@ Deno.serve(async (req) => {
           return toks.length >= 2 && toks.every((tok) => nomeGrupoNorm.includes(tok))
         })
         if (candidatas.length === 1) turmaId = candidatas[0].id
-        // semelhança fraca: nome do grupo contém curso/faculdade de alguma turma,
-        // ou uma palavra típica de grupo de formatura.
-        const palavrasFormatura = ['turma', 'comissao', 'formatura', 'formandos', 'formando']
+        const palavras = ['turma', 'comissao', 'formatura', 'formandos', 'formando']
         temSemelhanca =
-          palavrasFormatura.some((p) => nomeGrupoNorm.includes(p)) ||
+          palavras.some((p) => nomeGrupoNorm.includes(p)) ||
           (turmas || []).some((t: any) => {
-            const alvos = [norm(String(t.curso || '')), norm(String(t.faculdade || ''))].filter(
-              (s) => s.length >= 4,
-            )
+            const alvos = [norm(String(t.curso || '')), norm(String(t.faculdade || ''))].filter((s) => s.length >= 4)
             return alvos.some((s) => nomeGrupoNorm.includes(s))
           })
       }
 
-      // Só registra pendência de grupo que pareça ser de turma. Grupo pessoal
-      // (família, amigos, outro negócio) não vira nem linha no banco.
+      // Só registra pendência de grupo que pareça ser de turma. Grupo pessoal não vira linha.
       if (turmaId || temSemelhanca) {
         await admin.from('conversa_grupos').upsert({
           grupo_wa_id: body.grupo_wa_id,
@@ -154,29 +172,66 @@ Deno.serve(async (req) => {
         })
       }
 
-      if (turmaId) return json({ ok: true, origem: 'grupo', turma_id: turmaId, grupo_nome: body.grupo_nome })
-      return json({ ok: true, vincular: true, motivo: 'grupo sem turma vinculada' })
+      if (turmaId) return json({ ok: true, origem: 'grupo', turma_id: turmaId, grupo_nome: body.grupo_nome, vinculo: 'auto' })
+      return json({ ok: true, vincular: true, origem: 'grupo', motivo: 'grupo sem turma vinculada' })
     }
 
     return json({ error: 'informe telefone ou grupo_wa_id' }, 400)
   }
 
-  // ────────────────────────── SALVAR ──────────────────────────
+  // ─── VINCULAR (manual, pelo widget) ───
+  if (body.acao === 'vincular') {
+    const turmaId = body.turma_id || null
+    const ignorar = !!body.ignorar
+    const agora = new Date().toISOString()
+
+    if (body.tipo === 'grupo' && body.grupo_wa_id) {
+      await admin.from('conversa_grupos').upsert({
+        grupo_wa_id: body.grupo_wa_id,
+        grupo_nome: body.grupo_nome || '',
+        turma_id: turmaId,
+        vinculo: turmaId ? 'manual' : 'pendente',
+        ignorar,
+        criado_por: vendedorId,
+        updated_at: agora,
+      })
+      if (turmaId && body.grupo_wa_id) {
+        await admin.from('conversas_whatsapp').update({ turma_id: turmaId }).eq('chat_wa_id', body.grupo_wa_id).is('turma_id', null)
+      }
+      return json({ ok: true, turma_id: turmaId })
+    }
+
+    if (body.tipo === 'dm' && body.telefone) {
+      const tel = soDigitos(body.telefone)
+      await admin.from('conversa_dm').upsert({
+        telefone: tel,
+        chat_wa_id: body.chat_wa_id || null,
+        nome: body.nome || null,
+        turma_id: turmaId,
+        vinculo: turmaId ? 'manual' : 'auto',
+        ignorar,
+        updated_at: agora,
+      })
+      if (turmaId && body.chat_wa_id) {
+        await admin.from('conversas_whatsapp').update({ turma_id: turmaId }).eq('chat_wa_id', body.chat_wa_id).is('turma_id', null)
+      }
+      return json({ ok: true, turma_id: turmaId })
+    }
+
+    return json({ error: 'informe tipo (dm|grupo) + telefone/grupo_wa_id' }, 400)
+  }
+
+  // ─── SALVAR ───
   if (body.acao === 'salvar') {
     const msgs: any[] = Array.isArray(body.mensagens) ? body.mensagens : []
     if (msgs.length === 0) return json({ ok: true, salvas: 0 })
 
-    // chave do Gemini pra transcrever áudio
     const { data: cfg } = await admin.from('configuracoes').select('gemini_api_key, preferencias').maybeSingle()
     const geminiKey = (cfg?.gemini_api_key || '').trim()
     const geminiModel = (cfg?.preferencias?.geminiModel as string) || 'gemini-2.5-flash'
 
-    // quais já existem?
     const ids = msgs.map((m) => m.wa_msg_id).filter(Boolean)
-    const { data: jaTem } = await admin
-      .from('conversas_whatsapp')
-      .select('wa_msg_id')
-      .in('wa_msg_id', ids)
+    const { data: jaTem } = await admin.from('conversas_whatsapp').select('wa_msg_id').in('wa_msg_id', ids)
     const existentes = new Set((jaTem || []).map((r: any) => r.wa_msg_id))
 
     const linhas: any[] = []
@@ -221,9 +276,8 @@ Deno.serve(async (req) => {
       salvas = linhas.length
     }
     if (body.chat_wa_id) {
-      await admin.from('conversa_grupos')
-        .update({ ultima_sync: new Date().toISOString() })
-        .eq('grupo_wa_id', body.chat_wa_id)
+      await admin.from('conversa_grupos').update({ ultima_sync: new Date().toISOString() }).eq('grupo_wa_id', body.chat_wa_id)
+      await admin.from('conversa_dm').update({ ultima_sync: new Date().toISOString() }).eq('chat_wa_id', body.chat_wa_id)
     }
     return json({ ok: true, salvas })
   }
