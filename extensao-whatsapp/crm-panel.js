@@ -38,17 +38,25 @@
   }
 
   // ---- UI (shadow DOM, isolada do CSS do CRM) ----
+  if (document.getElementById('amorin-wa-host')) return; // já injetado
   const host = document.createElement('div');
   host.id = 'amorin-wa-host';
-  document.documentElement.appendChild(host);
+  const anexar = () => {
+    const alvo = document.body || document.documentElement;
+    if (!host.isConnected) alvo.appendChild(host);
+  };
+  anexar();
+  setInterval(anexar, 4000); // reanexa se a SPA remover
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `
     <style>
       * { box-sizing: border-box; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
-      .aba { position: fixed; top: 50%; right: 0; transform: translateY(-50%) rotate(180deg);
-        writing-mode: vertical-rl; background: #f97316; color: #fff; padding: 12px 6px;
-        border-radius: 0 0 8px 8px; font-size: 12px; font-weight: 700; cursor: pointer;
-        letter-spacing: .5px; box-shadow: -2px 0 8px rgba(0,0,0,.15); }
+      .aba { position: fixed; top: 45%; right: 0; transform: translateY(-50%);
+        writing-mode: vertical-rl; text-orientation: mixed; background: #f97316; color: #fff;
+        padding: 16px 8px; border-radius: 10px 0 0 10px; font-size: 13px; font-weight: 800;
+        cursor: pointer; letter-spacing: 1px; box-shadow: -3px 0 14px rgba(0,0,0,.35);
+        border: 1px solid rgba(255,255,255,.25); }
+      .aba:hover { padding-right: 12px; }
       .painel { position: fixed; top: 0; right: -360px; width: 340px; height: 100vh;
         background: #0f1115; color: #f4f4f5; box-shadow: -4px 0 20px rgba(0,0,0,.35);
         transition: right .22s ease; display: flex; flex-direction: column; }

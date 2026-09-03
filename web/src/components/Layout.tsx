@@ -275,7 +275,7 @@ export default function Layout() {
 
   return (
     <div
-      className={`min-h-screen ${bgThemeClass} text-[#f8fafc] flex flex-col font-sans selection:bg-orange-500/30 selection:text-orange-200`}
+      className={`min-h-screen ${bgThemeClass} text-[#f8fafc] flex flex-col font-sans overflow-x-hidden selection:bg-orange-500/30 selection:text-orange-200`}
     >
       {/* Topbar Fixa (60px) */}
       <header className="fixed top-0 left-0 right-0 h-[60px] z-40 bg-[#0a0f14]/80 backdrop-blur-md border-b border-white/[0.06] flex items-center justify-between px-4 lg:px-8">
@@ -738,7 +738,7 @@ export default function Layout() {
       )}
 
       {/* Área de Conteúdo Principal (padding 32px desktop, 24px tablet, 16px mobile) */}
-      <main className="flex-1 md:pl-[260px] pt-[60px] flex flex-col">
+      <main className="flex-1 md:pl-[260px] pt-[60px] flex flex-col min-w-0 max-w-full overflow-x-hidden">
         {mostrarFiltroResponsavel && (
           <div className="border-b border-white/[0.06] bg-[#0a0f14]/60 px-4 sm:px-6 lg:px-8 py-2">
             <div className="max-w-7xl w-full mx-auto">
@@ -746,7 +746,7 @@ export default function Layout() {
             </div>
           </div>
         )}
-        <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in-up">
+        <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto min-w-0 animate-fade-in-up">
           <Outlet />
         </div>
 

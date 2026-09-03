@@ -113,6 +113,23 @@
     color: hsl(var(--foreground));
   }
 
+  /* Fundo escuro no html/body/#root: sem isso, ao arrastar a tela pro lado no
+     celular (algum conteúdo largo demais) aparecia o branco do navegador atrás.
+     `overflow-x: clip` no #root corta esse arrasto lateral sem quebrar sticky. */
+  html,
+  body,
+  #root {
+    background-color: hsl(var(--background));
+  }
+  html,
+  body {
+    overflow-x: hidden;
+  }
+  #root {
+    overflow-x: clip;
+    max-width: 100%;
+  }
+
   /* NEVER REMOVE THIS */
   section[aria-label='Notifications alt+T'] {
     padding: 0 !important;

@@ -126,20 +126,48 @@ function Instalar() {
 
       <Passo n={5} titulo="Conectar o WhatsApp">
         <p>
-          Abra o CRM (esta mesma página serve) e clique na aba lateral laranja{' '}
-          <strong>WHATSAPP</strong> que aparece na direita da tela.
+          Depois de carregar a extensão, <strong>atualize esta página do CRM</strong> (F5). Vai
+          aparecer uma <strong>aba laranja vertical "WHATSAPP"</strong> colada na beirada direita da
+          tela — clique nela pra abrir o painel.
         </p>
         <p>
-          Clique em <strong>Abrir o WhatsApp Web</strong>, escaneie o QR code com o celular como
-          sempre. Pronto — a partir daí, toda conversa de uma turma cadastrada é arquivada sozinha.
+          No painel, clique em <strong>Abrir o WhatsApp Web</strong> e escaneie o QR code com o
+          celular como sempre.
+        </p>
+        <p className="text-slate-500">
+          Se a aba laranja não aparecer: a extensão está desatualizada. Em{' '}
+          <code className="text-orange-300">chrome://extensions</code>, clique no ícone de recarregar
+          do card dela (ou remova e carregue de novo o .zip novo).
+        </p>
+      </Passo>
+
+      <Passo n={6} titulo="Usar no dia a dia">
+        <p>
+          Com o WhatsApp Web aberto, ao entrar em qualquer conversa aparece um cartão{' '}
+          <strong>🪶 Amor In</strong> no canto superior direito mostrando a qual turma aquela
+          conversa está vinculada.
+        </p>
+        <p>
+          Se estiver <strong>"Não vinculada"</strong>, clique em <strong>Vincular a uma turma</strong>,
+          busque e escolha — pessoa vincula pelo telefone, grupo pelo nome. Enquanto não vincular,
+          nada daquela conversa é salvo.
         </p>
       </Passo>
 
       <div className="flex items-start gap-2 text-xs px-3 py-2 rounded-lg border bg-emerald-500/10 text-emerald-300 border-emerald-500/20">
         <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
         <span>
-          Os áudios são transcritos automaticamente. Grupos que não baterem sozinhos com uma turma
-          ficam pendentes — dá pra vinculá-los na aba <strong>Conversas</strong> de cada turma.
+          Os áudios são transcritos automaticamente. O conteúdo de cada conversa fica na aba{' '}
+          <strong>Conversas</strong> dentro da turma no Funil.
+        </span>
+      </div>
+
+      <div className="flex items-start gap-2 text-xs px-3 py-2 rounded-lg border bg-white/[0.03] text-slate-400 border-white/[0.06]">
+        <span>
+          <strong className="text-slate-300">3 lugares da extensão:</strong> a aba laranja
+          <strong> WHATSAPP</strong> (aqui no CRM, pra conectar) · o cartão <strong>🪶 Amor In</strong>{' '}
+          (no WhatsApp Web, pra vincular turma) · o <strong>popup</strong> (clicando no ícone da
+          extensão na barra do Chrome — fixe o ícone no quebra-cabeça 🧩).
         </span>
       </div>
 
