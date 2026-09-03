@@ -2533,7 +2533,7 @@ export default function LeadsPage() {
         <SelectedLeadDetail
           key={selectedLead.id}
           lead={selectedLead}
-          stageId={dealByLeadId.get(selectedLead.id)?.stageId}
+          deal={dealByLeadId.get(selectedLead.id)}
           onClose={() => setSelectedLead(null)}
           onPatch={(patch) => {
             updateLead(selectedLead.id, patch)
@@ -2581,19 +2581,38 @@ export default function LeadsPage() {
 // ---------------------------------------------------------------------------
 function SelectedLeadDetail({
   lead,
-  stageId,
+  deal,
   onClose,
   onPatch,
   onOpenFullForm,
 }: {
   lead: Lead
-  stageId?: string
+  deal?: Deal
   onClose: () => void
   onPatch: (patch: Partial<Lead>) => void
   onOpenFullForm: () => void
 }) {
   const { toast } = useToast()
+  const { toggleChecklistItem, moveDealStage } = useCRM()
   const sgeLink = getSGELinkForLead(lead.id)
+  const stageId = deal?.stageId
+
+  const handleToggleChecklist = (itemId: string, checked: boolean) => {
+    if (!deal) return
+    toggleChecklistItem(deal.id, itemId, checked)
+    if (!checked || deal.stageId === 'stage-5' || deal.stageId === 'stage-6') return
+    const itensEtapa = DEFAULT_CHECKLIST_ITEMS.filter((it) => it.stageId === deal.stageId)
+    const ultimo = itensEtapa[itensEtapa.length - 1]
+    if (!ultimo || ultimo.id !== itemId) return
+    const idx = FUNNEL_STAGES.findIndex((s) => s.id === deal.stageId)
+    const next = FUNNEL_STAGES[idx + 1]
+    if (!next) return
+    moveDealStage(deal.id, next.id)
+    toast({
+      title: `Turma avançou para ${next.name}`,
+      description: 'Checklist concluído — avançou sozinha, igual no Funil.',
+    })
+  }
 
   // Pacotes + mensagem
   const [pacotes, setPacotes] = useState<PacoteTurma[]>([])
@@ -2788,6 +2807,71 @@ function SelectedLeadDetail({
               ? 'Agendar reunião de turma'
               : 'Agendar reunião'}
         </button>
+
+        {deal && (
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3 space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">Etapa do Funil</span>
+              <Badge
+                variant="outline"
+                style={{
+                  backgroundColor: `${FUNNEL_STAGE_BY_ID[deal.stageId]?.color || '#64748b'}22`,
+                  color: FUNNEL_STAGE_BY_ID[deal.stageId]?.color || '#64748b',
+                  borderColor: `${FUNNEL_STAGE_BY_ID[deal.stageId]?.color || '#64748b'}55`,
+                }}
+              >
+                {FUNNEL_STAGE_BY_ID[deal.stageId]?.name || 'Sem etapa'}
+              </Badge>
+            </div>
+
+            {deal.stageId === 'stage-6' ? (
+              <p className="text-slate-500">Turma já fechada nesta etapa — {deal.outcome === 'ganho' ? 'Ganhou' : deal.outcome === 'perdido' ? 'Perdeu' : 'sem resultado marcado'}.</p>
+            ) : (
+              <>
+                <select
+                  value={deal.stageId}
+                  onChange={(e) => moveDealStage(deal.id, e.target.value)}
+                  className="w-full text-xs rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-2 py-1.5 text-slate-700 dark:text-slate-200"
+                >
+                  {FUNNEL_STAGES.filter((s) => s.id !== 'stage-6').map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {FUNNEL_STAGES.filter((s) => s.id !== 'stage-6').map((stage) => {
+                    const itens = DEFAULT_CHECKLIST_ITEMS.filter((it) => it.stageId === stage.id)
+                    const concluidos = itens.filter((it) => deal.checklist?.[it.id]).length
+                    const atual = stage.id === deal.stageId
+                    return (
+                      <div
+                        key={stage.id}
+                        className={`rounded-md border p-2 ${atual ? 'border-orange-400/60 bg-orange-500/5' : 'border-slate-200 dark:border-slate-800'}`}
+                      >
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                          {stage.name}
+                          {atual && (
+                            <span className="bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">ATUAL</span>
+                          )}
+                          <span className="ml-auto text-slate-400 font-normal">{concluidos}/{itens.length}</span>
+                        </div>
+                        {itens.map((it) => (
+                          <label key={it.id} className="flex items-start gap-1.5 text-[11px] text-slate-600 dark:text-slate-300 py-0.5 cursor-pointer">
+                            <Checkbox
+                              checked={!!deal.checklist?.[it.id]}
+                              onCheckedChange={(checked) => handleToggleChecklist(it.id, !!checked)}
+                              className="mt-0.5"
+                            />
+                            <span>{it.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="space-y-4 py-2 text-xs">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
