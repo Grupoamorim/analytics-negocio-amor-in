@@ -106,6 +106,82 @@ Deno.serve(async (req) => {
     return json({ ok: true, turmas: lista })
   }
 
+  // ─── INFO DA CONVERSA (contagem do que já foi arquivado) ───
+  if (body.acao === 'chat_info') {
+    if (!body.chat_wa_id) return json({ error: 'chat_wa_id' }, 400)
+    const { count } = await admin
+      .from('conversas_whatsapp')
+      .select('id', { count: 'exact', head: true })
+      .eq('chat_wa_id', body.chat_wa_id)
+    const { data: ult } = await admin
+      .from('conversas_whatsapp')
+      .select('enviada_em')
+      .eq('chat_wa_id', body.chat_wa_id)
+      .order('enviada_em', { ascending: false })
+      .limit(1)
+    return json({ ok: true, arquivadas: count || 0, ultima: ult?.[0]?.enviada_em || null })
+  }
+
+  // ─── MENSAGENS ARQUIVADAS DA CONVERSA (pra ver no painel, com áudio já em texto) ───
+  if (body.acao === 'chat_mensagens') {
+    if (!body.chat_wa_id) return json({ error: 'chat_wa_id' }, 400)
+    const limite = Math.min(Number(body.limite) || 40, 120)
+    const { data } = await admin
+      .from('conversas_whatsapp')
+      .select('de_mim, autor_nome, tipo, texto, transcrito, enviada_em')
+      .eq('chat_wa_id', body.chat_wa_id)
+      .order('enviada_em', { ascending: false })
+      .limit(limite)
+    return json({ ok: true, mensagens: (data || []).reverse() })
+  }
+
+  // ─── CRIAR CONTATO na turma (a partir da DM aberta) ───
+  if (body.acao === 'criar_contato') {
+    const nome = (body.nome || '').trim()
+    const turmaId = body.turma_id
+    const tel = soDigitos(body.telefone || '')
+    if (!nome || !turmaId) return json({ error: 'nome e turma_id são obrigatórios' }, 400)
+
+    // não duplica: se já existe contato com esse telefone, só garante a turma
+    const { data: contatos } = await admin.from('contatos').select('id, telefone, turma_id')
+    const existente = tel
+      ? (contatos || []).find((c: any) => telefoneBate(c.telefone || '', tel))
+      : null
+    let contatoId = existente?.id || null
+    if (contatoId) {
+      await admin.from('contatos').update({ turma_id: turmaId, nome }).eq('id', contatoId)
+    } else {
+      const { data: novo, error } = await admin
+        .from('contatos')
+        .insert({ nome, telefone: tel || null, turma_id: turmaId, updated_by: vendedorId })
+        .select('id')
+        .single()
+      if (error) return json({ error: error.message }, 400)
+      contatoId = novo.id
+    }
+
+    // vincula a conversa (DM) e traz o histórico já arquivado pra turma
+    if (tel) {
+      await admin.from('conversa_dm').upsert({
+        telefone: tel,
+        chat_wa_id: body.chat_wa_id || null,
+        nome,
+        turma_id: turmaId,
+        contato_id: contatoId,
+        vinculo: 'manual',
+        updated_at: new Date().toISOString(),
+      })
+    }
+    if (body.chat_wa_id) {
+      await admin
+        .from('conversas_whatsapp')
+        .update({ turma_id: turmaId, contato_id: contatoId })
+        .eq('chat_wa_id', body.chat_wa_id)
+        .is('turma_id', null)
+    }
+    return json({ ok: true, contato_id: contatoId, turma_id: turmaId })
+  }
+
   // ─── RESOLVER ───
   if (body.acao === 'resolver') {
     // --- Conversa direta (DM) ---
