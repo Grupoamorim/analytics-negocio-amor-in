@@ -319,6 +319,14 @@
         ${metricasSecaoHtml(v.turma_id)}
       </div>
       <div class="sec">
+        <div class="titulo">Informações da turma</div>
+        ${infoTurmaSecaoHtml(v.turma_id)}
+      </div>
+      <div class="sec">
+        <div class="titulo">Contatos</div>
+        ${pessoasSecaoHtml(v.turma_id)}
+      </div>
+      <div class="sec">
         <div class="titulo">Etapa e checklist</div>
         ${etapaSecaoHtml(v.turma_id)}
       </div>
@@ -341,6 +349,8 @@
     if ($('verconversa')) $('verconversa').onclick = verConversa;
     if ($('salvarObs')) $('salvarObs').onclick = () => salvarObservacoes(v.turma_id);
     if ($('obs') && metricas && metricas.__turmaId === v.turma_id) $('obs').value = metricas.observacoes || '';
+    ligarInfoTurmaSecao(v.turma_id);
+    ligarPessoasSecao(v.turma_id);
     ligarEtapaSecao(v.turma_id);
     ligarAgendarSecao(v.turma_id);
     renderMensagensPadrao();
@@ -451,6 +461,166 @@
       partes.push(`<div class="linha2"><span>${rotulo}${r.tipo_reuniao ? ' · ' + r.tipo_reuniao.replace(/</g, '&lt;') : ''}</span><b>${formatarData(r.inicio)}</b></div>`);
     });
     return partes.join('') || '<span class="muted">Sem dados de funil pra essa turma.</span>';
+  }
+
+  // =========================================================================
+  //  INFORMAÇÕES DA TURMA (editar direto — mesmos campos do card no Funil)
+  // =========================================================================
+  const EMPRESAS_TURMA = ['AFF', 'AIF', 'AIF-SSA', 'AIF-V', 'AIM', 'SFF'];
+  let turmaInfoData = null; // { __turmaId, ...campos }
+  let turmaInfoCarregandoPara = null;
+
+  async function carregarTurmaInfo(turmaId) {
+    if (turmaInfoCarregandoPara === turmaId) return;
+    turmaInfoCarregandoPara = turmaId;
+    const r = await bg('wa_turma_info', { payload: { turma_id: turmaId } });
+    turmaInfoCarregandoPara = null;
+    if (!chatAtual || !vinculoAtual || vinculoAtual.turma_id !== turmaId) return;
+    turmaInfoData = r && r.ok ? { ...r.turma, __turmaId: turmaId } : null;
+    render();
+  }
+
+  function infoTurmaSecaoHtml(turmaId) {
+    if (!turmaInfoData || turmaInfoData.__turmaId !== turmaId) {
+      setTimeout(() => carregarTurmaInfo(turmaId), 0);
+      return '<span class="muted">Carregando…</span>';
+    }
+    const t = turmaInfoData;
+    const campo = (label, id, val, tipo) => `
+      <div>
+        <div class="muted" style="margin-bottom:2px">${label}</div>
+        <input id="${id}" type="${tipo || 'text'}" value="${(val ?? '').toString().replace(/"/g, '&quot;')}" />
+      </div>
+    `;
+    return `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${campo('Curso', 'infCurso', t.curso)}
+        ${campo('Faculdade', 'infFaculdade', t.faculdade)}
+        ${campo('Cidade', 'infCidade', t.cidade)}
+        ${campo('Ano de formatura', 'infAno', t.ano_formatura)}
+        ${campo('Turma', 'infTurma', t.turma)}
+        <div>
+          <div class="muted" style="margin-bottom:2px">Empresa</div>
+          <select id="infEmpresa">${EMPRESAS_TURMA.map((e) => `<option value="${e}" ${e === t.empresa ? 'selected' : ''}>${e}</option>`).join('')}</select>
+        </div>
+        ${campo('Total de alunos', 'infTotalAlunos', t.total_alunos, 'number')}
+        <div>
+          <div class="muted" style="margin-bottom:2px">Alunos fechados</div>
+          <input value="${t.alunos_fechados ?? 0}" disabled />
+        </div>
+      </div>
+      <button class="g" id="salvarInfo" style="width:100%;margin-top:2px">Salvar informações</button>
+      <span class="muted" id="infoStatus"></span>
+    `;
+  }
+
+  function ligarInfoTurmaSecao(turmaId) {
+    const btn = $('salvarInfo');
+    if (!btn) return;
+    btn.onclick = async () => {
+      const status = $('infoStatus');
+      btn.disabled = true;
+      status.textContent = 'Salvando…';
+      try {
+        const r = await bg('wa_atualizar_turma_info', {
+          payload: {
+            turma_id: turmaId,
+            curso: $('infCurso').value.trim(),
+            faculdade: $('infFaculdade').value.trim(),
+            cidade: $('infCidade').value.trim(),
+            ano_formatura: $('infAno').value.trim(),
+            turma: $('infTurma').value.trim(),
+            empresa: $('infEmpresa').value,
+            total_alunos: $('infTotalAlunos').value ? Number($('infTotalAlunos').value) : null,
+          },
+        });
+        btn.disabled = false;
+        if (r && r.ok) {
+          status.style.color = '#34d399';
+          status.textContent = '✓ Salvo';
+          turmaInfoData = null;
+          metricas = null; // nome/turmasCache podem ter mudado
+          turmasCache = null;
+          setTimeout(() => { if ($('infoStatus')) $('infoStatus').textContent = ''; }, 2000);
+        } else {
+          status.style.color = '#f87171';
+          status.textContent = 'Erro: ' + ((r && r.erro) || (r && r.error) || 'tentar de novo');
+        }
+      } catch (e) {
+        btn.disabled = false;
+        status.style.color = '#f87171';
+        status.textContent = 'Erro inesperado: ' + e;
+      }
+    };
+  }
+
+  // =========================================================================
+  //  CONTATOS DA TURMA (ver, adicionar, remover)
+  // =========================================================================
+  let pessoasData = null; // { __turmaId, lista: [...] }
+  let pessoasCarregandoPara = null;
+
+  async function carregarPessoas(turmaId) {
+    if (pessoasCarregandoPara === turmaId) return;
+    pessoasCarregandoPara = turmaId;
+    const r = await bg('wa_turma_pessoas', { payload: { turma_id: turmaId } });
+    pessoasCarregandoPara = null;
+    if (!chatAtual || !vinculoAtual || vinculoAtual.turma_id !== turmaId) return;
+    pessoasData = { __turmaId: turmaId, lista: (r && r.pessoas) || [] };
+    render();
+  }
+
+  function pessoasSecaoHtml(turmaId) {
+    if (!pessoasData || pessoasData.__turmaId !== turmaId) {
+      setTimeout(() => carregarPessoas(turmaId), 0);
+      return '<span class="muted">Carregando…</span>';
+    }
+    const lista = pessoasData.lista;
+    let html = lista.length
+      ? `<div class="lista" style="max-height:140px" id="pessoasLista">` + lista.map((p) => `
+          <div class="item2" style="display:flex;align-items:center;gap:6px;cursor:default">
+            <div style="flex:1;min-width:0">
+              <div class="t">${(p.nome || 'Sem nome').replace(/</g, '&lt;')}</div>
+              ${p.telefone ? `<div class="p">${p.telefone}</div>` : ''}
+            </div>
+            <span class="muted" data-del="${p.id}" style="cursor:pointer;color:#f87171">remover</span>
+          </div>
+        `).join('') + `</div>`
+      : '<span class="muted">Nenhum contato cadastrado ainda.</span>';
+    html += `
+      <div class="row" style="margin-top:6px">
+        <input id="novoContatoNome" placeholder="Nome" style="flex:1" />
+        <input id="novoContatoTel" placeholder="Telefone" style="flex:1" />
+      </div>
+      <button class="g" id="addContato" style="width:100%">+ Adicionar contato</button>
+    `;
+    return html;
+  }
+
+  function ligarPessoasSecao(turmaId) {
+    const lista = $('pessoasLista');
+    if (lista) {
+      lista.querySelectorAll('[data-del]').forEach((el) => {
+        el.onclick = async () => {
+          await bg('wa_apagar_pessoa', { payload: { contato_id: el.getAttribute('data-del') } });
+          pessoasData = null;
+          render();
+        };
+      });
+    }
+    const add = $('addContato');
+    if (add) {
+      add.onclick = async () => {
+        const nome = $('novoContatoNome').value.trim();
+        const telefone = $('novoContatoTel').value.trim();
+        if (!nome) return;
+        add.disabled = true;
+        await bg('wa_criar_contato', { payload: { turma_id: turmaId, nome, telefone } });
+        add.disabled = false;
+        pessoasData = null;
+        render();
+      };
+    }
   }
 
   // =========================================================================
@@ -697,6 +867,8 @@
         infoChat = null;
         metricas = null;
         checklistData = null;
+        turmaInfoData = null;
+        pessoasData = null;
       }
       chatAtual = novoChat;
       if (!chatAtual) { render(); return; }

@@ -322,6 +322,42 @@ Deno.serve(async (req) => {
     return json({ ok: true, pessoas: pessoas || [] })
   }
 
+  // ─── APAGAR PESSOA/CONTATO da turma ───
+  if (body.acao === 'apagar_pessoa') {
+    const contatoId = body.contato_id
+    if (!contatoId) return json({ error: 'contato_id' }, 400)
+    const { error } = await admin.from('contatos').delete().eq('id', contatoId)
+    if (error) return json({ error: error.message }, 400)
+    return json({ ok: true })
+  }
+
+  // ─── INFORMAÇÕES EDITÁVEIS DA TURMA (mesmos campos do card no Funil) ───
+  if (body.acao === 'turma_info') {
+    const turmaId = body.turma_id
+    if (!turmaId) return json({ error: 'turma_id' }, 400)
+    const { data: turma } = await admin
+      .from('turmas')
+      .select('id, empresa, curso, faculdade, turma, ano_formatura, cidade, total_alunos, alunos_fechados, quantidade_comissao, meta_contratos, codigo')
+      .eq('id', turmaId)
+      .maybeSingle()
+    if (!turma) return json({ error: 'turma não encontrada' }, 404)
+    return json({ ok: true, turma })
+  }
+
+  // ─── SALVAR INFORMAÇÕES EDITÁVEIS DA TURMA ───
+  if (body.acao === 'atualizar_turma_info') {
+    const turmaId = body.turma_id
+    if (!turmaId) return json({ error: 'turma_id' }, 400)
+    const campos = ['empresa', 'curso', 'faculdade', 'turma', 'ano_formatura', 'cidade', 'total_alunos', 'quantidade_comissao', 'meta_contratos']
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: vendedorId }
+    for (const c of campos) {
+      if (body[c] !== undefined) updates[c] = body[c] === '' ? null : body[c]
+    }
+    const { error } = await admin.from('turmas').update(updates).eq('id', turmaId)
+    if (error) return json({ error: error.message }, 400)
+    return json({ ok: true })
+  }
+
   // ─── MENSAGENS PADRÃO (roteiros prontos pro painel do WhatsApp Web) ───
   if (body.acao === 'mensagens_padrao') {
     const { data } = await admin
