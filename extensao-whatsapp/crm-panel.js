@@ -39,9 +39,14 @@
 
   const MONTAGEM_ID = 'amorin-extensao-status';
   let root = null;
+  let elementoAtual = null; // <div id="amorin-extensao-status"> onde o root foi montado
 
   function montarUI(alvo) {
-    if (root) return; // já montado
+    // a página é uma SPA: ao trocar de aba e voltar, o React recria esse <div>
+    // do zero (com o texto estático de novo) — remonta se o elemento mudou ou
+    // se o nosso host saiu do ar.
+    if (root && elementoAtual === alvo && elementoAtual.isConnected) return;
+    elementoAtual = alvo;
     alvo.innerHTML = ''; // tira o "carregando..." estático da página
     const host = document.createElement('div');
     root = host.attachShadow({ mode: 'open' });
