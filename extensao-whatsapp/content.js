@@ -84,7 +84,7 @@
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `
     <style>
-      *{box-sizing:border-box;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
+      *{box-sizing:border-box;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
       .aba{position:fixed;top:45%;right:0;transform:translateY(-50%);writing-mode:vertical-rl;text-orientation:mixed;
         background:#f97316;color:#fff;padding:14px 8px;border-radius:10px 0 0 10px;font-size:12px;font-weight:800;
         cursor:pointer;letter-spacing:1px;box-shadow:-3px 0 14px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.25);
@@ -109,8 +109,9 @@
       .b{background:#f97316;color:#fff;width:100%}
       .g{background:#23262d;color:#e4e4e7}
       input{width:100%;padding:6px 8px;border-radius:7px;border:1px solid #2a2d33;background:#1a1a1c;color:#fff}
-      .lista{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
-      .item{padding:6px 8px;border-radius:6px;cursor:pointer;color:#d4d4d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .lista{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+      .item{padding:9px 10px;border-radius:6px;cursor:pointer;color:#d4d4d8;white-space:nowrap;overflow:hidden;
+        text-overflow:ellipsis;line-height:1.3}
       .item:hover{background:#23262d;color:#fff}
       .row{display:flex;gap:6px}
       .msgs{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
@@ -139,8 +140,27 @@
   `;
   const $ = (id) => root.getElementById(id);
   const painelEl = $('painel');
-  function abrirPainel() { painelEl.classList.add('aberto'); render(); }
-  function fecharPainel() { painelEl.classList.remove('aberto'); }
+
+  // Empurra o WhatsApp Web (margin-right no body) em vez de só cobrir por cima
+  // — o painel fica do lado, não na frente da conversa. Estilo vai no documento
+  // real (fora do shadow DOM), já que precisa afetar o <body> da página.
+  const LARGURA_PAINEL = 340;
+  const estiloEmpurrar = document.createElement('style');
+  estiloEmpurrar.textContent = `
+    body { margin-right: 0; transition: margin-right .22s ease; }
+    html.amorin-painel-aberto body { margin-right: ${LARGURA_PAINEL}px; }
+  `;
+  (document.head || document.documentElement).appendChild(estiloEmpurrar);
+
+  function abrirPainel() {
+    painelEl.classList.add('aberto');
+    document.documentElement.classList.add('amorin-painel-aberto');
+    render();
+  }
+  function fecharPainel() {
+    painelEl.classList.remove('aberto');
+    document.documentElement.classList.remove('amorin-painel-aberto');
+  }
   $('aba').onclick = abrirPainel;
   $('fechar').onclick = fecharPainel;
 
@@ -242,6 +262,7 @@
     const infoLinha = infoChat && infoChat.arquivadas > 0
       ? `<div class="tag">${infoChat.arquivadas} mensagem${infoChat.arquivadas === 1 ? '' : 's'} arquivada${infoChat.arquivadas === 1 ? '' : 's'}${infoChat.ultima ? ' · última ' + formatarQuando(infoChat.ultima) : ''}</div>`
       : '';
+    const sincronizandoAgora = sincronizandoChatId === chatAtual.id;
     b.innerHTML = `
       <div class="chat">${nome}</div>
       <div class="tag">${tipo} · vínculo ${via}</div>
@@ -249,6 +270,7 @@
         <span class="dot"></span>
         <span>${temTurma ? nomeTurma.replace(/</g, '&lt;') : (v && v.ignorar ? 'Marcada como "não é de turma"' : 'Não vinculada')}</span>
       </div>
+      ${sincronizandoAgora ? '<div class="tag">🔄 Sincronizando mensagens…</div>' : ''}
       ${infoLinha}
       <button class="b" id="vincular">${temTurma ? 'Trocar turma' : 'Vincular a uma turma'}</button>
       ${semContatoAindaDM ? '<button class="g" id="criarcontato" style="width:100%">Criar contato + vincular</button>' : ''}
@@ -423,19 +445,23 @@
       vinculoAtual = r && !r.erro ? r : null;
       if (vinculoAtual && vinculoAtual.turma_id) getTurmas(); // pré-carrega nomes
       render();
-      const idAlvo = chatAtual.id;
-      bg('wa_chat_info', { payload: { chat_wa_id: idAlvo } }).then((info) => {
-        if (chatAtual && chatAtual.id === idAlvo && info && info.ok) { infoChat = info; render(); }
-      });
+      atualizarInfoChat(chatAtual.id);
     } catch (e) {
       log('atualizarChat', e);
     }
+  }
+
+  function atualizarInfoChat(idAlvo) {
+    bg('wa_chat_info', { payload: { chat_wa_id: idAlvo } }).then((info) => {
+      if (chatAtual && chatAtual.id === idAlvo && info && info.ok) { infoChat = info; render(); }
+    });
   }
 
   // =========================================================================
   //  VARREDURA
   // =========================================================================
   let varrendo = false;
+  let sincronizandoChatId = null; // chat_wa_id que está baixando/salvando mensagens agora (pro indicador no painel)
   async function varrer() {
     if (varrendo) return;
     varrendo = true;
@@ -468,6 +494,8 @@
 
       const estado = await getEstado();
       const desde = estado.sincronizadoAte[ativo.id] || 0;
+      sincronizandoChatId = ativo.id;
+      if (chatAtual && chatAtual.id === ativo.id) render();
       const msgs = await pedir('mensagens', {
         chatId: ativo.id, count: CFG.MAX_MSGS_POR_SYNC, desde, comAudio: true,
       });
@@ -496,11 +524,17 @@
         estado.ultimaSync = new Date().toISOString();
         await setEstado(estado);
         if (resp.salvas) log(`+${resp.salvas} mensagens arquivadas (${ativo.nome})`);
+        if (resp.salvas && chatAtual && chatAtual.id === ativo.id) {
+          atualizarInfoChat(ativo.id); // contagem/última mensagem mudou, atualiza na hora
+        }
       }
     } catch (e) {
       log('varrer falhou', e);
     } finally {
       varrendo = false;
+      const eraOChatAberto = chatAtual && chatAtual.id === sincronizandoChatId;
+      sincronizandoChatId = null;
+      if (eraOChatAberto) render();
     }
   }
 
@@ -511,6 +545,7 @@
     const montar = () => {
       if (!document.body) return setTimeout(montar, 500);
       document.body.appendChild(host);
+      document.documentElement.classList.add('amorin-painel-aberto'); // painel já começa aberto
       render();
       atualizarChat();
     };

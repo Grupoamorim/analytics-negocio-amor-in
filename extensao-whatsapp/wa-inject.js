@@ -67,9 +67,15 @@
       if (!blob) return null;
       if (blob.size > 8 * 1024 * 1024) return null;
       const buf = await blob.arrayBuffer();
-      let bin = '';
       const bytes = new Uint8Array(buf);
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      // Monta a string binária em blocos (String.fromCharCode.apply em lote) em vez
+      // de caractere por caractere — um áudio de alguns MB no loop antigo travava
+      // a aba do WhatsApp Web por vários segundos (concatenação de string O(n²)).
+      const CHUNK = 8192;
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+      }
       return { base64: btoa(bin), mime: blob.type || 'audio/ogg' };
     } catch (e) {
       log('falha ao baixar áudio', e);
