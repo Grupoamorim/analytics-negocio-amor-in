@@ -42,6 +42,40 @@ function nomeTurma(t: Record<string, any>): string {
     .join(' ')
 }
 
+// Espelha web/src/types/crm.ts (FUNNEL_STAGES / DEFAULT_CHECKLIST_ITEMS) —
+// só os rótulos, sem o detalhe/script do playbook (o painel do WhatsApp Web
+// mostra a versão enxuta). Se mudar lá, mudar aqui também.
+const STAGE_ORDER = ['stage-1', 'stage-2', 'stage-3', 'stage-4', 'stage-5', 'stage-6']
+const STAGE_NOMES: Record<string, string> = {
+  'stage-1': 'Prospecção',
+  'stage-2': 'Qualificação/Contato',
+  'stage-3': 'Reunião Comissão',
+  'stage-4': 'Reunião Turma',
+  'stage-5': 'Decisão',
+  'stage-6': 'Fechou ou Perdeu',
+}
+const CHECKLIST_POR_STAGE: Record<string, string[]> = {
+  'stage-1': [
+    'Conseguir nome, telefone e/ou @ do contato',
+    'Cadastrar o contato no Mapa de Mercado (a turma vira Qualificação sozinha)',
+  ],
+  'stage-2': ['Primeiro Contato', 'Qualificação do Contato'],
+  'stage-3': [
+    'Agendar Reunião com a Comissão',
+    'Criar Grupo com a Comissão',
+    'Montar/Preencher o Pacote',
+    'Enviar o PDF do Orçamento',
+    'Sair com a Reunião da Turma Pré-agendada',
+  ],
+  'stage-4': ['Agendar Reunião com a Turma', 'Realizar a Apresentação para a Turma'],
+  'stage-5': [
+    'Follow-up pós-reunião com a comissão (1 a 2 dias depois)',
+    'Lembretes de prazo da proposta (ex: 7 dias antes de vencer)',
+    'Registrar a decisão final da turma (Sim ou Não)',
+  ],
+  'stage-6': [],
+}
+
 async function transcreverAudio(geminiKey: string, model: string, b64: string, mime: string): Promise<string> {
   const body = JSON.stringify({
     contents: [{
@@ -179,6 +213,85 @@ Deno.serve(async (req) => {
       .eq('id', turmaId)
     if (error) return json({ error: error.message }, 400)
     return json({ ok: true })
+  }
+
+  // ─── CHECKLIST da etapa atual da turma ───
+  if (body.acao === 'turma_checklist') {
+    const turmaId = body.turma_id
+    if (!turmaId) return json({ error: 'turma_id' }, 400)
+    const { data: deal } = await admin.from('deals').select('id, stage, checklist').eq('turma_id', turmaId).maybeSingle()
+    if (!deal) return json({ ok: true, stage: null, itens: [], checklist: {} })
+    const itens = (CHECKLIST_POR_STAGE[deal.stage] || []).map((label, idx) => ({ id: `${deal.stage}-${idx}`, label }))
+    return json({ ok: true, stage: deal.stage, stageNome: STAGE_NOMES[deal.stage] || deal.stage, itens, checklist: deal.checklist || {} })
+  }
+
+  // ─── MARCAR/DESMARCAR item do checklist — avança de etapa sozinho se for o
+  //     último item da etapa (mesma regra de handleToggleChecklistItem em
+  //     Pipeline.tsx), exceto em Decisão/Fechou-ou-Perdeu. ───
+  if (body.acao === 'checklist_toggle') {
+    const turmaId = body.turma_id
+    const itemId = body.item_id
+    if (!turmaId || !itemId) return json({ error: 'turma_id e item_id são obrigatórios' }, 400)
+    const { data: deal } = await admin.from('deals').select('id, stage, checklist').eq('turma_id', turmaId).maybeSingle()
+    if (!deal) return json({ error: 'turma sem deal no funil' }, 400)
+    const checklist = { ...(deal.checklist || {}), [itemId]: !!body.checked }
+    await admin.from('deals').update({ checklist }).eq('id', deal.id)
+
+    let novoStage = deal.stage
+    if (body.checked && deal.stage !== 'stage-5' && deal.stage !== 'stage-6') {
+      const itensEtapa = CHECKLIST_POR_STAGE[deal.stage] || []
+      const ultimoId = itensEtapa.length ? `${deal.stage}-${itensEtapa.length - 1}` : null
+      if (ultimoId === itemId) {
+        const idx = STAGE_ORDER.indexOf(deal.stage)
+        if (idx >= 0 && idx + 1 < STAGE_ORDER.length) {
+          novoStage = STAGE_ORDER[idx + 1]
+          await admin.from('deals').update({ stage: novoStage }).eq('id', deal.id)
+          await admin
+            .from('funil_eventos')
+            .insert({ deal_id: deal.id, turma_id: turmaId, from_stage: deal.stage, to_stage: novoStage, tipo: 'checklist_whatsapp' })
+            .then(() => {})
+            .catch(() => {})
+        }
+      }
+    }
+    return json({ ok: true, stage: novoStage, avancou: novoStage !== deal.stage })
+  }
+
+  // ─── MUDAR ETAPA manualmente (stage-1 a stage-5 — pra stage-6 usa 'marcar_resultado') ───
+  if (body.acao === 'mudar_etapa') {
+    const turmaId = body.turma_id
+    const novoStage = body.stage
+    if (!turmaId || !STAGE_ORDER.includes(novoStage)) return json({ error: 'turma_id e stage válidos são obrigatórios' }, 400)
+    const { data: deal } = await admin.from('deals').select('id, stage').eq('turma_id', turmaId).maybeSingle()
+    if (!deal) return json({ error: 'turma sem deal no funil' }, 400)
+    await admin.from('deals').update({ stage: novoStage }).eq('id', deal.id)
+    try {
+      await admin.from('funil_eventos').insert({ deal_id: deal.id, turma_id: turmaId, from_stage: deal.stage, to_stage: novoStage, tipo: 'manual_whatsapp' })
+    } catch (_) { /* não trava a troca de etapa por causa do log */ }
+    return json({ ok: true })
+  }
+
+  // ─── MARCAR GANHOU/PERDEU (etapa final) ───
+  if (body.acao === 'marcar_resultado') {
+    const turmaId = body.turma_id
+    const outcome = body.outcome === 'ganho' ? 'ganho' : body.outcome === 'perdido' ? 'perdido' : null
+    if (!turmaId || !outcome) return json({ error: 'turma_id e outcome (ganho|perdido) são obrigatórios' }, 400)
+    const { data: deal } = await admin.from('deals').select('id, stage').eq('turma_id', turmaId).maybeSingle()
+    if (!deal) return json({ error: 'turma sem deal no funil' }, 400)
+    await admin
+      .from('deals')
+      .update({ stage: 'stage-6', outcome, lost_reason: outcome === 'perdido' ? body.lost_reason || null : null })
+      .eq('id', deal.id)
+    try {
+      await admin.from('funil_eventos').insert({ deal_id: deal.id, turma_id: turmaId, from_stage: deal.stage, to_stage: 'stage-6', tipo: 'manual_whatsapp', outcome })
+    } catch (_) { /* não trava por causa do log */ }
+    return json({ ok: true })
+  }
+
+  // ─── MOTIVOS DE PERDA padronizados (Admin → Funil) ───
+  if (body.acao === 'motivos_perda') {
+    const { data } = await admin.from('motivos_perda').select('motivo').eq('ativo', true).order('motivo')
+    return json({ ok: true, motivos: (data || []).map((r: any) => r.motivo) })
   }
 
   // ─── PESSOAS vinculadas à turma (contatos) + resumo de conversa de cada uma ───

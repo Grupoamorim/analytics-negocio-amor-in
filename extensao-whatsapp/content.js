@@ -143,14 +143,16 @@
   const $ = (id) => root.getElementById(id);
   const painelEl = $('painel');
 
-  // Empurra o WhatsApp Web (margin-right no body) em vez de só cobrir por cima
-  // — o painel fica do lado, não na frente da conversa. Estilo vai no documento
-  // real (fora do shadow DOM), já que precisa afetar o <body> da página.
+  // Empurra o WhatsApp Web (não só cobre por cima) — o app deles usa
+  // #app { position:absolute; inset:0; width:100% } (testado de verdade no
+  // web.whatsapp.com). Só mudar `right` não basta: como width também tá
+  // explícito, a caixa fica "over-constrained" e o CSS ignora o `right` —
+  // precisa sobrescrever width também (calc(100% - Npx)).
   const LARGURA_PAINEL = 340;
   const estiloEmpurrar = document.createElement('style');
   estiloEmpurrar.textContent = `
-    body { margin-right: 0; transition: margin-right .22s ease; }
-    html.amorin-painel-aberto body { margin-right: ${LARGURA_PAINEL}px; }
+    #app { transition: right .22s ease, width .22s ease; }
+    html.amorin-painel-aberto #app { right: ${LARGURA_PAINEL}px !important; width: calc(100% - ${LARGURA_PAINEL}px) !important; }
   `;
   (document.head || document.documentElement).appendChild(estiloEmpurrar);
 
@@ -188,10 +190,15 @@
   }
 
   function render() {
-    // Enquanto o vendedor está digitando nas observações, não reconstrói o
-    // painel embaixo do dedo — senão perde o texto e o foco (mesma classe de
-    // bug do campo de busca de turma, corrigida antes).
-    if (document.activeElement === root.getElementById('obs')) return;
+    // Enquanto o vendedor está digitando/preenchendo algum campo (observações,
+    // agendar reunião...), não reconstrói o painel embaixo do dedo — senão
+    // perde o texto e o foco (mesma classe de bug do campo de busca de turma,
+    // corrigida antes).
+    // document.activeElement não vê dentro de shadow DOM aberto (retorna o
+    // host) — precisa perguntar pro próprio shadow root quem tá focado nele.
+    const ae = root.activeElement;
+    if (ae && ae.tagName === 'TEXTAREA') return;
+    if (ae && ae.tagName === 'INPUT' && ae.type !== 'checkbox') return;
     const b = $('body');
     if (!chatAtual) {
       b.innerHTML = `<span class="muted">Abra uma conversa pra vincular a uma turma.</span>`;
@@ -288,6 +295,14 @@
         ${metricasSecaoHtml(v.turma_id)}
       </div>
       <div class="sec">
+        <div class="titulo">Etapa e checklist</div>
+        ${etapaSecaoHtml(v.turma_id)}
+      </div>
+      <div class="sec">
+        <div class="titulo">Agendar reunião</div>
+        ${agendarSecaoHtml()}
+      </div>
+      <div class="sec">
         <div class="titulo">Observações da turma</div>
         <textarea id="obs" rows="3" placeholder="Escreva aqui — salva direto na turma…"></textarea>
         <button class="g" id="salvarObs" style="width:100%">Salvar observações</button>
@@ -302,6 +317,8 @@
     if ($('verconversa')) $('verconversa').onclick = verConversa;
     if ($('salvarObs')) $('salvarObs').onclick = () => salvarObservacoes(v.turma_id);
     if ($('obs') && metricas && metricas.__turmaId === v.turma_id) $('obs').value = metricas.observacoes || '';
+    ligarEtapaSecao(v.turma_id);
+    ligarAgendarSecao(v.turma_id);
     renderMensagensPadrao();
   }
 
@@ -403,6 +420,167 @@
     return partes.join('') || '<span class="muted">Sem dados de funil pra essa turma.</span>';
   }
 
+  // =========================================================================
+  //  ETAPA DO FUNIL + CHECKLIST (ver e mudar, sem sair do WhatsApp Web)
+  // =========================================================================
+  const STAGE_KEYS = ['stage-1', 'stage-2', 'stage-3', 'stage-4', 'stage-5'];
+  const STAGE_NOMES = {
+    'stage-1': 'Prospecção', 'stage-2': 'Qualificação/Contato', 'stage-3': 'Reunião Comissão',
+    'stage-4': 'Reunião Turma', 'stage-5': 'Decisão', 'stage-6': 'Fechou ou Perdeu',
+  };
+  let checklistData = null; // { __turmaId, stage, stageNome, itens, checklist }
+  let checklistCarregandoPara = null;
+  let motivosPerdaCache = null;
+
+  async function getMotivosPerda() {
+    if (motivosPerdaCache) return motivosPerdaCache;
+    const r = await bg('wa_motivos_perda');
+    motivosPerdaCache = (r && r.motivos) || [];
+    return motivosPerdaCache;
+  }
+
+  async function carregarChecklist(turmaId) {
+    if (checklistCarregandoPara === turmaId) return;
+    checklistCarregandoPara = turmaId;
+    const r = await bg('wa_turma_checklist', { payload: { turma_id: turmaId } });
+    checklistCarregandoPara = null;
+    if (!chatAtual || !vinculoAtual || vinculoAtual.turma_id !== turmaId) return;
+    checklistData = r && r.ok ? { ...r, __turmaId: turmaId } : null;
+    render();
+  }
+
+  function etapaSecaoHtml(turmaId) {
+    if (!checklistData || checklistData.__turmaId !== turmaId) {
+      setTimeout(() => carregarChecklist(turmaId), 0);
+      return '<span class="muted">Carregando…</span>';
+    }
+    const c = checklistData;
+    if (!c.stage) return '<span class="muted">Essa turma não tem um card no Funil ainda.</span>';
+    let html = '';
+    if (c.stage === 'stage-6') {
+      html += `<div class="linha2"><span>Etapa atual</span><b>Fechou ou Perdeu</b></div>`;
+      html += `<button class="g" id="reabrirEtapa" style="width:100%">Reabrir (voltar pra Decisão)</button>`;
+      return html;
+    }
+    html += `<select id="selStage" style="margin-bottom:4px">`;
+    html += STAGE_KEYS.map((k) => `<option value="${k}" ${k === c.stage ? 'selected' : ''}>${STAGE_NOMES[k]}</option>`).join('');
+    html += `</select>`;
+    if (c.itens.length) {
+      html += `<div class="lista" id="checklistLista" style="max-height:180px">`;
+      html += c.itens.map((it) => `
+        <label style="display:flex;gap:6px;align-items:flex-start;padding:5px 2px;cursor:pointer;font-size:11px;color:#d4d4d8">
+          <input type="checkbox" data-item="${it.id}" ${c.checklist[it.id] ? 'checked' : ''} style="margin-top:2px" />
+          <span style="flex:1">${it.label.replace(/</g, '&lt;')}</span>
+        </label>
+      `).join('');
+      html += `</div>`;
+    }
+    html += `<div class="row">
+      <button class="g" id="btnGanhou" style="flex:1">🏆 Ganhou</button>
+      <button class="g" id="btnPerdeu" style="flex:1">❌ Perdeu</button>
+    </div>`;
+    return html;
+  }
+
+  function ligarEtapaSecao(turmaId) {
+    const sel = $('selStage');
+    if (sel) sel.onchange = async () => { await mudarEtapa(turmaId, sel.value); };
+    const lista = $('checklistLista');
+    if (lista) {
+      lista.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        cb.onchange = async () => { await toggleChecklistItem(turmaId, cb.getAttribute('data-item'), cb.checked); };
+      });
+    }
+    const reabrir = $('reabrirEtapa');
+    if (reabrir) reabrir.onclick = () => mudarEtapa(turmaId, 'stage-5');
+    const btnGanhou = $('btnGanhou');
+    if (btnGanhou) btnGanhou.onclick = () => marcarResultado(turmaId, 'ganho');
+    const btnPerdeu = $('btnPerdeu');
+    if (btnPerdeu) {
+      btnPerdeu.onclick = async () => {
+        const motivos = await getMotivosPerda();
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;flex:1';
+        wrap.innerHTML = `
+          <select id="selMotivoPerda"><option value="">Motivo da perda…</option>${motivos.map((m) => `<option value="${m.replace(/"/g, '&quot;')}">${m.replace(/</g, '&lt;')}</option>`).join('')}</select>
+          <button class="b" id="confirmarPerdeu" style="width:100%">Confirmar</button>
+        `;
+        btnPerdeu.replaceWith(wrap);
+        $('confirmarPerdeu').onclick = () => marcarResultado(turmaId, 'perdido', $('selMotivoPerda').value);
+      };
+    }
+  }
+
+  async function mudarEtapa(turmaId, novoStage) {
+    checklistData = null;
+    metricas = null;
+    render();
+    await bg('wa_mudar_etapa', { payload: { turma_id: turmaId, stage: novoStage } });
+    carregarChecklist(turmaId);
+    carregarMetricas(turmaId);
+  }
+
+  async function toggleChecklistItem(turmaId, itemId, checked) {
+    const r = await bg('wa_checklist_toggle', { payload: { turma_id: turmaId, item_id: itemId, checked } });
+    checklistData = null;
+    metricas = null;
+    render();
+    if (r && r.avancou) log('checklist completo — avançou de etapa sozinho');
+  }
+
+  async function marcarResultado(turmaId, outcome, lostReason) {
+    await bg('wa_marcar_resultado', { payload: { turma_id: turmaId, outcome, lost_reason: lostReason || null } });
+    checklistData = null;
+    metricas = null;
+    render();
+  }
+
+  // =========================================================================
+  //  AGENDAR REUNIÃO (usa a mesma função que já sincroniza com o Google Agenda)
+  // =========================================================================
+  function agendarSecaoHtml() {
+    return `
+      <select id="agModalidade">
+        <option value="ON">Online</option>
+        <option value="PR-S">Presencial no estúdio</option>
+        <option value="PR-F">Presencial fora do estúdio</option>
+      </select>
+      <input id="agTipo" placeholder="Tipo (ex: Comissão, Turma)" />
+      <input id="agQuando" type="datetime-local" />
+      <button class="b" id="agEnviar" style="width:100%">Agendar reunião</button>
+      <span class="muted" id="agStatus"></span>
+    `;
+  }
+
+  function ligarAgendarSecao(turmaId) {
+    const btn = $('agEnviar');
+    if (!btn) return;
+    btn.onclick = async () => {
+      const modalidade = $('agModalidade').value;
+      const tipo = $('agTipo').value.trim() || 'Turma';
+      const quando = $('agQuando').value; // "YYYY-MM-DDTHH:mm" local
+      const status = $('agStatus');
+      if (!quando) { status.textContent = 'Escolha data e hora.'; return; }
+      const inicio = new Date(quando);
+      const fim = new Date(inicio.getTime() + 60 * 60000);
+      btn.disabled = true;
+      status.textContent = 'Agendando…';
+      const r = await bg('wa_agendar_reuniao', {
+        payload: { turma_id: turmaId, tipo_reuniao: tipo, modalidade, inicio: inicio.toISOString(), fim: fim.toISOString() },
+      });
+      btn.disabled = false;
+      if (r && r.ok) {
+        status.textContent = '✓ Agendada e sincronizada com o Google Agenda';
+        $('agTipo').value = '';
+        $('agQuando').value = '';
+        metricas = null;
+        render();
+      } else {
+        status.textContent = 'Erro: ' + ((r && r.erro) || (r && r.error) || 'tentar de novo');
+      }
+    };
+  }
+
   async function verConversa() {
     if (!chatAtual) return;
     modoConversa = true;
@@ -463,6 +641,7 @@
         modoConversa = false;
         infoChat = null;
         metricas = null;
+        checklistData = null;
       }
       chatAtual = novoChat;
       if (!chatAtual) { render(); return; }

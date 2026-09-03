@@ -197,6 +197,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       case 'wa_turma_pessoas':
         sendResponse(await chamarEdge('whatsapp-sync', { acao: 'turma_pessoas', ...msg.payload }));
         break;
+      case 'wa_turma_checklist':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'turma_checklist', ...msg.payload }));
+        break;
+      case 'wa_checklist_toggle':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'checklist_toggle', ...msg.payload }));
+        break;
+      case 'wa_mudar_etapa':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'mudar_etapa', ...msg.payload }));
+        break;
+      case 'wa_marcar_resultado':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'marcar_resultado', ...msg.payload }));
+        break;
+      case 'wa_motivos_perda':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'motivos_perda' }));
+        break;
+      case 'wa_agendar_reuniao':
+        // função dedicada (não é a whatsapp-sync) — já sincroniza com o Google
+        // Agenda e monta o título no padrão que os coletores de transcrição
+        // (Plaud/Fathom) esperam. Não duplicar essa lógica aqui.
+        sendResponse(await chamarEdge('agendar-reuniao', msg.payload));
+        break;
       case 'salvar':
         sendResponse(await chamarEdge('whatsapp-sync', msg.payload));
         break;
