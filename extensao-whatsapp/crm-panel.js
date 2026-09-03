@@ -89,8 +89,19 @@
 
   const $ = (id) => root.getElementById(id);
   const painel = $('painel');
-  $('aba').onclick = () => painel.classList.add('aberto');
-  $('fechar').onclick = () => painel.classList.remove('aberto');
+  const LARGURA_PAINEL = 340; // igual ao .painel width
+
+  // empurra o conteúdo do CRM pra nada ficar escondido atrás do painel
+  function empurrarCRM(aberto) {
+    const push = aberto && window.innerWidth >= 768 ? LARGURA_PAINEL + 'px' : '0px';
+    document.documentElement.style.setProperty('--amorin-wa-push', push);
+  }
+  function abrir() { painel.classList.add('aberto'); empurrarCRM(true); pintar(); }
+  function fechar() { painel.classList.remove('aberto'); empurrarCRM(false); }
+
+  $('aba').onclick = abrir;
+  $('fechar').onclick = fechar;
+  window.addEventListener('resize', () => empurrarCRM(painel.classList.contains('aberto')));
 
   function fmt(iso) {
     if (!iso) return '—';

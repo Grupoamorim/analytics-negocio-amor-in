@@ -130,6 +130,29 @@
     max-width: 100%;
   }
 
+  /* Quando a extensão do WhatsApp abre o painel lateral, ela define
+     --amorin-wa-push (largura do painel). O app encolhe pra nada ficar
+     escondido atrás. No celular o painel vira tela cheia -> não empurra. */
+  :root {
+    --amorin-wa-push: 0px;
+  }
+  .app-shell {
+    padding-right: var(--amorin-wa-push, 0px);
+    transition: padding-right 0.22s ease;
+  }
+  .app-topbar {
+    right: var(--amorin-wa-push, 0px);
+    transition: right 0.22s ease;
+  }
+  @media (max-width: 767px) {
+    .app-shell {
+      padding-right: 0 !important;
+    }
+    .app-topbar {
+      right: 0 !important;
+    }
+  }
+
   /* NEVER REMOVE THIS */
   section[aria-label='Notifications alt+T'] {
     padding: 0 !important;
