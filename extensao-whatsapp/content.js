@@ -90,48 +90,72 @@
         cursor:pointer;letter-spacing:1px;box-shadow:-3px 0 14px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.25);
         z-index:2147483000}
       .aba:hover{padding-right:12px}
-      .painel{position:fixed;top:0;right:-360px;width:340px;height:100vh;background:#0f1115;color:#f4f4f5;
-        box-shadow:-4px 0 20px rgba(0,0,0,.35);transition:right .22s ease;display:flex;flex-direction:column;
+      .painel{position:fixed;top:0;right:-360px;width:340px;height:100vh;background:#0a0f14;color:#f8fafc;
+        box-shadow:-4px 0 24px rgba(0,0,0,.45);transition:right .22s ease;display:flex;flex-direction:column;
         z-index:2147483000;font-size:12px}
       .painel.aberto{right:0}
       header{background:#f97316;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:8px;font-weight:700;flex:none}
       header .x{margin-left:auto;cursor:pointer;font-size:18px;line-height:1;opacity:.9}
-      .body{padding:12px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px}
-      .chat{font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .tag{font-size:10px;color:#a1a1aa}
-      .link{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1px solid #2a2d33}
+      .body{padding:14px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px}
+      .chat{font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+      .tag{font-size:10px;color:#94a3b8}
+      .link{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);
+        background:rgba(255,255,255,.03)}
       .link.ok{border-color:#34d39955;background:#34d39914}
       .link.no{border-color:#f59e0b55;background:#f59e0b14}
       .dot{width:8px;height:8px;border-radius:50%;flex:none}
       .ok .dot{background:#34d399}.no .dot{background:#f59e0b}
       .link span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      button{border:0;border-radius:7px;cursor:pointer;font-weight:600;font-size:11px;padding:6px 8px}
+      button{border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:12px;padding:9px 10px;transition:filter .12s}
+      button:hover{filter:brightness(1.08)}
+      button:disabled{opacity:.5;cursor:default;filter:none}
       .b{background:#f97316;color:#fff;width:100%}
-      .g{background:#23262d;color:#e4e4e7}
-      input{width:100%;padding:6px 8px;border-radius:7px;border:1px solid #2a2d33;background:#1a1a1c;color:#fff}
+      .g{background:rgba(255,255,255,.05);color:#e2e8f0;border:1px solid rgba(255,255,255,.08);width:100%}
+      .pill{width:100%;border-radius:10px;font-weight:600;padding:10px;border:1px solid;background:transparent}
+      .pill-orange{color:#fb923c;border-color:#f9731655;background:#f9731614}
+      .pill-red{color:#f87171;border-color:#f8717155;background:#f8717114}
+      input,select{width:100%;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);
+        background:rgba(255,255,255,.04);color:#f8fafc;font-family:inherit;font-size:12px}
+      select{cursor:pointer}
       .lista{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
-      .item{padding:9px 10px;border-radius:6px;cursor:pointer;color:#d4d4d8;white-space:nowrap;overflow:hidden;
+      .item{padding:9px 10px;border-radius:8px;cursor:pointer;color:#d4d4d8;white-space:nowrap;overflow:hidden;
         text-overflow:ellipsis;line-height:1.3}
-      .item:hover{background:#23262d;color:#fff}
-      .row{display:flex;gap:6px}
+      .item:hover{background:rgba(255,255,255,.06);color:#fff}
+      .row{display:flex;gap:8px}
       .msgs{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
-      .msg{padding:6px 8px;border-radius:8px;background:#1a1a1c}
-      .msg.mim{background:#f9731622}
-      .msg .qm{color:#a1a1aa;font-size:10px;margin-bottom:2px}
-      .msg .tx{color:#e4e4e7;white-space:pre-wrap;word-break:break-word}
+      .msg{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
+      .msg.mim{background:#f9731618;border-color:#f9731633}
+      .msg .qm{color:#94a3b8;font-size:10px;margin-bottom:2px}
+      .msg .tx{color:#e2e8f0;white-space:pre-wrap;word-break:break-word}
       .muted{color:#71717a;font-size:10px}
-      .sec{border-top:1px solid #1c1f24;padding-top:10px;display:flex;flex-direction:column;gap:6px}
-      .sec .titulo{font-size:11px;font-weight:700;color:#d4d4d8;text-transform:uppercase;letter-spacing:.4px}
-      .linha2{display:flex;justify-content:space-between;font-size:11px;color:#a1a1aa;padding:3px 0;border-bottom:1px solid #1c1f24}
-      .linha2 b{color:#f4f4f5;font-weight:600}
+      .sec{border-top:1px solid rgba(255,255,255,.06);padding-top:12px;display:flex;flex-direction:column;gap:7px}
+      .sec .titulo{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
+      .linha2{display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;padding:4px 0;
+        border-bottom:1px solid rgba(255,255,255,.05)}
+      .linha2 b{color:#f8fafc;font-weight:600}
       .linha2.alerta{color:#fbbf24;border-color:#78350f55}
-      .padrao{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto}
-      .padrao .item2{padding:7px 8px;border-radius:7px;border:1px solid #2a2d33;background:#16181c;cursor:pointer}
-      .padrao .item2:hover{border-color:#f9731688;background:#1a1a1c}
+      .prob{display:flex;align-items:center;gap:8px;padding:2px 0}
+      .prob .barra{flex:1;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+      .prob .barra i{display:block;height:100%;background:linear-gradient(90deg,#f97316,#fb923c);border-radius:99px}
+      .prob b{font-size:12px;color:#fff;min-width:32px;text-align:right}
+      .padrao{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto}
+      .padrao .item2{padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);cursor:pointer}
+      .padrao .item2:hover{border-color:#f9731688;background:#f9731610}
       .padrao .item2 .t{font-weight:600;color:#fff;font-size:11px}
       .padrao .item2 .p{color:#8a8a93;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-      textarea{width:100%;padding:6px 8px;border-radius:7px;border:1px solid #2a2d33;background:#1a1a1c;color:#fff;
-        font-family:inherit;resize:vertical}
+      textarea{width:100%;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);
+        background:rgba(255,255,255,.04);color:#f8fafc;font-family:inherit;font-size:12px;resize:vertical}
+      .stageCard{border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 10px;margin-bottom:6px;
+        background:rgba(255,255,255,.02)}
+      .stageCard.atual{border-color:#f9731688;background:#f9731612}
+      .stageTop{display:flex;align-items:center;gap:6px;font-size:11px;color:#f8fafc;font-weight:600;margin-bottom:4px}
+      .stageTop .badge{background:#f97316;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:99px;
+        letter-spacing:.4px}
+      .stageTop .contagem{margin-left:auto;color:#94a3b8;font-weight:600;font-size:10px}
+      .itemCk{display:flex;gap:6px;align-items:flex-start;padding:3px 0;cursor:pointer;font-size:11px;color:#cbd5e1}
+      .itemCk input{width:auto;margin-top:2px;flex:none}
+      .itemCk span{flex:1}
+      summary{outline:none}
       [hidden]{display:none!important}
     </style>
     <div class="aba" id="aba">🪶 AMOR IN</div>
@@ -408,6 +432,15 @@
     }
     const m = metricas;
     const partes = [];
+    if (m.probabilidade != null) {
+      partes.push(`
+        <div class="prob">
+          <span class="muted" style="flex:none">Probabilidade</span>
+          <span class="barra"><i style="width:${Math.max(0, Math.min(100, m.probabilidade))}%"></i></span>
+          <b>${m.probabilidade}%</b>
+        </div>
+      `);
+    }
     const status = turmaStatusPorId(turmaId);
     if (status) partes.push(`<div class="linha2"><span>Status no funil</span><b>${status.replace(/</g, '&lt;')}</b></div>`);
     if (m.diasNaFase != null) partes.push(`<div class="linha2"><span>Dias na fase</span><b>${m.diasNaFase}</b></div>`);
@@ -456,36 +489,46 @@
     }
     const c = checklistData;
     if (!c.stage) return '<span class="muted">Essa turma não tem um card no Funil ainda.</span>';
-    let html = '';
     if (c.stage === 'stage-6') {
-      html += `<div class="linha2"><span>Etapa atual</span><b>Fechou ou Perdeu</b></div>`;
-      html += `<button class="g" id="reabrirEtapa" style="width:100%">Reabrir (voltar pra Decisão)</button>`;
-      return html;
+      return `
+        <div class="stageCard atual">
+          <div class="stageTop"><b>Fechou ou Perdeu</b><span class="badge">ATUAL</span></div>
+        </div>
+        <button class="g" id="reabrirEtapa" style="width:100%">Reabrir (voltar pra Decisão)</button>
+      `;
     }
-    html += `<select id="selStage" style="margin-bottom:4px">`;
-    html += STAGE_KEYS.map((k) => `<option value="${k}" ${k === c.stage ? 'selected' : ''}>${STAGE_NOMES[k]}</option>`).join('');
-    html += `</select>`;
-    if (c.itens.length) {
-      html += `<div class="lista" id="checklistLista" style="max-height:180px">`;
-      html += c.itens.map((it) => `
-        <label style="display:flex;gap:6px;align-items:flex-start;padding:5px 2px;cursor:pointer;font-size:11px;color:#d4d4d8">
-          <input type="checkbox" data-item="${it.id}" ${c.checklist[it.id] ? 'checked' : ''} style="margin-top:2px" />
-          <span style="flex:1">${it.label.replace(/</g, '&lt;')}</span>
-        </label>
-      `).join('');
-      html += `</div>`;
-    }
+    let html = `<div class="lista" id="stagesLista" style="max-height:320px">`;
+    html += (c.stages || []).map((st) => `
+      <div class="stageCard ${st.atual ? 'atual' : ''}">
+        <div class="stageTop">
+          <b>${st.nome}</b>
+          ${st.atual ? '<span class="badge">ATUAL</span>' : ''}
+          <span class="contagem">${st.concluidos}/${st.total}</span>
+        </div>
+        ${st.itens.map((it) => `
+          <label class="itemCk">
+            <input type="checkbox" data-item="${it.id}" ${it.checked ? 'checked' : ''} />
+            <span>${it.label.replace(/</g, '&lt;')}</span>
+          </label>
+        `).join('')}
+      </div>
+    `).join('');
+    html += `</div>`;
     html += `<div class="row">
-      <button class="g" id="btnGanhou" style="flex:1">🏆 Ganhou</button>
-      <button class="g" id="btnPerdeu" style="flex:1">❌ Perdeu</button>
+      <button class="pill pill-orange" id="btnGanhou" style="flex:1">🏆 Ganhou</button>
+      <button class="pill pill-red" id="btnPerdeu" style="flex:1">❌ Perdeu</button>
     </div>`;
+    html += `<details style="margin-top:2px">
+      <summary class="muted" style="cursor:pointer">Mudar etapa manualmente</summary>
+      <select id="selStage" style="margin-top:4px">${STAGE_KEYS.map((k) => `<option value="${k}" ${k === c.stage ? 'selected' : ''}>${STAGE_NOMES[k]}</option>`).join('')}</select>
+    </details>`;
     return html;
   }
 
   function ligarEtapaSecao(turmaId) {
     const sel = $('selStage');
     if (sel) sel.onchange = async () => { await mudarEtapa(turmaId, sel.value); };
-    const lista = $('checklistLista');
+    const lista = $('stagesLista');
     if (lista) {
       lista.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
         cb.onchange = async () => { await toggleChecklistItem(turmaId, cb.getAttribute('data-item'), cb.checked); };
@@ -547,8 +590,8 @@
       </select>
       <input id="agTipo" placeholder="Tipo (ex: Comissão, Turma)" />
       <input id="agQuando" type="datetime-local" />
-      <button class="b" id="agEnviar" style="width:100%">Agendar reunião</button>
-      <span class="muted" id="agStatus"></span>
+      <button class="pill pill-orange" id="agEnviar">📅 Agendar reunião</button>
+      <span id="agStatus" style="font-size:11px;color:#94a3b8"></span>
     `;
   }
 
@@ -556,27 +599,39 @@
     const btn = $('agEnviar');
     if (!btn) return;
     btn.onclick = async () => {
-      const modalidade = $('agModalidade').value;
-      const tipo = $('agTipo').value.trim() || 'Turma';
-      const quando = $('agQuando').value; // "YYYY-MM-DDTHH:mm" local
       const status = $('agStatus');
-      if (!quando) { status.textContent = 'Escolha data e hora.'; return; }
-      const inicio = new Date(quando);
-      const fim = new Date(inicio.getTime() + 60 * 60000);
-      btn.disabled = true;
-      status.textContent = 'Agendando…';
-      const r = await bg('wa_agendar_reuniao', {
-        payload: { turma_id: turmaId, tipo_reuniao: tipo, modalidade, inicio: inicio.toISOString(), fim: fim.toISOString() },
-      });
-      btn.disabled = false;
-      if (r && r.ok) {
-        status.textContent = '✓ Agendada e sincronizada com o Google Agenda';
-        $('agTipo').value = '';
-        $('agQuando').value = '';
-        metricas = null;
-        render();
-      } else {
-        status.textContent = 'Erro: ' + ((r && r.erro) || (r && r.error) || 'tentar de novo');
+      try {
+        const modalidade = $('agModalidade').value;
+        const tipo = $('agTipo').value.trim() || 'Turma';
+        const quando = $('agQuando').value; // "YYYY-MM-DDTHH:mm" local
+        if (!quando) { status.style.color = '#fbbf24'; status.textContent = '⚠ Escolha data e hora antes de agendar.'; return; }
+        const inicio = new Date(quando);
+        if (isNaN(inicio.getTime())) { status.style.color = '#fbbf24'; status.textContent = '⚠ Data/hora inválida.'; return; }
+        const fim = new Date(inicio.getTime() + 60 * 60000);
+        btn.disabled = true;
+        status.style.color = '#94a3b8';
+        status.textContent = 'Agendando…';
+        const r = await bg('wa_agendar_reuniao', {
+          payload: { turma_id: turmaId, tipo_reuniao: tipo, modalidade, inicio: inicio.toISOString(), fim: fim.toISOString() },
+        });
+        btn.disabled = false;
+        if (r && r.ok) {
+          status.style.color = '#34d399';
+          status.textContent = '✓ Agendada e sincronizada com o Google Agenda';
+          $('agTipo').value = '';
+          $('agQuando').value = '';
+          metricas = null;
+          render();
+        } else {
+          status.style.color = '#f87171';
+          status.textContent = 'Erro: ' + ((r && r.erro) || (r && r.error) || 'tentar de novo');
+          log('agendar reunião falhou', r);
+        }
+      } catch (e) {
+        btn.disabled = false;
+        status.style.color = '#f87171';
+        status.textContent = 'Erro inesperado: ' + e;
+        log('agendar reunião — exceção', e);
       }
     };
   }

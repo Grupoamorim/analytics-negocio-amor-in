@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Amor In Gestão — Conversas do WhatsApp",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "Painel lateral dentro do CRM Amor In Gestão que conecta o WhatsApp Web e arquiva as conversas das comissões e alunos por turma.",
   "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": [

@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
 
     const { data: deal } = await admin
       .from('deals')
-      .select('id, stage, sem_resposta, sem_resposta_desde, created_at')
+      .select('id, stage, sem_resposta, sem_resposta_desde, created_at, probabilidade')
       .eq('turma_id', turmaId)
       .maybeSingle()
 
@@ -195,6 +195,7 @@ Deno.serve(async (req) => {
       ok: true,
       observacoes: turma?.observacoes || '',
       stage: deal?.stage || null,
+      probabilidade: deal?.probabilidade ?? null,
       semResposta: !!deal?.sem_resposta,
       semRespostaDesde: deal?.sem_resposta_desde || null,
       diasNaFase,
@@ -215,14 +216,29 @@ Deno.serve(async (req) => {
     return json({ ok: true })
   }
 
-  // ─── CHECKLIST da etapa atual da turma ───
+  // ─── CHECKLIST de TODAS as etapas da turma (igual a visão do Funil: cada
+  //     etapa com seus itens, contagem e destaque de qual é a atual) ───
   if (body.acao === 'turma_checklist') {
     const turmaId = body.turma_id
     if (!turmaId) return json({ error: 'turma_id' }, 400)
     const { data: deal } = await admin.from('deals').select('id, stage, checklist').eq('turma_id', turmaId).maybeSingle()
-    if (!deal) return json({ ok: true, stage: null, itens: [], checklist: {} })
-    const itens = (CHECKLIST_POR_STAGE[deal.stage] || []).map((label, idx) => ({ id: `${deal.stage}-${idx}`, label }))
-    return json({ ok: true, stage: deal.stage, stageNome: STAGE_NOMES[deal.stage] || deal.stage, itens, checklist: deal.checklist || {} })
+    if (!deal) return json({ ok: true, stage: null, stages: [] })
+    const checklist = deal.checklist || {}
+    const stages = STAGE_ORDER.filter((s) => s !== 'stage-6').map((stageId) => {
+      const itens = (CHECKLIST_POR_STAGE[stageId] || []).map((label, idx) => {
+        const id = `${stageId}-${idx}`
+        return { id, label, checked: !!checklist[id] }
+      })
+      return {
+        id: stageId,
+        nome: STAGE_NOMES[stageId],
+        atual: stageId === deal.stage,
+        itens,
+        concluidos: itens.filter((it) => it.checked).length,
+        total: itens.length,
+      }
+    })
+    return json({ ok: true, stage: deal.stage, stageNome: STAGE_NOMES[deal.stage] || deal.stage, stages })
   }
 
   // ─── MARCAR/DESMARCAR item do checklist — avança de etapa sozinho se for o
