@@ -191,14 +191,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       case 'wa_turma_metricas':
         sendResponse(await chamarEdge('whatsapp-sync', { acao: 'turma_metricas', ...msg.payload }));
         break;
-      case 'wa_sessao_embed': {
-        // Sessão pro iframe do painel completo da turma (embed/turma) — nunca vai
-        // na URL, só por postMessage já dentro do WhatsApp Web.
-        const token = await tokenValido();
-        const s = await getSessao();
-        sendResponse(token && s ? { ok: true, access_token: token, refresh_token: s.refresh_token } : { ok: false });
+      case 'wa_atualizar_observacoes':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'atualizar_observacoes', ...msg.payload }));
         break;
-      }
+      case 'wa_turma_pessoas':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'turma_pessoas', ...msg.payload }));
+        break;
       case 'salvar':
         sendResponse(await chamarEdge('whatsapp-sync', msg.payload));
         break;

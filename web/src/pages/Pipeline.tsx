@@ -1514,7 +1514,7 @@ export default function Pipeline() {
 // ---------------------------------------------------------------------------
 // Modal de detalhes do card (checklist + link da proposta + detalhes + histórico)
 // ---------------------------------------------------------------------------
-export interface DealDetailModalProps {
+interface DealDetailModalProps {
   deal: Deal
   lead?: Lead
   owner?: TeamMember
@@ -1537,7 +1537,7 @@ export interface DealDetailModalProps {
 
 const EMPRESAS_TURMA = ['AFF', 'AIF', 'AIF-SSA', 'AIF-V', 'AIM', 'SFF']
 
-export function DealDetailModal({
+function DealDetailModal({
   deal,
   lead,
   owner,

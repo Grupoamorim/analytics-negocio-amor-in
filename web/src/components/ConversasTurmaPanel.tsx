@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, Mic, Link2, EyeOff, RefreshCw, Search } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { SortControl, type SortDirection } from '@/components/SortControl'
@@ -38,6 +38,9 @@ export default function ConversasTurmaPanel({ lead }: { lead: LeadLike }) {
   const [filtro, setFiltro] = useState<'todos' | 'dm' | 'grupo'>('todos')
   const [sortField, setSortField] = useState('enviadaEm')
   const [sortDir, setSortDir] = useState<SortDirection>('desc')
+  // Pessoas/grupo vinculados a essa turma — clicável, o grupo sempre é a
+  // primeira conversa (padrão pedido: mostrar quem já conversou, um a um).
+  const [threadAtivo, setThreadAtivo] = useState<string | 'todos'>('todos')
 
   async function carregar() {
     setCarregando(true)
@@ -56,10 +59,43 @@ export default function ConversasTurmaPanel({ lead }: { lead: LeadLike }) {
       setCarregando(false)
     }
   }
+  const autoSelecionouGrupoRef = useRef<string | null>(null)
   useEffect(() => {
+    autoSelecionouGrupoRef.current = null
+    setThreadAtivo('todos')
     carregar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id])
+
+  // A primeira conversa mostrada é sempre a do grupo, quando existir — só
+  // define automaticamente uma vez por turma (não atropela se o vendedor já
+  // trocou pra outra pessoa ou voltou pra "Todos" de propósito).
+  useEffect(() => {
+    if (autoSelecionouGrupoRef.current === lead.id) return
+    if (gruposTurma.length === 0) return
+    autoSelecionouGrupoRef.current = lead.id
+    setThreadAtivo(gruposTurma[0].grupoWaId)
+  }, [gruposTurma, lead.id])
+
+  /** Uma linha por "conversa" (o grupo + cada pessoa que já mandou/recebeu DM). */
+  const threads = useMemo(() => {
+    const porChat = new Map<string, { chatWaId: string; nome: string; grupo: boolean; qtd: number; ultima: string }>()
+    for (const m of msgs) {
+      const atual = porChat.get(m.chatWaId)
+      const nome = m.origem === 'grupo' ? m.grupoNome || 'Grupo' : m.autorNome || 'Contato'
+      if (!atual) {
+        porChat.set(m.chatWaId, { chatWaId: m.chatWaId, nome, grupo: m.origem === 'grupo', qtd: 1, ultima: m.enviadaEm })
+      } else {
+        atual.qtd += 1
+        if (m.enviadaEm > atual.ultima) atual.ultima = m.enviadaEm
+        // prefere um nome de quem não somos nós, pra não mostrar "Nós" na lista
+        if (!m.deMim && m.autorNome) atual.nome = m.autorNome
+      }
+    }
+    const lista = Array.from(porChat.values())
+    lista.sort((a, b) => (a.grupo === b.grupo ? (a.ultima < b.ultima ? 1 : -1) : a.grupo ? -1 : 1))
+    return lista
+  }, [msgs])
 
   const sugestoes = useMemo(
     () => gruposQueBatemComTurma(pendentes, lead),
@@ -69,6 +105,7 @@ export default function ConversasTurmaPanel({ lead }: { lead: LeadLike }) {
   const filtradas = useMemo(() => {
     const b = busca.trim().toLowerCase()
     let arr = msgs.filter((m) => filtro === 'todos' || m.origem === filtro)
+    if (threadAtivo !== 'todos') arr = arr.filter((m) => m.chatWaId === threadAtivo)
     if (b) arr = arr.filter((m) => (m.texto || '').toLowerCase().includes(b) || (m.autorNome || '').toLowerCase().includes(b))
     const dir = sortDir === 'asc' ? 1 : -1
     return [...arr].sort((a, b2) => {
@@ -76,7 +113,7 @@ export default function ConversasTurmaPanel({ lead }: { lead: LeadLike }) {
       const vb = (b2 as any)[sortField] ?? ''
       return va < vb ? -dir : va > vb ? dir : 0
     })
-  }, [msgs, filtro, busca, sortField, sortDir])
+  }, [msgs, filtro, busca, sortField, sortDir, threadAtivo])
 
   const stats = useMemo(() => {
     const enviadas = msgs.filter((m) => m.deMim).length
@@ -154,6 +191,37 @@ export default function ConversasTurmaPanel({ lead }: { lead: LeadLike }) {
         <span>{stats.enviadas} enviadas · {stats.recebidas} recebidas</span>
         <span className="inline-flex items-center gap-1"><Mic className="w-3 h-3" /> {stats.audios} áudios</span>
       </div>
+
+      {/* conversas: o grupo sempre primeiro, depois cada pessoa que já falou com a turma */}
+      {threads.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <button
+            onClick={() => setThreadAtivo('todos')}
+            className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] border ${
+              threadAtivo === 'todos'
+                ? 'bg-orange-600 text-white border-orange-600'
+                : 'text-slate-500 border-slate-200 dark:border-slate-800 hover:text-slate-300'
+            }`}
+          >
+            Todos
+          </button>
+          {threads.map((t) => (
+            <button
+              key={t.chatWaId}
+              onClick={() => setThreadAtivo(t.chatWaId)}
+              title={`${t.nome} · ${t.qtd} mensagens`}
+              className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] border max-w-[140px] truncate ${
+                threadAtivo === t.chatWaId
+                  ? 'bg-orange-600 text-white border-orange-600'
+                  : 'text-slate-500 border-slate-200 dark:border-slate-800 hover:text-slate-300'
+              }`}
+            >
+              {t.grupo ? '👥 ' : ''}
+              {t.nome}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* filtros */}
       <div className="flex flex-wrap items-center gap-1.5">

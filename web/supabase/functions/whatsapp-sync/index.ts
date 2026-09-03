@@ -111,6 +111,12 @@ Deno.serve(async (req) => {
     const turmaId = body.turma_id
     if (!turmaId) return json({ error: 'turma_id' }, 400)
 
+    const { data: turma } = await admin
+      .from('turmas')
+      .select('observacoes')
+      .eq('id', turmaId)
+      .maybeSingle()
+
     const { data: deal } = await admin
       .from('deals')
       .select('id, stage, sem_resposta, sem_resposta_desde, created_at')
@@ -142,25 +148,49 @@ Deno.serve(async (req) => {
       ? Math.max(0, Math.floor((Date.now() - Date.parse(ultimaMsg.enviada_em)) / 86400000))
       : null
 
-    const { data: proxima } = await admin
+    const { data: reunioes } = await admin
       .from('reunioes_agendadas')
       .select('titulo, inicio, tipo_reuniao')
       .eq('turma_id', turmaId)
       .neq('status', 'cancelada')
       .gte('inicio', new Date().toISOString())
       .order('inicio', { ascending: true })
-      .limit(1)
-      .maybeSingle()
+      .limit(4)
 
     return json({
       ok: true,
+      observacoes: turma?.observacoes || '',
       stage: deal?.stage || null,
       semResposta: !!deal?.sem_resposta,
       semRespostaDesde: deal?.sem_resposta_desde || null,
       diasNaFase,
       diasSemInteracao,
-      proximaReuniao: proxima || null,
+      reunioes: reunioes || [],
     })
+  }
+
+  // ─── SALVAR OBSERVAÇÕES da turma direto do painel do WhatsApp Web ───
+  if (body.acao === 'atualizar_observacoes') {
+    const turmaId = body.turma_id
+    if (!turmaId) return json({ error: 'turma_id' }, 400)
+    const { error } = await admin
+      .from('turmas')
+      .update({ observacoes: body.observacoes || '', updated_at: new Date().toISOString(), updated_by: vendedorId })
+      .eq('id', turmaId)
+    if (error) return json({ error: error.message }, 400)
+    return json({ ok: true })
+  }
+
+  // ─── PESSOAS vinculadas à turma (contatos) + resumo de conversa de cada uma ───
+  if (body.acao === 'turma_pessoas') {
+    const turmaId = body.turma_id
+    if (!turmaId) return json({ error: 'turma_id' }, 400)
+    const { data: pessoas } = await admin
+      .from('contatos')
+      .select('id, nome, telefone')
+      .eq('turma_id', turmaId)
+      .order('nome')
+    return json({ ok: true, pessoas: pessoas || [] })
   }
 
   // ─── MENSAGENS PADRÃO (roteiros prontos pro painel do WhatsApp Web) ───

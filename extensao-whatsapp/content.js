@@ -130,27 +130,14 @@
       .padrao .item2:hover{border-color:#f9731688;background:#1a1a1c}
       .padrao .item2 .t{font-weight:600;color:#fff;font-size:11px}
       .padrao .item2 .p{color:#8a8a93;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-      .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2147483200;display:flex;
-        align-items:center;justify-content:center;padding:3vh 3vw}
-      .overlayBox{width:min(1000px,94vw);height:92vh;background:#0a0f14;border-radius:14px;overflow:hidden;
-        box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;position:relative}
-      .overlayTopo{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#111820;
-        border-bottom:1px solid #1c1f24}
-      .overlayTopo .x2{margin-left:auto;cursor:pointer;color:#a1a1aa;font-size:20px;line-height:1}
-      .overlayTopo .x2:hover{color:#fff}
-      .overlayBox iframe{flex:1;border:0;width:100%}
+      textarea{width:100%;padding:6px 8px;border-radius:7px;border:1px solid #2a2d33;background:#1a1a1c;color:#fff;
+        font-family:inherit;resize:vertical}
       [hidden]{display:none!important}
     </style>
     <div class="aba" id="aba">🪶 AMOR IN</div>
     <div class="painel aberto" id="painel">
       <header>🪶 Amor In <span class="x" id="fechar">&times;</span></header>
       <div class="body" id="body"><span class="muted">Abrindo…</span></div>
-    </div>
-    <div class="overlay" id="overlay" hidden>
-      <div class="overlayBox">
-        <div class="overlayTopo"><span class="muted">🪶 Turma completa — dados ao vivo do CRM</span><span class="x2" id="fecharOverlay">&times;</span></div>
-        <iframe id="iframeTurma" title="Turma"></iframe>
-      </div>
     </div>
   `;
   const $ = (id) => root.getElementById(id);
@@ -179,37 +166,6 @@
   $('aba').onclick = abrirPainel;
   $('fechar').onclick = fecharPainel;
 
-  // ---- painel completo da turma (iframe com o CRM de verdade) ----
-  const overlayEl = $('overlay');
-  const iframeTurma = $('iframeTurma');
-  function abrirTurmaCompleta(turmaId) {
-    if (!turmaId) return;
-    iframeTurma.src = `${CFG.APP_URL}/embed/turma/${turmaId}`;
-    overlayEl.hidden = false;
-  }
-  function fecharTurmaCompleta() {
-    overlayEl.hidden = true;
-    iframeTurma.src = 'about:blank';
-  }
-  $('fecharOverlay').onclick = fecharTurmaCompleta;
-  // handshake com o iframe: ele avisa "pronto" e a gente manda a sessão por
-  // postMessage (nunca pela URL, pra não deixar token no histórico).
-  window.addEventListener('message', (ev) => {
-    if (!ev.data || ev.data.__amorin_embed == null) return;
-    if (ev.origin !== CFG.APP_URL) return;
-    if (ev.data.__amorin_embed === 'pronto') {
-      bg('wa_sessao_embed').then((s) => {
-        if (s && s.ok && iframeTurma.contentWindow) {
-          iframeTurma.contentWindow.postMessage(
-            { __amorin_embed: 'sessao', access_token: s.access_token, refresh_token: s.refresh_token },
-            CFG.APP_URL,
-          );
-        }
-      });
-    }
-    if (ev.data.__amorin_embed === 'fechar') fecharTurmaCompleta();
-  });
-
   let chatAtual = null;   // { id, isGroup, nome, telefone }
   let vinculoAtual = null; // resposta do resolver
   let infoChat = null;     // resposta do chat_info (arquivadas, última)
@@ -232,6 +188,10 @@
   }
 
   function render() {
+    // Enquanto o vendedor está digitando nas observações, não reconstrói o
+    // painel embaixo do dedo — senão perde o texto e o foco (mesma classe de
+    // bug do campo de busca de turma, corrigida antes).
+    if (document.activeElement === root.getElementById('obs')) return;
     const b = $('body');
     if (!chatAtual) {
       b.innerHTML = `<span class="muted">Abra uma conversa pra vincular a uma turma.</span>`;
@@ -326,7 +286,11 @@
       <div class="sec">
         <div class="titulo">Turma no funil</div>
         ${metricasSecaoHtml(v.turma_id)}
-        <button class="g" id="abrirturma" style="width:100%">Abrir turma completa (CRM)</button>
+      </div>
+      <div class="sec">
+        <div class="titulo">Observações da turma</div>
+        <textarea id="obs" rows="3" placeholder="Escreva aqui — salva direto na turma…"></textarea>
+        <button class="g" id="salvarObs" style="width:100%">Salvar observações</button>
       </div>` : ''}
       <div class="sec">
         <div class="titulo">Mensagens padrão</div>
@@ -336,8 +300,23 @@
     $('vincular').onclick = async () => { await getTurmas(); modoSeletor = true; modoSeletorAcao = 'vincular'; filtro = ''; render(); };
     if ($('criarcontato')) $('criarcontato').onclick = async () => { await getTurmas(); modoSeletor = true; modoSeletorAcao = 'contato'; filtro = ''; render(); };
     if ($('verconversa')) $('verconversa').onclick = verConversa;
-    if ($('abrirturma')) $('abrirturma').onclick = () => abrirTurmaCompleta(v.turma_id);
+    if ($('salvarObs')) $('salvarObs').onclick = () => salvarObservacoes(v.turma_id);
+    if ($('obs') && metricas && metricas.__turmaId === v.turma_id) $('obs').value = metricas.observacoes || '';
     renderMensagensPadrao();
+  }
+
+  async function salvarObservacoes(turmaId) {
+    const campo = $('obs');
+    const botao = $('salvarObs');
+    if (!campo || !botao) return;
+    const texto = campo.value;
+    botao.textContent = 'Salvando…';
+    botao.disabled = true;
+    const r = await bg('wa_atualizar_observacoes', { payload: { turma_id: turmaId, observacoes: texto } });
+    botao.disabled = false;
+    botao.textContent = r && r.ok ? '✓ Salvo' : 'Erro — tentar de novo';
+    if (r && r.ok && metricas) metricas.observacoes = texto;
+    setTimeout(() => { if ($('salvarObs')) $('salvarObs').textContent = 'Salvar observações'; }, 2000);
   }
 
   async function renderMensagensPadrao() {
@@ -417,9 +396,10 @@
     if (m.diasNaFase != null) partes.push(`<div class="linha2"><span>Dias na fase</span><b>${m.diasNaFase}</b></div>`);
     if (m.diasSemInteracao != null) partes.push(`<div class="linha2"><span>Dias sem interação</span><b>${m.diasSemInteracao}</b></div>`);
     if (m.semResposta) partes.push(`<div class="linha2 alerta"><span>⚠ Marcada como sem resposta</span></div>`);
-    if (m.proximaReuniao) {
-      partes.push(`<div class="linha2"><span>Próxima reunião</span><b>${formatarData(m.proximaReuniao.inicio)}</b></div>`);
-    }
+    (m.reunioes || []).forEach((r, i) => {
+      const rotulo = i === 0 ? 'Próxima reunião' : 'Depois';
+      partes.push(`<div class="linha2"><span>${rotulo}${r.tipo_reuniao ? ' · ' + r.tipo_reuniao.replace(/</g, '&lt;') : ''}</span><b>${formatarData(r.inicio)}</b></div>`);
+    });
     return partes.join('') || '<span class="muted">Sem dados de funil pra essa turma.</span>';
   }
 

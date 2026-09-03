@@ -32,7 +32,6 @@ import DRE from '@/pages/DRE'
 import Projecoes from '@/pages/Projecoes'
 import Relatorios from '@/pages/Relatorios'
 import Admin from '@/pages/Admin'
-import EmbedTurma from '@/pages/EmbedTurma'
 
 const TELA_CARREGANDO = (
   <div className="min-h-screen bg-[#0a0f14] flex items-center justify-center text-slate-400 text-sm">
@@ -78,9 +77,6 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/redefinir-senha" element={<RedefinirSenha />} />
-            {/* Sem Layout/topbar — carregado dentro de um <iframe> pela extensão do
-                WhatsApp. A sessão chega por postMessage, não pela URL. */}
-            <Route path="/embed/turma/:turmaId" element={<EmbedTurma />} />
             <Route
               element={
                 <ProtectedRoute>
