@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageSquare, Download, ExternalLink, CheckCircle2, Users, User } from 'lucide-react'
+import { MessageSquare, Download, ExternalLink, CheckCircle2, Users, User, Wifi, FileText } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import { useAcesso } from '@/context/AcessoContext'
 import { fetchTodasConversas, type ConversaMsg } from '@/utils/conversas'
 import { resumoPorVendedor, type ResumoVendedor } from '@/utils/conversasResumo'
+import { supabase } from '@/lib/supabase/client'
 
-type Aba = 'instalar' | 'meu' | 'geral'
+type Aba = 'instalar' | 'status' | 'mensagens' | 'meu' | 'geral'
 
 export default function WhatsappComercial() {
   const { deals } = useCRM()
@@ -29,6 +30,8 @@ export default function WhatsappComercial() {
 
   const abas: { id: Aba; label: string; icon: typeof User }[] = [
     { id: 'instalar', label: 'Como instalar', icon: Download },
+    { id: 'status', label: 'Status da extensão', icon: Wifi },
+    { id: 'mensagens', label: 'Mensagens padrão', icon: FileText },
     { id: 'meu', label: 'Meu resumo', icon: User },
     ...(isAdmin ? [{ id: 'geral' as Aba, label: 'Resumo geral', icon: Users }] : []),
   ]
@@ -62,6 +65,8 @@ export default function WhatsappComercial() {
       </div>
 
       {aba === 'instalar' && <Instalar />}
+      {aba === 'status' && <StatusExtensao />}
+      {aba === 'mensagens' && <MensagensPadrao />}
       {aba === 'meu' && <ResumoPessoal nome={nome} r={meu} carregando={carregando} />}
       {aba === 'geral' && isAdmin && <ResumoGeral resumos={resumos} carregando={carregando} />}
     </div>
@@ -126,26 +131,23 @@ function Instalar() {
 
       <Passo n={5} titulo="Conectar o WhatsApp">
         <p>
-          Depois de carregar a extensão, <strong>atualize esta página do CRM</strong> (F5). Vai
-          aparecer uma <strong>aba laranja vertical "WHATSAPP"</strong> colada na beirada direita da
-          tela — clique nela pra abrir o painel.
-        </p>
-        <p>
-          No painel, clique em <strong>Abrir o WhatsApp Web</strong> e escaneie o QR code com o
-          celular como sempre.
+          Depois de carregar a extensão, abra a aba <strong>Status da extensão</strong> aqui em cima
+          e clique em <strong>Abrir o WhatsApp Web</strong>. Escaneie o QR code com o celular como
+          sempre.
         </p>
         <p className="text-slate-500">
-          Se a aba laranja não aparecer: a extensão está desatualizada. Em{' '}
-          <code className="text-orange-300">chrome://extensions</code>, clique no ícone de recarregar
-          do card dela (ou remova e carregue de novo o .zip novo).
+          Se a aba <strong>Status da extensão</strong> não mostrar nada: a extensão está
+          desatualizada. Em <code className="text-orange-300">chrome://extensions</code>, clique no
+          ícone de recarregar do card dela (ou remova e carregue de novo o .zip novo).
         </p>
       </Passo>
 
       <Passo n={6} titulo="Usar no dia a dia">
         <p>
-          Com o WhatsApp Web aberto, ao entrar em qualquer conversa aparece um cartão{' '}
-          <strong>🪶 Amor In</strong> no canto superior direito mostrando a qual turma aquela
-          conversa está vinculada.
+          Com o WhatsApp Web aberto, aparece um painel <strong>🪶 Amor In</strong> encostado na
+          beirada direita da tela (clique na aba vertical laranja pra abrir/fechar). Ele mostra a
+          qual turma aquela conversa está vinculada, o histórico já arquivado e as{' '}
+          <strong>mensagens padrão</strong> — um clique já envia na conversa aberta.
         </p>
         <p>
           Se estiver <strong>"Não vinculada"</strong>, clique em <strong>Vincular a uma turma</strong>,
@@ -164,10 +166,11 @@ function Instalar() {
 
       <div className="flex items-start gap-2 text-xs px-3 py-2 rounded-lg border bg-white/[0.03] text-slate-400 border-white/[0.06]">
         <span>
-          <strong className="text-slate-300">3 lugares da extensão:</strong> a aba laranja
-          <strong> WHATSAPP</strong> (aqui no CRM, pra conectar) · o cartão <strong>🪶 Amor In</strong>{' '}
-          (no WhatsApp Web, pra vincular turma) · o <strong>popup</strong> (clicando no ícone da
-          extensão na barra do Chrome — fixe o ícone no quebra-cabeça 🧩).
+          <strong className="text-slate-300">3 lugares da extensão:</strong> a aba{' '}
+          <strong>Status da extensão</strong> aqui no CRM (pra conectar) · o painel{' '}
+          <strong>🪶 Amor In</strong> (no WhatsApp Web, pra vincular turma e mandar mensagens padrão) ·
+          o <strong>popup</strong> (clicando no ícone da extensão na barra do Chrome — fixe o ícone no
+          quebra-cabeça 🧩).
         </span>
       </div>
 
@@ -199,6 +202,139 @@ function Instalar() {
           </p>
         </div>
       </details>
+    </div>
+  )
+}
+
+function StatusExtensao() {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-400">
+        Status da conexão da extensão instalada neste navegador — usa a mesma sessão que você já tem
+        aqui no CRM, não pede login de novo.
+      </p>
+      {/* A extensão (crm-panel.js) procura este container e renderiza o status aqui dentro.
+          Sem ela instalada/atualizada, fica só o aviso abaixo. */}
+      <div id="amorin-extensao-status" className="bg-[#111820] border border-white/[0.06] rounded-xl p-4">
+        <p className="text-sm text-slate-500">
+          Extensão não detectada neste navegador. Veja a aba <strong>Como instalar</strong>.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+type MsgPadrao = { id: string; titulo: string; texto: string; ativo: boolean }
+
+function MensagensPadrao() {
+  const [itens, setItens] = useState<MsgPadrao[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const [titulo, setTitulo] = useState('')
+  const [texto, setTexto] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  async function carregar() {
+    setCarregando(true)
+    const { data } = await supabase
+      .from('mensagens_padrao_whatsapp')
+      .select('id, titulo, texto, ativo')
+      .order('titulo', { ascending: true })
+    setItens((data as MsgPadrao[]) || [])
+    setCarregando(false)
+  }
+
+  useEffect(() => {
+    carregar()
+  }, [])
+
+  async function adicionar() {
+    if (!titulo.trim() || !texto.trim()) return
+    setSalvando(true)
+    const { error } = await supabase
+      .from('mensagens_padrao_whatsapp')
+      .insert({ titulo: titulo.trim(), texto: texto.trim() })
+    setSalvando(false)
+    if (!error) {
+      setTitulo('')
+      setTexto('')
+      carregar()
+    }
+  }
+
+  async function alternarAtivo(item: MsgPadrao) {
+    setItens((prev) => prev.map((m) => (m.id === item.id ? { ...m, ativo: !item.ativo } : m)))
+    await supabase.from('mensagens_padrao_whatsapp').update({ ativo: !item.ativo }).eq('id', item.id)
+  }
+
+  async function remover(id: string) {
+    setItens((prev) => prev.filter((m) => m.id !== id))
+    await supabase.from('mensagens_padrao_whatsapp').delete().eq('id', id)
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-400">
+        Roteiros prontos que aparecem no painel <strong>🪶 Amor In</strong> dentro do WhatsApp Web —
+        um clique já envia a mensagem na conversa aberta. Visível pra todo o time.
+      </p>
+
+      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-4 space-y-2">
+        <input
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          placeholder="Título (ex: Boas-vindas)"
+          className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500"
+        />
+        <textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Texto da mensagem…"
+          rows={3}
+          className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500"
+        />
+        <button
+          onClick={adicionar}
+          disabled={salvando || !titulo.trim() || !texto.trim()}
+          className="rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-semibold px-3 py-2"
+        >
+          {salvando ? 'Salvando…' : 'Adicionar'}
+        </button>
+      </div>
+
+      {carregando ? (
+        <p className="text-sm text-slate-500">Carregando…</p>
+      ) : itens.length === 0 ? (
+        <p className="text-sm text-slate-500">Nenhuma mensagem padrão cadastrada ainda.</p>
+      ) : (
+        <div className="space-y-2">
+          {itens.map((m) => (
+            <div
+              key={m.id}
+              className="bg-white/[0.03] border border-white/[0.06] rounded-lg p-3 flex items-start gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{m.titulo}</p>
+                <p className="text-xs text-slate-400 whitespace-pre-wrap mt-0.5">{m.texto}</p>
+              </div>
+              <div className="flex flex-col gap-1 items-end shrink-0">
+                <button
+                  onClick={() => alternarAtivo(m)}
+                  className={`text-[11px] px-2 py-1 rounded-md border whitespace-nowrap ${
+                    m.ativo
+                      ? 'border-emerald-500/30 text-emerald-300 bg-emerald-500/10'
+                      : 'border-white/[0.08] text-slate-500'
+                  }`}
+                >
+                  {m.ativo ? 'Ativa' : 'Inativa'}
+                </button>
+                <button onClick={() => remover(m.id)} className="text-[11px] text-red-400 hover:underline">
+                  Remover
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

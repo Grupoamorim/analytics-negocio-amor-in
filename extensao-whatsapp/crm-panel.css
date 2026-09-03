@@ -1,9 +1,0 @@
-/* Só o container. A UI de verdade fica num shadow root isolado (crm-panel.js). */
-#amorin-wa-host {
-  position: fixed;
-  top: 0;
-  right: 0;
-  z-index: 2147483000;
-  width: 0;
-  height: 0;
-}

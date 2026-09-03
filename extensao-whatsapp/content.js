@@ -67,21 +67,36 @@
     return turmasCache;
   }
 
+  // ---- cache de mensagens padrão ----
+  let mensagensPadraoCache = null;
+  async function getMensagensPadrao() {
+    if (mensagensPadraoCache) return mensagensPadraoCache;
+    const r = await bg('wa_mensagens_padrao');
+    mensagensPadraoCache = (r && r.mensagens) || [];
+    return mensagensPadraoCache;
+  }
+
   // =========================================================================
-  //  WIDGET  (cartão flutuante no canto)
+  //  PAINEL  (sidebar completa, estilo Moskit, dentro do próprio WhatsApp Web)
   // =========================================================================
   const host = document.createElement('div');
   host.id = 'amorin-wa-widget';
-  host.style.cssText = 'position:fixed;top:12px;right:16px;z-index:2147483000;';
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `
     <style>
       *{box-sizing:border-box;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
-      .card{width:280px;background:#0f1115;color:#f4f4f5;border:1px solid #2a2d33;border-radius:12px;
-        box-shadow:0 8px 28px rgba(0,0,0,.4);overflow:hidden;font-size:12px}
-      .top{display:flex;align-items:center;gap:6px;background:#f97316;color:#fff;padding:7px 10px;font-weight:700}
-      .top .min{margin-left:auto;cursor:pointer;opacity:.9}
-      .body{padding:10px;display:flex;flex-direction:column;gap:8px}
+      .aba{position:fixed;top:45%;right:0;transform:translateY(-50%);writing-mode:vertical-rl;text-orientation:mixed;
+        background:#f97316;color:#fff;padding:14px 8px;border-radius:10px 0 0 10px;font-size:12px;font-weight:800;
+        cursor:pointer;letter-spacing:1px;box-shadow:-3px 0 14px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.25);
+        z-index:2147483000}
+      .aba:hover{padding-right:12px}
+      .painel{position:fixed;top:0;right:-360px;width:340px;height:100vh;background:#0f1115;color:#f4f4f5;
+        box-shadow:-4px 0 20px rgba(0,0,0,.35);transition:right .22s ease;display:flex;flex-direction:column;
+        z-index:2147483000;font-size:12px}
+      .painel.aberto{right:0}
+      header{background:#f97316;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:8px;font-weight:700;flex:none}
+      header .x{margin-left:auto;cursor:pointer;font-size:18px;line-height:1;opacity:.9}
+      .body{padding:12px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px}
       .chat{font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .tag{font-size:10px;color:#a1a1aa}
       .link{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1px solid #2a2d33}
@@ -104,20 +119,27 @@
       .msg .qm{color:#a1a1aa;font-size:10px;margin-bottom:2px}
       .msg .tx{color:#e4e4e7;white-space:pre-wrap;word-break:break-word}
       .muted{color:#71717a;font-size:10px}
-      .aba{background:#f97316;color:#fff;font-weight:700;font-size:11px;padding:6px 9px;border-radius:9px;
-        cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+      .sec{border-top:1px solid #1c1f24;padding-top:10px;display:flex;flex-direction:column;gap:6px}
+      .sec .titulo{font-size:11px;font-weight:700;color:#d4d4d8;text-transform:uppercase;letter-spacing:.4px}
+      .padrao{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto}
+      .padrao .item2{padding:7px 8px;border-radius:7px;border:1px solid #2a2d33;background:#16181c;cursor:pointer}
+      .padrao .item2:hover{border-color:#f9731688;background:#1a1a1c}
+      .padrao .item2 .t{font-weight:600;color:#fff;font-size:11px}
+      .padrao .item2 .p{color:#8a8a93;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
       [hidden]{display:none!important}
     </style>
-    <div class="aba" id="aba" hidden>🪶 Amor In</div>
-    <div class="card" id="card">
-      <div class="top">🪶 Amor In <span class="min" id="min">—</span></div>
+    <div class="aba" id="aba">🪶 AMOR IN</div>
+    <div class="painel aberto" id="painel">
+      <header>🪶 Amor In <span class="x" id="fechar">&times;</span></header>
       <div class="body" id="body"><span class="muted">Abrindo…</span></div>
     </div>
   `;
   const $ = (id) => root.getElementById(id);
-  let minimizado = false;
-  $('min').onclick = () => { minimizado = true; $('card').hidden = true; $('aba').hidden = false; };
-  $('aba').onclick = () => { minimizado = false; $('card').hidden = false; $('aba').hidden = true; render(); };
+  const painelEl = $('painel');
+  function abrirPainel() { painelEl.classList.add('aberto'); render(); }
+  function fecharPainel() { painelEl.classList.remove('aberto'); }
+  $('aba').onclick = abrirPainel;
+  $('fechar').onclick = fecharPainel;
 
   let chatAtual = null;   // { id, isGroup, nome, telefone }
   let vinculoAtual = null; // resposta do resolver
@@ -140,7 +162,6 @@
   }
 
   function render() {
-    if (minimizado) return;
     const b = $('body');
     if (!chatAtual) {
       b.innerHTML = `<span class="muted">Abra uma conversa pra vincular a uma turma.</span>`;
@@ -172,9 +193,6 @@
     }
 
     if (modoSeletor) {
-      const turmas = (turmasCache || []).filter((t) =>
-        !filtro || t.nome.toLowerCase().includes(filtro.toLowerCase()),
-      );
       const legenda = modoSeletorAcao === 'contato'
         ? 'Criar contato pra essa pessoa e escolher a turma'
         : `${tipo} · vínculo ${via}`;
@@ -182,19 +200,31 @@
         <div class="chat">${nome}</div>
         <div class="tag">${legenda}</div>
         <input id="busca" placeholder="Buscar turma…" value="${filtro.replace(/"/g, '&quot;')}" />
-        <div class="lista" id="lista">
-          ${turmas.slice(0, 60).map((t) => `<div class="item" data-id="${t.id}">${t.nome.replace(/</g, '&lt;')}</div>`).join('') || '<span class="muted">Nenhuma turma.</span>'}
-        </div>
+        <div class="lista" id="lista"></div>
         <div class="row">
           <button class="g" id="cancelar" style="flex:1">Cancelar</button>
           ${modoSeletorAcao === 'vincular' ? '<button class="g" id="naoturma" style="flex:1">Não é de turma</button>' : ''}
         </div>
       `;
+      // A lista é re-renderizada a cada letra digitada, mas o <input> em si
+      // nunca é recriado — senão perde o foco a cada tecla (só aceitava uma
+      // letra por vez porque o re-render trocava o elemento debaixo do dedo).
+      const renderLista = () => {
+        const turmas = (turmasCache || []).filter((t) =>
+          !filtro || t.nome.toLowerCase().includes(filtro.toLowerCase()),
+        );
+        $('lista').innerHTML =
+          turmas.slice(0, 60).map((t) => `<div class="item" data-id="${t.id}">${t.nome.replace(/</g, '&lt;')}</div>`).join('') ||
+          '<span class="muted">Nenhuma turma.</span>';
+        $('lista').querySelectorAll('.item').forEach((el) => {
+          el.onclick = () => (modoSeletorAcao === 'contato' ? criarContato(el.getAttribute('data-id')) : vincular(el.getAttribute('data-id')));
+        });
+      };
+      renderLista();
       const busca = $('busca');
-      busca.oninput = () => { filtro = busca.value; render(); busca.focus(); busca.setSelectionRange(filtro.length, filtro.length); };
-      $('lista').querySelectorAll('.item').forEach((el) => {
-        el.onclick = () => (modoSeletorAcao === 'contato' ? criarContato(el.getAttribute('data-id')) : vincular(el.getAttribute('data-id')));
-      });
+      busca.oninput = () => { filtro = busca.value; renderLista(); };
+      busca.focus();
+      busca.setSelectionRange(filtro.length, filtro.length);
       $('cancelar').onclick = () => { modoSeletor = false; render(); };
       if ($('naoturma')) $('naoturma').onclick = () => vincular(null, true);
       return;
@@ -220,10 +250,52 @@
       ${semContatoAindaDM ? '<button class="g" id="criarcontato" style="width:100%">Criar contato + vincular</button>' : ''}
       ${infoChat && infoChat.arquivadas > 0 ? '<button class="g" id="verconversa" style="width:100%">Ver conversa arquivada</button>' : ''}
       ${temTurma ? '' : '<span class="muted">Enquanto não vincular, nada dessa conversa é salvo.</span>'}
+      <div class="sec">
+        <div class="titulo">Mensagens padrão</div>
+        <div class="padrao" id="padrao"><span class="muted">Carregando…</span></div>
+      </div>
     `;
     $('vincular').onclick = async () => { await getTurmas(); modoSeletor = true; modoSeletorAcao = 'vincular'; filtro = ''; render(); };
     if ($('criarcontato')) $('criarcontato').onclick = async () => { await getTurmas(); modoSeletor = true; modoSeletorAcao = 'contato'; filtro = ''; render(); };
     if ($('verconversa')) $('verconversa').onclick = verConversa;
+    renderMensagensPadrao();
+  }
+
+  async function renderMensagensPadrao() {
+    const idAlvo = chatAtual && chatAtual.id;
+    const lista = await getMensagensPadrao();
+    const alvo = $('padrao');
+    if (!alvo || !chatAtual || chatAtual.id !== idAlvo) return; // conversa trocou enquanto carregava
+    if (!lista.length) {
+      alvo.innerHTML = '<span class="muted">Nenhuma cadastrada ainda (Admin → WhatsApp Comercial).</span>';
+      return;
+    }
+    alvo.innerHTML = lista.map((m) => `
+      <div class="item2" data-id="${m.id}">
+        <div class="t">${(m.titulo || '').replace(/</g, '&lt;')}</div>
+        <div class="p">${(m.texto || '').replace(/</g, '&lt;')}</div>
+      </div>
+    `).join('');
+    alvo.querySelectorAll('.item2').forEach((el) => {
+      el.onclick = () => {
+        const m = lista.find((x) => x.id === el.getAttribute('data-id'));
+        if (m) enviarMensagemPadrao(m.texto);
+      };
+    });
+  }
+
+  async function enviarMensagemPadrao(texto) {
+    if (!chatAtual || !texto) return;
+    const alvo = $('padrao');
+    if (alvo) alvo.innerHTML = '<span class="muted">Enviando…</span>';
+    try {
+      await pedir('enviar', { chatId: chatAtual.id, texto });
+      setTimeout(varrer, 800); // arquiva a mensagem que acabou de sair
+    } catch (e) {
+      log('enviar falhou', e);
+    } finally {
+      renderMensagensPadrao();
+    }
   }
 
   function turmaNomePorId(id) {

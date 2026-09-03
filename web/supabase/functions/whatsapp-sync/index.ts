@@ -106,6 +106,16 @@ Deno.serve(async (req) => {
     return json({ ok: true, turmas: lista })
   }
 
+  // ─── MENSAGENS PADRÃO (roteiros prontos pro painel do WhatsApp Web) ───
+  if (body.acao === 'mensagens_padrao') {
+    const { data } = await admin
+      .from('mensagens_padrao_whatsapp')
+      .select('id, titulo, texto')
+      .eq('ativo', true)
+      .order('titulo', { ascending: true })
+    return json({ ok: true, mensagens: data || [] })
+  }
+
   // ─── INFO DA CONVERSA (contagem do que já foi arquivado) ───
   if (body.acao === 'chat_info') {
     if (!body.chat_wa_id) return json({ error: 'chat_wa_id' }, 400)

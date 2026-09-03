@@ -128,6 +128,10 @@
       }
       if (req === 'ativo') return responder(await chatAtivo());
       if (req === 'mensagens') return responder(await mensagens(params.chatId, params));
+      if (req === 'enviar') {
+        await window.WPP.chat.sendTextMessage(params.chatId, params.texto);
+        return responder({ ok: true });
+      }
       responder(null, 'req desconhecido: ' + req);
     } catch (e) {
       responder(null, e);

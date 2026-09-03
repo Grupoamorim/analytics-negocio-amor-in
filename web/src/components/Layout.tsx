@@ -275,10 +275,10 @@ export default function Layout() {
 
   return (
     <div
-      className={`app-shell min-h-screen ${bgThemeClass} text-[#f8fafc] flex flex-col font-sans overflow-x-hidden selection:bg-orange-500/30 selection:text-orange-200`}
+      className={`min-h-screen ${bgThemeClass} text-[#f8fafc] flex flex-col font-sans overflow-x-hidden selection:bg-orange-500/30 selection:text-orange-200`}
     >
       {/* Topbar Fixa (60px) */}
-      <header className="app-topbar fixed top-0 left-0 right-0 h-[60px] z-40 bg-[#0a0f14]/80 backdrop-blur-md border-b border-white/[0.06] flex items-center justify-between px-4 lg:px-8">
+      <header className="fixed top-0 left-0 right-0 h-[60px] z-40 bg-[#0a0f14]/80 backdrop-blur-md border-b border-white/[0.06] flex items-center justify-between px-4 lg:px-8">
         {/* Lado Esquerdo: Mobile Hamburger + Título da Página */}
         <div className="flex items-center gap-3">
           <button
