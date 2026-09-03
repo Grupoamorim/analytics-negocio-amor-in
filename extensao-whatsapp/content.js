@@ -130,12 +130,27 @@
       .padrao .item2:hover{border-color:#f9731688;background:#1a1a1c}
       .padrao .item2 .t{font-weight:600;color:#fff;font-size:11px}
       .padrao .item2 .p{color:#8a8a93;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+      .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2147483200;display:flex;
+        align-items:center;justify-content:center;padding:3vh 3vw}
+      .overlayBox{width:min(1000px,94vw);height:92vh;background:#0a0f14;border-radius:14px;overflow:hidden;
+        box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;position:relative}
+      .overlayTopo{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#111820;
+        border-bottom:1px solid #1c1f24}
+      .overlayTopo .x2{margin-left:auto;cursor:pointer;color:#a1a1aa;font-size:20px;line-height:1}
+      .overlayTopo .x2:hover{color:#fff}
+      .overlayBox iframe{flex:1;border:0;width:100%}
       [hidden]{display:none!important}
     </style>
     <div class="aba" id="aba">🪶 AMOR IN</div>
     <div class="painel aberto" id="painel">
       <header>🪶 Amor In <span class="x" id="fechar">&times;</span></header>
       <div class="body" id="body"><span class="muted">Abrindo…</span></div>
+    </div>
+    <div class="overlay" id="overlay" hidden>
+      <div class="overlayBox">
+        <div class="overlayTopo"><span class="muted">🪶 Turma completa — dados ao vivo do CRM</span><span class="x2" id="fecharOverlay">&times;</span></div>
+        <iframe id="iframeTurma" title="Turma"></iframe>
+      </div>
     </div>
   `;
   const $ = (id) => root.getElementById(id);
@@ -163,6 +178,37 @@
   }
   $('aba').onclick = abrirPainel;
   $('fechar').onclick = fecharPainel;
+
+  // ---- painel completo da turma (iframe com o CRM de verdade) ----
+  const overlayEl = $('overlay');
+  const iframeTurma = $('iframeTurma');
+  function abrirTurmaCompleta(turmaId) {
+    if (!turmaId) return;
+    iframeTurma.src = `${CFG.APP_URL}/embed/turma/${turmaId}`;
+    overlayEl.hidden = false;
+  }
+  function fecharTurmaCompleta() {
+    overlayEl.hidden = true;
+    iframeTurma.src = 'about:blank';
+  }
+  $('fecharOverlay').onclick = fecharTurmaCompleta;
+  // handshake com o iframe: ele avisa "pronto" e a gente manda a sessão por
+  // postMessage (nunca pela URL, pra não deixar token no histórico).
+  window.addEventListener('message', (ev) => {
+    if (!ev.data || ev.data.__amorin_embed == null) return;
+    if (ev.origin !== CFG.APP_URL) return;
+    if (ev.data.__amorin_embed === 'pronto') {
+      bg('wa_sessao_embed').then((s) => {
+        if (s && s.ok && iframeTurma.contentWindow) {
+          iframeTurma.contentWindow.postMessage(
+            { __amorin_embed: 'sessao', access_token: s.access_token, refresh_token: s.refresh_token },
+            CFG.APP_URL,
+          );
+        }
+      });
+    }
+    if (ev.data.__amorin_embed === 'fechar') fecharTurmaCompleta();
+  });
 
   let chatAtual = null;   // { id, isGroup, nome, telefone }
   let vinculoAtual = null; // resposta do resolver
@@ -280,6 +326,7 @@
       <div class="sec">
         <div class="titulo">Turma no funil</div>
         ${metricasSecaoHtml(v.turma_id)}
+        <button class="g" id="abrirturma" style="width:100%">Abrir turma completa (CRM)</button>
       </div>` : ''}
       <div class="sec">
         <div class="titulo">Mensagens padrão</div>
@@ -289,6 +336,7 @@
     $('vincular').onclick = async () => { await getTurmas(); modoSeletor = true; modoSeletorAcao = 'vincular'; filtro = ''; render(); };
     if ($('criarcontato')) $('criarcontato').onclick = async () => { await getTurmas(); modoSeletor = true; modoSeletorAcao = 'contato'; filtro = ''; render(); };
     if ($('verconversa')) $('verconversa').onclick = verConversa;
+    if ($('abrirturma')) $('abrirturma').onclick = () => abrirTurmaCompleta(v.turma_id);
     renderMensagensPadrao();
   }
 
