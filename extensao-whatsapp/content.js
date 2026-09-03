@@ -98,6 +98,11 @@
       .item{padding:6px 8px;border-radius:6px;cursor:pointer;color:#d4d4d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .item:hover{background:#23262d;color:#fff}
       .row{display:flex;gap:6px}
+      .msgs{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+      .msg{padding:6px 8px;border-radius:8px;background:#1a1a1c}
+      .msg.mim{background:#f9731622}
+      .msg .qm{color:#a1a1aa;font-size:10px;margin-bottom:2px}
+      .msg .tx{color:#e4e4e7;white-space:pre-wrap;word-break:break-word}
       .muted{color:#71717a;font-size:10px}
       .aba{background:#f97316;color:#fff;font-weight:700;font-size:11px;padding:6px 9px;border-radius:9px;
         cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35)}
@@ -116,8 +121,23 @@
 
   let chatAtual = null;   // { id, isGroup, nome, telefone }
   let vinculoAtual = null; // resposta do resolver
+  let infoChat = null;     // resposta do chat_info (arquivadas, última)
   let modoSeletor = false;
+  let modoSeletorAcao = 'vincular'; // 'vincular' | 'contato'
+  let modoConversa = false;
+  let mensagensConversa = null;
   let filtro = '';
+
+  function formatarQuando(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}/${mm} ${hh}:${mi}`;
+  }
 
   function render() {
     if (minimizado) return;
@@ -130,35 +150,64 @@
     const tipo = chatAtual.isGroup ? 'Grupo' : 'Pessoa';
     const via = chatAtual.isGroup ? 'pelo nome do grupo' : 'pelo telefone';
 
+    if (modoConversa) {
+      const lista = mensagensConversa === null
+        ? '<span class="muted">Carregando…</span>'
+        : (mensagensConversa.length
+          ? mensagensConversa.map((m) => `
+              <div class="msg ${m.de_mim ? 'mim' : ''}">
+                <div class="qm">${m.de_mim ? 'Eu' : (m.autor_nome || 'Contato').replace(/</g, '&lt;')} · ${formatarQuando(m.enviada_em)}${m.transcrito ? ' · 🎤 áudio' : ''}</div>
+                <div class="tx">${(m.texto || '(sem texto)').replace(/</g, '&lt;')}</div>
+              </div>
+            `).join('')
+          : '<span class="muted">Nada arquivado ainda.</span>');
+      b.innerHTML = `
+        <div class="chat">${nome}</div>
+        <div class="tag">Conversa arquivada</div>
+        <div class="msgs" id="msgs">${lista}</div>
+        <button class="g" id="voltar" style="width:100%">Voltar</button>
+      `;
+      $('voltar').onclick = () => { modoConversa = false; render(); };
+      return;
+    }
+
     if (modoSeletor) {
       const turmas = (turmasCache || []).filter((t) =>
         !filtro || t.nome.toLowerCase().includes(filtro.toLowerCase()),
       );
+      const legenda = modoSeletorAcao === 'contato'
+        ? 'Criar contato pra essa pessoa e escolher a turma'
+        : `${tipo} · vínculo ${via}`;
       b.innerHTML = `
         <div class="chat">${nome}</div>
-        <div class="tag">${tipo} · vínculo ${via}</div>
+        <div class="tag">${legenda}</div>
         <input id="busca" placeholder="Buscar turma…" value="${filtro.replace(/"/g, '&quot;')}" />
         <div class="lista" id="lista">
           ${turmas.slice(0, 60).map((t) => `<div class="item" data-id="${t.id}">${t.nome.replace(/</g, '&lt;')}</div>`).join('') || '<span class="muted">Nenhuma turma.</span>'}
         </div>
         <div class="row">
           <button class="g" id="cancelar" style="flex:1">Cancelar</button>
-          <button class="g" id="naoturma" style="flex:1">Não é de turma</button>
+          ${modoSeletorAcao === 'vincular' ? '<button class="g" id="naoturma" style="flex:1">Não é de turma</button>' : ''}
         </div>
       `;
       const busca = $('busca');
       busca.oninput = () => { filtro = busca.value; render(); busca.focus(); busca.setSelectionRange(filtro.length, filtro.length); };
       $('lista').querySelectorAll('.item').forEach((el) => {
-        el.onclick = () => vincular(el.getAttribute('data-id'));
+        el.onclick = () => (modoSeletorAcao === 'contato' ? criarContato(el.getAttribute('data-id')) : vincular(el.getAttribute('data-id')));
       });
       $('cancelar').onclick = () => { modoSeletor = false; render(); };
-      $('naoturma').onclick = () => vincular(null, true);
+      if ($('naoturma')) $('naoturma').onclick = () => vincular(null, true);
       return;
     }
 
     const v = vinculoAtual;
     const temTurma = v && v.turma_id && !v.vincular;
     const nomeTurma = temTurma ? (turmaNomePorId(v.turma_id) || 'turma vinculada') : null;
+    const temContato = !!(v && v.contato_id);
+    const semContatoAindaDM = !chatAtual.isGroup && !temContato;
+    const infoLinha = infoChat && infoChat.arquivadas > 0
+      ? `<div class="tag">${infoChat.arquivadas} mensagem${infoChat.arquivadas === 1 ? '' : 's'} arquivada${infoChat.arquivadas === 1 ? '' : 's'}${infoChat.ultima ? ' · última ' + formatarQuando(infoChat.ultima) : ''}</div>`
+      : '';
     b.innerHTML = `
       <div class="chat">${nome}</div>
       <div class="tag">${tipo} · vínculo ${via}</div>
@@ -166,15 +215,49 @@
         <span class="dot"></span>
         <span>${temTurma ? nomeTurma.replace(/</g, '&lt;') : (v && v.ignorar ? 'Marcada como "não é de turma"' : 'Não vinculada')}</span>
       </div>
+      ${infoLinha}
       <button class="b" id="vincular">${temTurma ? 'Trocar turma' : 'Vincular a uma turma'}</button>
+      ${semContatoAindaDM ? '<button class="g" id="criarcontato" style="width:100%">Criar contato + vincular</button>' : ''}
+      ${infoChat && infoChat.arquivadas > 0 ? '<button class="g" id="verconversa" style="width:100%">Ver conversa arquivada</button>' : ''}
       ${temTurma ? '' : '<span class="muted">Enquanto não vincular, nada dessa conversa é salvo.</span>'}
     `;
-    $('vincular').onclick = async () => { await getTurmas(); modoSeletor = true; filtro = ''; render(); };
+    $('vincular').onclick = async () => { await getTurmas(); modoSeletor = true; modoSeletorAcao = 'vincular'; filtro = ''; render(); };
+    if ($('criarcontato')) $('criarcontato').onclick = async () => { await getTurmas(); modoSeletor = true; modoSeletorAcao = 'contato'; filtro = ''; render(); };
+    if ($('verconversa')) $('verconversa').onclick = verConversa;
   }
 
   function turmaNomePorId(id) {
     const t = (turmasCache || []).find((x) => x.id === id);
     return t ? t.nome : null;
+  }
+
+  async function verConversa() {
+    if (!chatAtual) return;
+    modoConversa = true;
+    mensagensConversa = null;
+    render();
+    const idAlvo = chatAtual.id;
+    const r = await bg('wa_chat_mensagens', { payload: { chat_wa_id: idAlvo, limite: 40 } });
+    if (!chatAtual || chatAtual.id !== idAlvo) return;
+    mensagensConversa = (r && r.mensagens) || [];
+    render();
+  }
+
+  async function criarContato(turmaId) {
+    if (!chatAtual || chatAtual.isGroup || !turmaId) return;
+    $('body').innerHTML = '<span class="muted">Criando contato…</span>';
+    const r = await bg('wa_criar_contato', {
+      payload: { nome: chatAtual.nome, telefone: chatAtual.telefone, chat_wa_id: chatAtual.id, turma_id: turmaId },
+    });
+    modoSeletor = false;
+    if (r && r.ok) {
+      vinculoAtual = { turma_id: r.turma_id, contato_id: r.contato_id, origem: 'dm', vinculo: 'contato' };
+      render();
+      setTimeout(varrer, 500);
+    } else {
+      log('criar_contato erro', r && r.erro);
+      atualizarChat();
+    }
   }
 
   async function vincular(turmaId, ignorar) {
@@ -202,7 +285,13 @@
   async function atualizarChat() {
     try {
       const ativo = await pedir('ativo').catch(() => null);
-      chatAtual = ativo && ativo.id ? ativo : null;
+      const novoChat = ativo && ativo.id ? ativo : null;
+      if (!novoChat || !chatAtual || novoChat.id !== chatAtual.id) {
+        modoSeletor = false;
+        modoConversa = false;
+        infoChat = null;
+      }
+      chatAtual = novoChat;
       if (!chatAtual) { render(); return; }
       const resolver = chatAtual.isGroup
         ? { grupo_wa_id: chatAtual.id, grupo_nome: chatAtual.nome }
@@ -211,6 +300,10 @@
       vinculoAtual = r && !r.erro ? r : null;
       if (vinculoAtual && vinculoAtual.turma_id) getTurmas(); // pré-carrega nomes
       render();
+      const idAlvo = chatAtual.id;
+      bg('wa_chat_info', { payload: { chat_wa_id: idAlvo } }).then((info) => {
+        if (chatAtual && chatAtual.id === idAlvo && info && info.ok) { infoChat = info; render(); }
+      });
     } catch (e) {
       log('atualizarChat', e);
     }

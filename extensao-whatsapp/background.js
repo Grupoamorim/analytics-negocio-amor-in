@@ -176,6 +176,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       case 'wa_vincular':
         sendResponse(await chamarEdge('whatsapp-sync', { acao: 'vincular', ...msg.payload }));
         break;
+      case 'wa_chat_info':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'chat_info', ...msg.payload }));
+        break;
+      case 'wa_chat_mensagens':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'chat_mensagens', ...msg.payload }));
+        break;
+      case 'wa_criar_contato':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'criar_contato', ...msg.payload }));
+        break;
       case 'salvar':
         sendResponse(await chamarEdge('whatsapp-sync', msg.payload));
         break;
