@@ -121,6 +121,9 @@
       .muted{color:#71717a;font-size:10px}
       .sec{border-top:1px solid #1c1f24;padding-top:10px;display:flex;flex-direction:column;gap:6px}
       .sec .titulo{font-size:11px;font-weight:700;color:#d4d4d8;text-transform:uppercase;letter-spacing:.4px}
+      .linha2{display:flex;justify-content:space-between;font-size:11px;color:#a1a1aa;padding:3px 0;border-bottom:1px solid #1c1f24}
+      .linha2 b{color:#f4f4f5;font-weight:600}
+      .linha2.alerta{color:#fbbf24;border-color:#78350f55}
       .padrao{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto}
       .padrao .item2{padding:7px 8px;border-radius:7px;border:1px solid #2a2d33;background:#16181c;cursor:pointer}
       .padrao .item2:hover{border-color:#f9731688;background:#1a1a1c}
@@ -144,6 +147,7 @@
   let chatAtual = null;   // { id, isGroup, nome, telefone }
   let vinculoAtual = null; // resposta do resolver
   let infoChat = null;     // resposta do chat_info (arquivadas, última)
+  let metricas = null;     // resposta do turma_metricas (status, dias na fase, próxima reunião...)
   let modoSeletor = false;
   let modoSeletorAcao = 'vincular'; // 'vincular' | 'contato'
   let modoConversa = false;
@@ -250,6 +254,11 @@
       ${semContatoAindaDM ? '<button class="g" id="criarcontato" style="width:100%">Criar contato + vincular</button>' : ''}
       ${infoChat && infoChat.arquivadas > 0 ? '<button class="g" id="verconversa" style="width:100%">Ver conversa arquivada</button>' : ''}
       ${temTurma ? '' : '<span class="muted">Enquanto não vincular, nada dessa conversa é salvo.</span>'}
+      ${temTurma ? `
+      <div class="sec">
+        <div class="titulo">Turma no funil</div>
+        ${metricasSecaoHtml(v.turma_id)}
+      </div>` : ''}
       <div class="sec">
         <div class="titulo">Mensagens padrão</div>
         <div class="padrao" id="padrao"><span class="muted">Carregando…</span></div>
@@ -301,6 +310,47 @@
   function turmaNomePorId(id) {
     const t = (turmasCache || []).find((x) => x.id === id);
     return t ? t.nome : null;
+  }
+
+  function turmaStatusPorId(id) {
+    const t = (turmasCache || []).find((x) => x.id === id);
+    return t ? t.funil_status : null;
+  }
+
+  function formatarData(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  let metricasCarregandoPara = null;
+  async function carregarMetricas(turmaId) {
+    if (metricasCarregandoPara === turmaId) return; // já tem um fetch em andamento pra essa turma
+    metricasCarregandoPara = turmaId;
+    const r = await bg('wa_turma_metricas', { payload: { turma_id: turmaId } });
+    metricasCarregandoPara = null;
+    if (!chatAtual || !vinculoAtual || vinculoAtual.turma_id !== turmaId) return; // trocou de conversa enquanto carregava
+    metricas = r && r.ok ? { ...r, __turmaId: turmaId } : null;
+    render();
+  }
+
+  function metricasSecaoHtml(turmaId) {
+    if (!metricas || metricas.__turmaId !== turmaId) {
+      setTimeout(() => carregarMetricas(turmaId), 0); // dispara fora do render, dedupe por metricasCarregandoPara
+      return '<span class="muted">Carregando…</span>';
+    }
+    const m = metricas;
+    const partes = [];
+    const status = turmaStatusPorId(turmaId);
+    if (status) partes.push(`<div class="linha2"><span>Status no funil</span><b>${status.replace(/</g, '&lt;')}</b></div>`);
+    if (m.diasNaFase != null) partes.push(`<div class="linha2"><span>Dias na fase</span><b>${m.diasNaFase}</b></div>`);
+    if (m.diasSemInteracao != null) partes.push(`<div class="linha2"><span>Dias sem interação</span><b>${m.diasSemInteracao}</b></div>`);
+    if (m.semResposta) partes.push(`<div class="linha2 alerta"><span>⚠ Marcada como sem resposta</span></div>`);
+    if (m.proximaReuniao) {
+      partes.push(`<div class="linha2"><span>Próxima reunião</span><b>${formatarData(m.proximaReuniao.inicio)}</b></div>`);
+    }
+    return partes.join('') || '<span class="muted">Sem dados de funil pra essa turma.</span>';
   }
 
   async function verConversa() {
@@ -362,6 +412,7 @@
         modoSeletor = false;
         modoConversa = false;
         infoChat = null;
+        metricas = null;
       }
       chatAtual = novoChat;
       if (!chatAtual) { render(); return; }

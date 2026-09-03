@@ -106,6 +106,63 @@ Deno.serve(async (req) => {
     return json({ ok: true, turmas: lista })
   }
 
+  // ─── MÉTRICAS DA TURMA (status do funil, dias na fase, dias sem interação, próxima reunião) ───
+  if (body.acao === 'turma_metricas') {
+    const turmaId = body.turma_id
+    if (!turmaId) return json({ error: 'turma_id' }, 400)
+
+    const { data: deal } = await admin
+      .from('deals')
+      .select('id, stage, sem_resposta, sem_resposta_desde, created_at')
+      .eq('turma_id', turmaId)
+      .maybeSingle()
+
+    let diasNaFase: number | null = null
+    if (deal) {
+      const { data: evento } = await admin
+        .from('funil_eventos')
+        .select('created_at')
+        .eq('deal_id', deal.id)
+        .eq('to_stage', deal.stage)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const desde = evento?.created_at || deal.created_at
+      if (desde) diasNaFase = Math.max(0, Math.floor((Date.now() - Date.parse(desde)) / 86400000))
+    }
+
+    const { data: ultimaMsg } = await admin
+      .from('conversas_whatsapp')
+      .select('enviada_em')
+      .eq('turma_id', turmaId)
+      .order('enviada_em', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const diasSemInteracao = ultimaMsg?.enviada_em
+      ? Math.max(0, Math.floor((Date.now() - Date.parse(ultimaMsg.enviada_em)) / 86400000))
+      : null
+
+    const { data: proxima } = await admin
+      .from('reunioes_agendadas')
+      .select('titulo, inicio, tipo_reuniao')
+      .eq('turma_id', turmaId)
+      .neq('status', 'cancelada')
+      .gte('inicio', new Date().toISOString())
+      .order('inicio', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    return json({
+      ok: true,
+      stage: deal?.stage || null,
+      semResposta: !!deal?.sem_resposta,
+      semRespostaDesde: deal?.sem_resposta_desde || null,
+      diasNaFase,
+      diasSemInteracao,
+      proximaReuniao: proxima || null,
+    })
+  }
+
   // ─── MENSAGENS PADRÃO (roteiros prontos pro painel do WhatsApp Web) ───
   if (body.acao === 'mensagens_padrao') {
     const { data } = await admin
@@ -364,9 +421,94 @@ Deno.serve(async (req) => {
     if (body.chat_wa_id) {
       await admin.from('conversa_grupos').update({ ultima_sync: new Date().toISOString() }).eq('grupo_wa_id', body.chat_wa_id)
       await admin.from('conversa_dm').update({ ultima_sync: new Date().toISOString() }).eq('chat_wa_id', body.chat_wa_id)
+      if (salvas > 0) {
+        try { await atualizarSemResposta(admin, body.chat_wa_id) } catch (_) { /* não trava o salvar por causa disso */ }
+      }
     }
     return json({ ok: true, salvas })
   }
 
   return json({ error: 'ação desconhecida' }, 400)
 })
+
+// Roda depois de cada 'salvar': se as últimas mensagens da conversa são todas
+// nossas (de_mim) espalhadas em 3+ dias diferentes sem nenhuma resposta, marca
+// a turma como "sem resposta" sozinha (mesmo efeito de marcarSemResposta() no
+// CRMContext.tsx). Se a mensagem mais recente é uma resposta recebida e a
+// turma estava marcada, reativa e fecha o episódio — igual reativarSemResposta().
+async function atualizarSemResposta(admin: ReturnType<typeof createClient>, chatWaId: string) {
+  const { data: ultima } = await admin
+    .from('conversas_whatsapp')
+    .select('turma_id')
+    .eq('chat_wa_id', chatWaId)
+    .not('turma_id', 'is', null)
+    .order('enviada_em', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const turmaId = ultima?.turma_id
+  if (!turmaId) return
+
+  const { data: deal } = await admin
+    .from('deals')
+    .select('id, stage, sem_resposta')
+    .eq('turma_id', turmaId)
+    .maybeSingle()
+  if (!deal) return
+
+  const { data: recentes } = await admin
+    .from('conversas_whatsapp')
+    .select('de_mim, enviada_em')
+    .eq('chat_wa_id', chatWaId)
+    .order('enviada_em', { ascending: false })
+    .limit(15)
+  if (!recentes || !recentes.length) return
+
+  const agora = new Date().toISOString()
+
+  // resposta chegou -> reativa se estava marcado
+  if (!recentes[0].de_mim) {
+    if (!deal.sem_resposta) return
+    const { data: aberto } = await admin
+      .from('sem_resposta_episodios')
+      .select('id, iniciou_em')
+      .eq('deal_id', deal.id)
+      .is('encerrou_em', null)
+      .order('iniciou_em', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (aberto) {
+      const dias = Math.round((Date.parse(agora) - Date.parse(aberto.iniciou_em)) / 86400000)
+      await admin.from('sem_resposta_episodios').update({ encerrou_em: agora, encerrou_por: 'reativado', dias }).eq('id', aberto.id)
+    }
+    await admin.from('deals').update({ sem_resposta: false, sem_resposta_desde: null }).eq('id', deal.id)
+    return
+  }
+
+  // já marcada, ou fase que não entra no controle (nova / fechada) -> nada a fazer
+  if (deal.sem_resposta || deal.stage === 'stage-1' || deal.stage === 'stage-6') return
+
+  // conta dias distintos na sequência de mensagens nossas (sem resposta no meio)
+  const dias = new Set<string>()
+  for (const m of recentes) {
+    if (!m.de_mim) break
+    dias.add(String(m.enviada_em).slice(0, 10))
+  }
+  if (dias.size < 3) return
+
+  const { data: turma } = await admin
+    .from('turmas')
+    .select('curso, faculdade, empresa')
+    .eq('id', turmaId)
+    .maybeSingle()
+
+  await admin.from('deals').update({ sem_resposta: true, sem_resposta_desde: agora }).eq('id', deal.id)
+  await admin.from('sem_resposta_episodios').insert({
+    deal_id: deal.id,
+    turma_id: turmaId,
+    stage_id: deal.stage,
+    curso: turma?.curso || null,
+    faculdade: turma?.faculdade || null,
+    empresa: turma?.empresa || null,
+    iniciou_em: agora,
+  })
+}

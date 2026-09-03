@@ -188,6 +188,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       case 'wa_mensagens_padrao':
         sendResponse(await chamarEdge('whatsapp-sync', { acao: 'mensagens_padrao' }));
         break;
+      case 'wa_turma_metricas':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'turma_metricas', ...msg.payload }));
+        break;
       case 'salvar':
         sendResponse(await chamarEdge('whatsapp-sync', msg.payload));
         break;
