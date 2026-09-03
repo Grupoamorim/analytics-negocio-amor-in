@@ -358,6 +358,63 @@ Deno.serve(async (req) => {
     return json({ ok: true })
   }
 
+  // ─── PACOTES DA TURMA (fotografia) ───
+  if (body.acao === 'turma_pacotes') {
+    const turmaId = body.turma_id
+    if (!turmaId) return json({ error: 'turma_id' }, 400)
+    const { data } = await admin.from('pacotes_turma').select('*').eq('turma_id', turmaId).order('ordem')
+    return json({ ok: true, pacotes: data || [] })
+  }
+
+  // ─── CATÁLOGO de itens + templates pra montar um pacote novo ───
+  if (body.acao === 'catalogo_pacotes') {
+    const { data: itens } = await admin.from('pacote_itens_catalogo').select('*').eq('ativo', true).order('ordem')
+    const { data: templates } = await admin.from('pacote_templates').select('*').eq('ativo', true).order('ordem')
+    return json({ ok: true, itens: itens || [], templates: templates || [] })
+  }
+
+  // ─── ADICIONAR pacote na turma ───
+  if (body.acao === 'pacote_adicionar') {
+    const turmaId = body.turma_id
+    const nome = (body.nome || '').trim()
+    if (!turmaId || !nome) return json({ error: 'turma_id e nome são obrigatórios' }, 400)
+    const { data: existentes } = await admin.from('pacotes_turma').select('ordem').eq('turma_id', turmaId)
+    const ordem = (existentes || []).reduce((mx: number, p: any) => Math.max(mx, p.ordem || 0), 0) + 1
+    const { error } = await admin.from('pacotes_turma').insert({
+      turma_id: turmaId,
+      nome,
+      valor: Number(body.valor) || 0,
+      parcelas: Number(body.parcelas) || 1,
+      itens: Array.isArray(body.itens) ? body.itens : [],
+      ordem,
+    })
+    if (error) return json({ error: error.message }, 400)
+    return json({ ok: true })
+  }
+
+  // ─── ATUALIZAR pacote ───
+  if (body.acao === 'pacote_atualizar') {
+    const id = body.id
+    if (!id) return json({ error: 'id' }, 400)
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (body.nome !== undefined) updates.nome = body.nome
+    if (body.valor !== undefined) updates.valor = Number(body.valor) || 0
+    if (body.parcelas !== undefined) updates.parcelas = Number(body.parcelas) || 1
+    if (body.itens !== undefined) updates.itens = Array.isArray(body.itens) ? body.itens : []
+    const { error } = await admin.from('pacotes_turma').update(updates).eq('id', id)
+    if (error) return json({ error: error.message }, 400)
+    return json({ ok: true })
+  }
+
+  // ─── REMOVER pacote ───
+  if (body.acao === 'pacote_remover') {
+    const id = body.id
+    if (!id) return json({ error: 'id' }, 400)
+    const { error } = await admin.from('pacotes_turma').delete().eq('id', id)
+    if (error) return json({ error: error.message }, 400)
+    return json({ ok: true })
+  }
+
   // ─── MENSAGENS PADRÃO (roteiros prontos pro painel do WhatsApp Web) ───
   if (body.acao === 'mensagens_padrao') {
     const { data } = await admin

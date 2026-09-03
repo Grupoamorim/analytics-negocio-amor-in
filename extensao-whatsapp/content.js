@@ -327,6 +327,10 @@
         ${pessoasSecaoHtml(v.turma_id)}
       </div>
       <div class="sec">
+        <div class="titulo">Pacotes da turma</div>
+        ${pacotesSecaoHtml(v.turma_id)}
+      </div>
+      <div class="sec">
         <div class="titulo">Etapa e checklist</div>
         ${etapaSecaoHtml(v.turma_id)}
       </div>
@@ -351,6 +355,7 @@
     if ($('obs') && metricas && metricas.__turmaId === v.turma_id) $('obs').value = metricas.observacoes || '';
     ligarInfoTurmaSecao(v.turma_id);
     ligarPessoasSecao(v.turma_id);
+    ligarPacotesSecao(v.turma_id);
     ligarEtapaSecao(v.turma_id);
     ligarAgendarSecao(v.turma_id);
     renderMensagensPadrao();
@@ -624,6 +629,185 @@
   }
 
   // =========================================================================
+  //  PACOTES DA TURMA (fotografia — ver, criar a partir de template, editar)
+  // =========================================================================
+  let pacotesData = null; // { __turmaId, lista: [...] }
+  let pacotesCarregandoPara = null;
+  let catalogoData = null; // { itens, templates } — global, não muda por turma
+  let catalogoCarregando = false;
+  let formPacote = null; // null = fechado; { id, nome, valor, parcelas, itensSelecionados: Set }
+
+  async function carregarPacotes(turmaId) {
+    if (pacotesCarregandoPara === turmaId) return;
+    pacotesCarregandoPara = turmaId;
+    const r = await bg('wa_turma_pacotes', { payload: { turma_id: turmaId } });
+    pacotesCarregandoPara = null;
+    if (!chatAtual || !vinculoAtual || vinculoAtual.turma_id !== turmaId) return;
+    pacotesData = { __turmaId: turmaId, lista: (r && r.pacotes) || [] };
+    render();
+  }
+
+  async function getCatalogoPacotes() {
+    if (catalogoData) return catalogoData;
+    if (!catalogoCarregando) {
+      catalogoCarregando = true;
+      const r = await bg('wa_catalogo_pacotes');
+      catalogoCarregando = false;
+      catalogoData = { itens: (r && r.itens) || [], templates: (r && r.templates) || [] };
+    }
+    return catalogoData || { itens: [], templates: [] };
+  }
+
+  function formatBRL(v) {
+    return (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function pacotesSecaoHtml(turmaId) {
+    if (!pacotesData || pacotesData.__turmaId !== turmaId) {
+      setTimeout(() => carregarPacotes(turmaId), 0);
+      return '<span class="muted">Carregando…</span>';
+    }
+    const lista = pacotesData.lista;
+    let html = lista.length
+      ? lista.map((p) => `
+          <div class="stageCard">
+            <div class="stageTop">
+              <b>${(p.nome || '').replace(/</g, '&lt;')}</b>
+              <span class="contagem">R$ ${formatBRL(p.valor)} · ${p.parcelas}x</span>
+            </div>
+            <div class="muted">${(p.itens || []).length} ite${(p.itens || []).length === 1 ? 'm' : 'ns'}</div>
+            <div class="row" style="margin-top:6px">
+              <button class="g" data-editar="${p.id}" style="flex:1">Editar</button>
+              <button class="g" data-remover="${p.id}" style="flex:1;color:#f87171">Remover</button>
+            </div>
+          </div>
+        `).join('')
+      : '<span class="muted">Nenhum pacote cadastrado ainda.</span>';
+    html += formPacote ? pacoteFormHtml() : `<button class="g" id="novoPacote" style="width:100%;margin-top:4px">+ Novo pacote</button>`;
+    return html;
+  }
+
+  function pacoteFormHtml() {
+    const cat = catalogoData || { itens: [], templates: [] };
+    const f = formPacote;
+    return `
+      <div class="stageCard atual" id="formPacoteBox" style="margin-top:6px">
+        ${cat.templates.length ? `
+          <select id="pkTemplate" style="margin-bottom:6px">
+            <option value="">Começar do zero…</option>
+            ${cat.templates.map((t) => `<option value="${t.id}">${t.nome.replace(/</g, '&lt;')}</option>`).join('')}
+          </select>
+        ` : ''}
+        <input id="pkNome" placeholder="Nome do pacote (ex: Luxo)" value="${(f.nome || '').replace(/"/g, '&quot;')}" style="margin-bottom:6px" />
+        <div class="row" style="margin-bottom:6px">
+          <input id="pkValor" type="number" step="0.01" placeholder="Valor" value="${f.valor || ''}" style="flex:1" />
+          <input id="pkParcelas" type="number" placeholder="Parcelas" value="${f.parcelas || 1}" style="flex:1" />
+        </div>
+        ${cat.itens.length ? `
+          <div class="muted" style="margin-bottom:2px">Itens do pacote</div>
+          <div class="lista" style="max-height:140px" id="pkItens">
+            ${cat.itens.map((it) => `
+              <label class="itemCk">
+                <input type="checkbox" data-cat="${it.id}" ${f.itensSelecionados.has(it.nome) ? 'checked' : ''} />
+                <span>${it.nome.replace(/</g, '&lt;')}</span>
+              </label>
+            `).join('')}
+          </div>
+        ` : ''}
+        <div class="row" style="margin-top:6px">
+          <button class="g" id="pkCancelar" style="flex:1">Cancelar</button>
+          <button class="pill pill-orange" id="pkSalvar" style="flex:1">${f.id ? 'Salvar' : 'Criar pacote'}</button>
+        </div>
+        <span class="muted" id="pkStatus"></span>
+      </div>
+    `;
+  }
+
+  function ligarPacotesSecao(turmaId) {
+    root.querySelectorAll('[data-editar]').forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-editar');
+        const p = pacotesData.lista.find((x) => x.id === id);
+        if (!p) return;
+        await getCatalogoPacotes();
+        formPacote = { id, nome: p.nome, valor: p.valor, parcelas: p.parcelas, itensSelecionados: new Set(p.itens || []) };
+        render();
+      };
+    });
+    root.querySelectorAll('[data-remover]').forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm('Remover esse pacote?')) return;
+        await bg('wa_pacote_remover', { payload: { id: btn.getAttribute('data-remover') } });
+        pacotesData = null;
+        render();
+      };
+    });
+    const novo = $('novoPacote');
+    if (novo) {
+      novo.onclick = async () => {
+        await getCatalogoPacotes();
+        formPacote = { id: null, nome: '', valor: '', parcelas: 1, itensSelecionados: new Set() };
+        render();
+      };
+    }
+    const cancelar = $('pkCancelar');
+    if (cancelar) cancelar.onclick = () => { formPacote = null; render(); };
+    const tplSel = $('pkTemplate');
+    if (tplSel) {
+      tplSel.onchange = () => {
+        const t = (catalogoData.templates || []).find((x) => x.id === tplSel.value);
+        if (t) {
+          formPacote.nome = t.nome;
+          formPacote.itensSelecionados = new Set(t.itens || []);
+        }
+        render();
+      };
+    }
+    const itensBox = $('pkItens');
+    if (itensBox) {
+      itensBox.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        cb.onchange = () => {
+          const item = catalogoData.itens.find((it) => it.id === cb.getAttribute('data-cat'));
+          if (!item) return;
+          if (cb.checked) formPacote.itensSelecionados.add(item.nome);
+          else formPacote.itensSelecionados.delete(item.nome);
+        };
+      });
+    }
+    const salvar = $('pkSalvar');
+    if (salvar) {
+      salvar.onclick = async () => {
+        const status = $('pkStatus');
+        const nome = $('pkNome').value.trim();
+        if (!nome) { status.style.color = '#fbbf24'; status.textContent = '⚠ Dê um nome ao pacote.'; return; }
+        formPacote.valor = $('pkValor').value;
+        formPacote.parcelas = $('pkParcelas').value;
+        salvar.disabled = true;
+        status.textContent = 'Salvando…';
+        const payload = {
+          turma_id: turmaId,
+          nome,
+          valor: formPacote.valor,
+          parcelas: formPacote.parcelas,
+          itens: Array.from(formPacote.itensSelecionados),
+        };
+        const r = formPacote.id
+          ? await bg('wa_pacote_atualizar', { payload: { id: formPacote.id, ...payload } })
+          : await bg('wa_pacote_adicionar', { payload });
+        salvar.disabled = false;
+        if (r && r.ok) {
+          formPacote = null;
+          pacotesData = null;
+          render();
+        } else {
+          status.style.color = '#f87171';
+          status.textContent = 'Erro: ' + ((r && r.erro) || (r && r.error) || 'tentar de novo');
+        }
+      };
+    }
+  }
+
+  // =========================================================================
   //  ETAPA DO FUNIL + CHECKLIST (ver e mudar, sem sair do WhatsApp Web)
   // =========================================================================
   const STAGE_KEYS = ['stage-1', 'stage-2', 'stage-3', 'stage-4', 'stage-5'];
@@ -869,6 +1053,8 @@
         checklistData = null;
         turmaInfoData = null;
         pessoasData = null;
+        pacotesData = null;
+        formPacote = null;
       }
       chatAtual = novoChat;
       if (!chatAtual) { render(); return; }
