@@ -739,7 +739,7 @@ export default function Pipeline() {
       </div>
 
       {/* Kanban */}
-      <div className="overflow-x-auto pb-4 -mx-2 px-2">
+      <div className="overflow-x-auto scroll-x-hover pb-4 -mx-2 px-2">
         <div className="flex gap-4 min-w-max">
           {sortedStages.map((stage) => {
             const stageDeals = sortByRules(
