@@ -136,6 +136,7 @@ export default function Admin() {
   const [enviandoConvite, setEnviandoConvite] = useState(false)
   const [resetandoSenhaId, setResetandoSenhaId] = useState<string | null>(null)
   const [reenviandoEmailId, setReenviandoEmailId] = useState<string | null>(null)
+  const [excluindoId, setExcluindoId] = useState<string | null>(null)
 
   // Vendedores / SDR
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
@@ -347,6 +348,51 @@ export default function Admin() {
       })
     } finally {
       setReenviandoEmailId(null)
+    }
+  }
+
+  async function handleExcluirUsuario(p: Perfil) {
+    if (p.id === user?.id) {
+      toast({
+        title: 'Você não pode excluir a si mesmo',
+        description: 'Peça a outro administrador para fazer isso.',
+        variant: 'destructive',
+      })
+      return
+    }
+    if (
+      !confirm(
+        `Excluir definitivamente "${p.nome || p.email}"? Essa ação não pode ser desfeita — a pessoa perde o acesso e o cadastro é apagado. Se for só pra tirar o acesso temporariamente, use "Inativar" em vez de excluir.`,
+      )
+    ) {
+      return
+    }
+    setExcluindoId(p.id)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Sessão expirada, faça login novamente.')
+
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId: p.id },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+
+      setPerfis((prev) => prev.filter((x) => x.id !== p.id))
+      toast({
+        title: 'Usuário excluído',
+        description: `${p.nome || p.email} foi removido definitivamente do sistema.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao excluir',
+        description: err.message || 'Não foi possível excluir o usuário.',
+        variant: 'destructive',
+      })
+    } finally {
+      setExcluindoId(null)
     }
   }
 
@@ -1121,6 +1167,16 @@ export default function Admin() {
                                   : p.ativo === false
                                     ? 'Reativar'
                                     : 'Inativar'}
+                              </button>
+                            )}
+                            {p.id !== user?.id && (
+                              <button
+                                type="button"
+                                onClick={() => handleExcluirUsuario(p)}
+                                disabled={excluindoId === p.id}
+                                className="text-[11px] text-red-400/80 hover:text-red-400 underline decoration-dotted"
+                              >
+                                {excluindoId === p.id ? 'Excluindo...' : 'Excluir'}
                               </button>
                             )}
                           </td>
