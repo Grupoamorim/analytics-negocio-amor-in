@@ -15,6 +15,8 @@ import { fetchAllRows } from '@/utils/fetchAllRows'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import { useAcesso } from '@/context/AcessoContext'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import TurmasFechadasPlanilha from '@/components/TurmasFechadasPlanilha'
 
 function normalizar(s?: string | null): string {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
@@ -379,14 +381,26 @@ export default function Adesoes() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white tracking-tight">Adesões</h1>
+        <p className="text-sm text-slate-400 mt-1">
+          Análise financeira das adesões (SGE) e acompanhamento individual de alunos das turmas já
+          fechadas.
+        </p>
+      </div>
+
+      <Tabs defaultValue="financeiro" className="space-y-6">
+        <TabsList className="bg-[#111820] border border-white/[0.06]">
+          <TabsTrigger value="financeiro">Análise Financeira</TabsTrigger>
+          <TabsTrigger value="fechadas">Turmas Fechadas</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="financeiro" className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Adesões</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Quantidade de adesões por dia, mês, trimestre, semestre e ano — com comparativo automático
-            contra o mesmo período do ano passado. Dados acumulados direto do SGE.
-          </p>
-        </div>
+        <p className="text-sm text-slate-400">
+          Quantidade de adesões por dia, mês, trimestre, semestre e ano — com comparativo automático
+          contra o mesmo período do ano passado. Dados acumulados direto do SGE.
+        </p>
         <EmpresaFilterBar
           options={empresaOptions}
           selected={selectedEmpresas}
@@ -589,6 +603,12 @@ export default function Adesoes() {
           </div>
         </>
       )}
+        </TabsContent>
+
+        <TabsContent value="fechadas">
+          <TurmasFechadasPlanilha />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

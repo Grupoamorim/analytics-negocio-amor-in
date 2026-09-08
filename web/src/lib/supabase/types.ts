@@ -1896,6 +1896,86 @@ export type Database = {
         }
         Relationships: []
       }
+      planilha_alunos: {
+        Row: {
+          chat_wa_id: string | null
+          contato_id: string | null
+          created_at: string
+          fechou: boolean
+          fechou_em: string | null
+          fechou_origem: string | null
+          id: string
+          nome: string
+          observacao: string | null
+          status: string
+          telefone: string | null
+          turma_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          chat_wa_id?: string | null
+          contato_id?: string | null
+          created_at?: string
+          fechou?: boolean
+          fechou_em?: string | null
+          fechou_origem?: string | null
+          id?: string
+          nome: string
+          observacao?: string | null
+          status?: string
+          telefone?: string | null
+          turma_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          chat_wa_id?: string | null
+          contato_id?: string | null
+          created_at?: string
+          fechou?: boolean
+          fechou_em?: string | null
+          fechou_origem?: string | null
+          id?: string
+          nome?: string
+          observacao?: string | null
+          status?: string
+          telefone?: string | null
+          turma_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planilha_alunos_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planilha_alunos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planilha_alunos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planilha_alunos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           ativo: boolean

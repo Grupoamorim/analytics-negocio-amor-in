@@ -1066,6 +1066,14 @@
       if (vinculoAtual && vinculoAtual.turma_id) getTurmas(); // pré-carrega nomes
       render();
       atualizarInfoChat(chatAtual.id);
+      // Aluno da planilha de Adesões > Turmas Fechadas: se o telefone dessa DM
+      // bate com um aluno "pendente" da turma vinculada, marca sozinho como
+      // "mandei mensagem" (não sobrescreve quem já foi marcado à mão).
+      if (vinculoAtual && vinculoAtual.turma_id && !chatAtual.isGroup && chatAtual.telefone) {
+        bg('wa_planilha_vincular', {
+          payload: { turma_id: vinculoAtual.turma_id, telefone: chatAtual.telefone, chat_wa_id: chatAtual.id },
+        }).catch(() => {});
+      }
     } catch (e) {
       log('atualizarChat', e);
     }

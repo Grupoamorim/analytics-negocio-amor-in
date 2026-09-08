@@ -501,6 +501,33 @@ Deno.serve(async (req) => {
     return json({ ok: true, contato_id: contatoId, turma_id: turmaId })
   }
 
+  // ─── PLANILHA DE ALUNOS (Adesões > Turmas Fechadas) ───
+  // Chamada toda vez que o widget resolve uma conversa DM já vinculada a uma
+  // turma — se o telefone bate com um aluno "pendente" da planilha daquela
+  // turma, marca sozinho como "enviado" (o vendedor abriu o WhatsApp com ele).
+  // Não sobrescreve quem já foi marcado manualmente (sem_resposta/negou/fechado).
+  if (body.acao === 'planilha_vincular') {
+    const turmaId = body.turma_id
+    const tel = soDigitos(body.telefone || '')
+    if (!turmaId || !tel) return json({ ok: true, vinculado: false })
+
+    const { data: alunos } = await admin
+      .from('planilha_alunos')
+      .select('id, telefone')
+      .eq('turma_id', turmaId)
+      .eq('status', 'pendente')
+
+    const match = (alunos || []).find((a: any) => telefoneBate(a.telefone || '', tel))
+    if (!match) return json({ ok: true, vinculado: false })
+
+    await admin
+      .from('planilha_alunos')
+      .update({ status: 'enviado', chat_wa_id: body.chat_wa_id || null })
+      .eq('id', match.id)
+
+    return json({ ok: true, vinculado: true })
+  }
+
   // ─── RESOLVER ───
   if (body.acao === 'resolver') {
     // --- Conversa direta (DM) ---

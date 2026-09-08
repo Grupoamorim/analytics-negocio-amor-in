@@ -176,6 +176,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       case 'wa_vincular':
         sendResponse(await chamarEdge('whatsapp-sync', { acao: 'vincular', ...msg.payload }));
         break;
+      case 'wa_planilha_vincular':
+        sendResponse(await chamarEdge('whatsapp-sync', { acao: 'planilha_vincular', ...msg.payload }));
+        break;
       case 'wa_chat_info':
         sendResponse(await chamarEdge('whatsapp-sync', { acao: 'chat_info', ...msg.payload }));
         break;
