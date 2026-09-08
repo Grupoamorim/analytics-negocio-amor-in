@@ -130,7 +130,6 @@ export default function Pipeline() {
     addDeal,
     addLead,
     updateLead,
-    deleteLead,
     contacts,
     addContact,
     deleteContact,
@@ -468,16 +467,26 @@ export default function Pipeline() {
 
   const handleDeleteDealAndLead = async (deal: Deal, lead: Lead | null | undefined) => {
     const nome = lead ? getTurmaDisplayName(lead) : deal.title
-    if (!confirm(`Apagar "${nome}" do funil e das Turmas? Essa ação não pode ser desfeita.`)) return
+    if (
+      !confirm(
+        `Remover "${nome}" do funil? A turma continua salva em Turmas — ela some daqui, mas pode ser adicionada de novo pelo "+" em qualquer etapa (volta a aparecer em Prospecção).`,
+      )
+    )
+      return
     try {
+      // Só remove a oportunidade (deal) do funil — nunca a turma em si. Sem
+      // deal em nenhum estágio, a turma volta a aparecer em leadsSemFunil e
+      // fica disponível pra (re)adicionar pelo "+" de qualquer coluna.
       await deleteDeal(deal.id)
-      if (lead) await deleteLead(lead.id)
-      toast({ title: 'Turma apagada' })
+      toast({
+        title: 'Turma removida do funil',
+        description: 'Continua salva em Turmas — use o "+" em qualquer etapa pra adicionar de novo.',
+      })
       setSelectedDealId(null)
     } catch {
       toast({
-        title: 'Erro ao apagar',
-        description: 'Não foi possível apagar essa turma.',
+        title: 'Erro ao remover',
+        description: 'Não foi possível remover essa turma do funil.',
         variant: 'destructive',
       })
     }
@@ -1042,8 +1051,8 @@ export default function Pipeline() {
                                     e.stopPropagation()
                                     handleDeleteDealAndLead(deal, lead)
                                   }}
-                                  title="Apagar esta turma da Prospecção"
-                                  aria-label="Apagar esta turma"
+                                  title="Remover esta turma do funil (continua salva em Turmas)"
+                                  aria-label="Remover esta turma do funil"
                                   className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-opacity"
                                 >
                                   <Trash2 className="w-3 h-3" />
@@ -1858,7 +1867,7 @@ function DealDetailModal({
               <button
                 type="button"
                 onClick={onDelete}
-                title="Apagar turma"
+                title="Remover do funil (continua salva em Turmas)"
                 className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10"
               >
                 <Trash2 className="w-4 h-4" />
