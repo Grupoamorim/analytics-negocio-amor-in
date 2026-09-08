@@ -1013,7 +1013,7 @@ export default function Pipeline() {
 
                         {/* Nome da turma + outcome badge */}
                         <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex items-start gap-2 min-w-0">
                             <div
                               className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
                               style={{
@@ -1025,16 +1025,16 @@ export default function Pipeline() {
                               <GraduationCap className="w-3.5 h-3.5" />
                             </div>
                             <div className="min-w-0">
-                              <div className="font-semibold text-white text-xs leading-tight truncate">
-                                {lead ? getTurmaDisplayName(lead) : deal.title}
+                              {/* Nome completo sempre por extenso — quebra linha em vez de
+                                  cortar com "...", pra nunca ter dúvida de qual turma é qual. */}
+                              <div className="font-semibold text-white text-xs leading-tight break-words">
+                                {lead ? getFullTurmaName(lead) : deal.title}
                               </div>
-                              <div className="text-[10px] text-slate-400 truncate">
-                                {lead?.faculdade || deal.company}
-                                {lead?.curso ? ` • ${lead.curso}` : ''}
+                              <div className="text-[10px] text-slate-400">
                                 {(() => {
                                   const s = semestreDoLead(lead)
                                   if (!s || s === '—') return ''
-                                  return /\d/.test(s) ? ` • ${s} sem.` : ` • ${s}`
+                                  return /\d/.test(s) ? `${s} sem.` : s
                                 })()}
                               </div>
                             </div>
@@ -1425,12 +1425,8 @@ export default function Pipeline() {
                       }}
                       className="w-full text-left p-3 rounded-lg bg-[#111820] border border-white/[0.08] hover:border-orange-500/40 transition-colors"
                     >
-                      <div className="font-semibold text-white text-xs truncate">
-                        {lead ? getTurmaDisplayName(lead) : deal.title}
-                      </div>
-                      <div className="text-[10px] text-slate-400 truncate mt-0.5">
-                        {lead?.faculdade || deal.company}
-                        {lead?.curso ? ` • ${lead.curso}` : ''}
+                      <div className="font-semibold text-white text-xs break-words">
+                        {lead ? getFullTurmaName(lead) : deal.title}
                       </div>
                       <div className="flex items-center justify-between mt-1.5">
                         <span className="text-[10px] text-slate-500">{owner?.name || '—'}</span>
@@ -1502,13 +1498,8 @@ export default function Pipeline() {
                   onClick={() => handleCreateDealFromLead(lead, creatingForStageId)}
                   className="w-full text-left px-3 py-2 rounded-lg bg-white/[0.02] hover:bg-orange-500/10 border border-white/[0.06] hover:border-orange-500/30 transition-colors disabled:opacity-50"
                 >
-                  <div className="text-xs font-semibold text-white truncate">
-                    {getTurmaDisplayName(lead)}
-                  </div>
-                  <div className="text-[10px] text-slate-400 truncate">
-                    {lead.faculdade}
-                    {lead.curso ? ` • ${lead.curso}` : ''}
-                    {lead.cidade ? ` • ${lead.cidade}` : ''}
+                  <div className="text-xs font-semibold text-white break-words">
+                    {getFullTurmaName(lead)}
                   </div>
                 </button>
               ))}
@@ -1590,7 +1581,7 @@ function DealDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const stage = stages.find((s) => s.id === deal.stageId)
-  const turmaName = lead ? getTurmaDisplayName(lead) : deal.title
+  const turmaName = lead ? getFullTurmaName(lead) : deal.title
   const sgeLink = lead ? getSGELinkForLead(lead.id) : null
 
   const showProposal = isProposalStage(deal.stageId)
@@ -1837,7 +1828,7 @@ function DealDetailModal({
               </div>
             )}
             <div className="min-w-0">
-              <h3 className="text-lg font-bold text-white truncate">{turmaName}</h3>
+              <h3 className="text-lg font-bold text-white break-words">{turmaName}</h3>
               <p className="text-xs text-slate-400 truncate">
                 {lead?.faculdade || deal.company}
                 {lead?.curso ? ` • ${lead.curso}` : ''}
