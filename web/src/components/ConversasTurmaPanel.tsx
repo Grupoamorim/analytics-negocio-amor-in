@@ -79,17 +79,26 @@ export default function ConversasTurmaPanel({ lead }: { lead: LeadLike }) {
 
   /** Uma linha por "conversa" (o grupo + cada pessoa que já mandou/recebeu DM). */
   const threads = useMemo(() => {
-    const porChat = new Map<string, { chatWaId: string; nome: string; grupo: boolean; qtd: number; ultima: string }>()
+    const porChat = new Map<string, { chatWaId: string; nome: string; grupoNomeReal: string | null; grupo: boolean; qtd: number; ultima: string }>()
     for (const m of msgs) {
       const atual = porChat.get(m.chatWaId)
-      const nome = m.origem === 'grupo' ? m.grupoNome || 'Grupo' : m.autorNome || 'Contato'
+      // Grupo mostra sempre o rótulo genérico "GRUPO" (não o nome real do
+      // grupo no WhatsApp) — pedido do Lucas pra ficar mais claro na aba.
+      const nome = m.origem === 'grupo' ? 'GRUPO' : m.autorNome || 'Contato'
       if (!atual) {
-        porChat.set(m.chatWaId, { chatWaId: m.chatWaId, nome, grupo: m.origem === 'grupo', qtd: 1, ultima: m.enviadaEm })
+        porChat.set(m.chatWaId, {
+          chatWaId: m.chatWaId,
+          nome,
+          grupoNomeReal: m.origem === 'grupo' ? m.grupoNome : null,
+          grupo: m.origem === 'grupo',
+          qtd: 1,
+          ultima: m.enviadaEm,
+        })
       } else {
         atual.qtd += 1
         if (m.enviadaEm > atual.ultima) atual.ultima = m.enviadaEm
         // prefere um nome de quem não somos nós, pra não mostrar "Nós" na lista
-        if (!m.deMim && m.autorNome) atual.nome = m.autorNome
+        if (m.origem !== 'grupo' && !m.deMim && m.autorNome) atual.nome = m.autorNome
       }
     }
     const lista = Array.from(porChat.values())
@@ -209,7 +218,7 @@ export default function ConversasTurmaPanel({ lead }: { lead: LeadLike }) {
             <button
               key={t.chatWaId}
               onClick={() => setThreadAtivo(t.chatWaId)}
-              title={`${t.nome} · ${t.qtd} mensagens`}
+              title={`${t.grupoNomeReal || t.nome} · ${t.qtd} mensagens`}
               className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] border max-w-[140px] truncate ${
                 threadAtivo === t.chatWaId
                   ? 'bg-orange-600 text-white border-orange-600'
@@ -277,7 +286,7 @@ export default function ConversasTurmaPanel({ lead }: { lead: LeadLike }) {
                 <span className="font-medium text-slate-500 dark:text-slate-300">
                   {m.deMim ? 'Nós' : m.autorNome || 'Contato'}
                 </span>
-                {m.origem === 'grupo' && <span>· grupo</span>}
+                {m.origem === 'grupo' && <span>· GRUPO</span>}
                 {m.tipo === 'audio' && (
                   <span className="inline-flex items-center gap-0.5 text-orange-500">
                     <Mic className="w-2.5 h-2.5" /> áudio{m.transcrito ? ' transcrito' : ''}

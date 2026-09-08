@@ -32,6 +32,22 @@
     return x._serialized || (x.user ? `${x.user}@${x.server || x._server || 'c.us'}` : null);
   }
 
+  // m.fromMe da wa-js não é confiável pra contatos com id "@lid" (novo formato
+  // de privacidade do WhatsApp) — vem sempre false mesmo em mensagens que nós
+  // mandamos. Comparar o autor real da mensagem com o nosso próprio id resolve
+  // isso (autor_nome/autor_telefone já vêm certos por mensagem, só o fromMe
+  // que falha).
+  let meuIdCache;
+  async function meuId() {
+    if (meuIdCache !== undefined) return meuIdCache;
+    try {
+      meuIdCache = idSerial(await window.WPP.conn.getMyUserId());
+    } catch (_) {
+      meuIdCache = null;
+    }
+    return meuIdCache;
+  }
+
   function tipoMsg(m) {
     const t = m.type || '';
     if (t === 'ptt' || t === 'audio') return 'audio';
@@ -94,6 +110,7 @@
       return [];
     }
     const out = [];
+    const meu = await meuId();
     for (const m of lista) {
       const tms = (m.t || 0) * 1000;
       if (desde && tms <= desde) continue;
@@ -101,7 +118,7 @@
       const autorId = idSerial(m.author || m.from);
       const linha = {
         wa_msg_id: idSerial(m.id) || (m.id && m.id.id) || null,
-        de_mim: !!m.fromMe,
+        de_mim: meu ? autorId === meu : !!m.fromMe,
         autor_nome: m.senderObj ? (m.senderObj.pushname || m.senderObj.name || null) : null,
         autor_telefone: soDigitos(autorId && autorId.split('@')[0]) || null,
         tipo,
