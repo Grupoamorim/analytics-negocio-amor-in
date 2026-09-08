@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -142,6 +142,38 @@ export default function Pipeline() {
   const { podeGerenciarTurmas } = useAcesso()
 
   const [draggingDealId, setDraggingDealId] = useState<string | null>(null)
+  // Barra de rolagem "espelho" em cima do Kanban — a nativa só aparece embaixo
+  // da coluna mais alta, que costuma ficar fora da tela sem rolar a página
+  // toda; essa daqui fica logo acima dos cards e rola o Kanban junto.
+  const kanbanScrollRef = useRef<HTMLDivElement>(null)
+  const kanbanTopScrollRef = useRef<HTMLDivElement>(null)
+  const [kanbanContentWidth, setKanbanContentWidth] = useState(0)
+  const sincronizandoScrollRef = useRef(false)
+  useEffect(() => {
+    const el = kanbanScrollRef.current?.firstElementChild as HTMLElement | null
+    if (!el) return
+    const atualizar = () => setKanbanContentWidth(el.scrollWidth)
+    atualizar()
+    const ro = new ResizeObserver(atualizar)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const handleTopScroll = () => {
+    if (sincronizandoScrollRef.current) return
+    sincronizandoScrollRef.current = true
+    if (kanbanScrollRef.current && kanbanTopScrollRef.current) {
+      kanbanScrollRef.current.scrollLeft = kanbanTopScrollRef.current.scrollLeft
+    }
+    sincronizandoScrollRef.current = false
+  }
+  const handleKanbanScroll = () => {
+    if (sincronizandoScrollRef.current) return
+    sincronizandoScrollRef.current = true
+    if (kanbanScrollRef.current && kanbanTopScrollRef.current) {
+      kanbanTopScrollRef.current.scrollLeft = kanbanScrollRef.current.scrollLeft
+    }
+    sincronizandoScrollRef.current = false
+  }
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
   const [probWhyDealId, setProbWhyDealId] = useState<string | null>(null)
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
@@ -747,8 +779,24 @@ export default function Pipeline() {
         </div>
       </div>
 
+      {/* Barra de rolagem espelho, sempre visível em cima do Kanban */}
+      {kanbanContentWidth > 0 && (
+        <div
+          ref={kanbanTopScrollRef}
+          onScroll={handleTopScroll}
+          className="overflow-x-auto scroll-x-hover-visible -mx-2 px-2"
+          style={{ height: 14 }}
+        >
+          <div style={{ width: kanbanContentWidth, height: 1 }} />
+        </div>
+      )}
+
       {/* Kanban */}
-      <div className="overflow-x-auto scroll-x-hover pb-4 -mx-2 px-2">
+      <div
+        ref={kanbanScrollRef}
+        onScroll={handleKanbanScroll}
+        className="overflow-x-auto scroll-x-hover pb-4 -mx-2 px-2"
+      >
         <div className="flex gap-4 min-w-max">
           {sortedStages.map((stage) => {
             const stageDeals = sortByRules(

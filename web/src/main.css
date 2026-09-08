@@ -345,4 +345,24 @@
   .scroll-x-hover::-webkit-scrollbar-track {
     background-color: transparent;
   }
+
+  /* Variante sempre visível (não só no hover) — usada na barra "espelho" do
+     topo do Kanban, que precisa aparecer de cara pra quem não vai rolar a
+     página toda até achar a barra nativa lá embaixo da coluna mais alta. */
+  .scroll-x-hover-visible {
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+  .scroll-x-hover-visible::-webkit-scrollbar {
+    height: 10px;
+  }
+  .scroll-x-hover-visible::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.45);
+    border-radius: 9999px;
+  }
+  .scroll-x-hover-visible:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.7);
+  }
+  .scroll-x-hover-visible::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
 }
