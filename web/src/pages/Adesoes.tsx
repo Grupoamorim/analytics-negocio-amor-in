@@ -17,6 +17,8 @@ import { SortControl, sortByField, type SortDirection } from '@/components/SortC
 import { useAcesso } from '@/context/AcessoContext'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import TurmasFechadasPlanilha from '@/components/TurmasFechadasPlanilha'
+import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
+import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
 
 function normalizar(s?: string | null): string {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
@@ -43,35 +45,12 @@ interface Adesao {
   turma: string | null
 }
 
-type Periodo = 'mes' | 'trimestre' | 'semestre' | 'ano' | 'personalizado'
-
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
 
 function toISO(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-}
-
-function calcularPeriodo(periodo: Periodo, anoBase: number, mesBase: number): { ini: string; fim: string } {
-  if (periodo === 'mes') {
-    return { ini: toISO(new Date(anoBase, mesBase, 1)), fim: toISO(new Date(anoBase, mesBase + 1, 0)) }
-  }
-  if (periodo === 'trimestre') {
-    const inicioTri = Math.floor(mesBase / 3) * 3
-    return {
-      ini: toISO(new Date(anoBase, inicioTri, 1)),
-      fim: toISO(new Date(anoBase, inicioTri + 3, 0)),
-    }
-  }
-  if (periodo === 'semestre') {
-    const inicioSem = mesBase < 6 ? 0 : 6
-    return {
-      ini: toISO(new Date(anoBase, inicioSem, 1)),
-      fim: toISO(new Date(anoBase, inicioSem + 6, 0)),
-    }
-  }
-  return { ini: toISO(new Date(anoBase, 0, 1)), fim: toISO(new Date(anoBase, 11, 31)) }
 }
 
 /** Desloca um período um ano pra trás, pra comparação ano a ano. */
@@ -221,11 +200,8 @@ export default function Adesoes() {
     },
     [filtroPessoalAtivo, turmasRef, minhaVisao],
   )
-  const [periodo, setPeriodo] = useState<Periodo>('mes')
-  const hoje = new Date()
-  const inicial = calcularPeriodo('mes', hoje.getFullYear(), hoje.getMonth())
-  const [dtIni, setDtIni] = useState(inicial.ini)
-  const [dtFim, setDtFim] = useState(inicial.fim)
+  const periodoFiltro = usePeriodoFiltro('mes')
+  const { periodo, dtIni, dtFim } = periodoFiltro
   const [incluirPrestacaoServico, setIncluirPrestacaoServico] = useState(false)
 
   // Filtro por empresa (AIF, AFF, SFF, AIM...) — nenhum selecionado = todas.
@@ -255,15 +231,6 @@ export default function Adesoes() {
     })
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [adesoes])
-
-  function selecionarPeriodo(p: Periodo) {
-    setPeriodo(p)
-    if (p !== 'personalizado') {
-      const { ini, fim } = calcularPeriodo(p, hoje.getFullYear(), hoje.getMonth())
-      setDtIni(ini)
-      setDtFim(fim)
-    }
-  }
 
   useEffect(() => {
     async function load() {
@@ -408,69 +375,17 @@ export default function Adesoes() {
         />
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {(
-          [
-            ['mes', 'Mês'],
-            ['trimestre', 'Trimestre'],
-            ['semestre', 'Semestre'],
-            ['ano', 'Ano'],
-            ['personalizado', 'Personalizado'],
-          ] as [Periodo, string][]
-        ).map(([p, label]) => (
-          <button
-            key={p}
-            onClick={() => selecionarPeriodo(p)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-              periodo === p
-                ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
-                : 'text-slate-400 border-white/[0.08] hover:text-white hover:bg-white/[0.05]'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <PeriodoFiltroBar {...periodoFiltro} />
 
-        {periodo === 'personalizado' && (
-          <>
-            <label className="text-xs text-slate-400">
-              De{' '}
-              <input
-                type="date"
-                value={dtIni}
-                onChange={(e) => setDtIni(e.target.value)}
-                className="ml-1 bg-[#111820] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-sm"
-              />
-            </label>
-            <label className="text-xs text-slate-400">
-              Até{' '}
-              <input
-                type="date"
-                value={dtFim}
-                onChange={(e) => setDtFim(e.target.value)}
-                className="ml-1 bg-[#111820] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-sm"
-              />
-            </label>
-          </>
-        )}
-
-        {periodo !== 'personalizado' && (
-          <span className="text-xs text-slate-500">
-            {new Date(`${dtIni}T00:00:00`).toLocaleDateString('pt-BR')} até{' '}
-            {new Date(`${dtFim}T00:00:00`).toLocaleDateString('pt-BR')}
-          </span>
-        )}
-
-        <label className="flex items-center gap-1.5 ml-auto text-xs text-slate-400 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={incluirPrestacaoServico}
-            onChange={(e) => setIncluirPrestacaoServico(e.target.checked)}
-            className="accent-orange-500"
-          />
-          Incluir Prestação de Serviços (ensaios, festas, eventos avulsos)
-        </label>
-      </div>
+      <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={incluirPrestacaoServico}
+          onChange={(e) => setIncluirPrestacaoServico(e.target.checked)}
+          className="accent-orange-500"
+        />
+        Incluir Prestação de Serviços (ensaios, festas, eventos avulsos)
+      </label>
 
       {!loading && !incluirPrestacaoServico && analise.qtdPrestacaoServico > 0 && (
         <div className="text-xs text-slate-400 bg-white/[0.02] border border-white/[0.06] rounded-lg px-3 py-2">
