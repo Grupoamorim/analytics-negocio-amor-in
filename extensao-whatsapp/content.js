@@ -84,88 +84,138 @@
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `
     <style>
-      *{box-sizing:border-box;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+      :host{
+        --bg1:#0c0f13; --bg2:#0a0c10; --panel-border:rgba(255,255,255,.07); --hair:rgba(255,255,255,.055);
+        --text:#f4f2ee; --dim:#95a0ad; --accent:#f97316; --accent-soft:rgba(249,115,22,.12);
+        --z:2147483000;
+      }
+      *{box-sizing:border-box;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+      *::-webkit-scrollbar{width:5px;height:5px}
+      *::-webkit-scrollbar-track{background:transparent}
+      *::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px}
+      *::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.22)}
       .aba{position:fixed;top:45%;right:0;transform:translateY(-50%);writing-mode:vertical-rl;text-orientation:mixed;
-        background:#f97316;color:#fff;padding:14px 8px;border-radius:10px 0 0 10px;font-size:12px;font-weight:800;
-        cursor:pointer;letter-spacing:1px;box-shadow:-3px 0 14px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.25);
-        z-index:2147483000}
-      .aba:hover{padding-right:12px}
-      .painel{position:fixed;top:0;right:-360px;width:340px;height:100vh;background:#0a0f14;color:#f8fafc;
-        box-shadow:-4px 0 24px rgba(0,0,0,.45);transition:right .22s ease;display:flex;flex-direction:column;
-        z-index:2147483000;font-size:12px}
+        background:linear-gradient(180deg,#15191f,#0d1014);color:#e7e2da;padding:16px 7px;border-radius:12px 0 0 12px;
+        font-size:11px;font-weight:500;letter-spacing:1.5px;cursor:pointer;
+        border:1px solid var(--panel-border);border-right:none;box-shadow:-6px 0 24px rgba(0,0,0,.28);
+        transition:padding .15s ease,box-shadow .15s ease;z-index:var(--z)}
+      .aba::before{content:'';position:absolute;top:10px;left:6px;right:6px;height:1.5px;background:var(--accent);border-radius:99px;opacity:.85}
+      .aba:hover{padding-right:11px;box-shadow:-8px 0 28px rgba(0,0,0,.36)}
+      .aba.atras-de-overlay{z-index:1}
+      .painel{position:fixed;top:0;right:-360px;width:340px;height:100vh;color:var(--text);
+        background:
+          radial-gradient(120% 55% at 100% 0%,rgba(249,115,22,.055),transparent 60%),
+          linear-gradient(180deg,var(--bg1),var(--bg2));
+        border-left:1px solid var(--panel-border);
+        box-shadow:-14px 0 48px rgba(0,0,0,.32),inset 1px 0 0 rgba(255,255,255,.02);
+        transition:right .24s cubic-bezier(.2,.7,.3,1);display:flex;flex-direction:column;
+        z-index:var(--z);font-size:12px}
       .painel.aberto{right:0}
-      header{background:#f97316;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:8px;font-weight:700;flex:none}
-      header .x{margin-left:auto;cursor:pointer;font-size:18px;line-height:1;opacity:.9}
-      .body{padding:14px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px}
-      .chat{font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
-      .tag{font-size:10px;color:#94a3b8}
-      .link{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);
-        background:rgba(255,255,255,.03)}
-      .link.ok{border-color:#34d39955;background:#34d39914}
-      .link.no{border-color:#f59e0b55;background:#f59e0b14}
-      .dot{width:8px;height:8px;border-radius:50%;flex:none}
+      .painel.atras-de-overlay{z-index:1}
+      header{padding:16px 16px 14px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;
+        letter-spacing:.2px;flex:none;border-bottom:1px solid var(--hair);
+        background:linear-gradient(180deg,rgba(255,255,255,.025),transparent)}
+      header .marca{color:var(--text)}
+      header .marca b{color:var(--accent);font-weight:600}
+      header .x{margin-left:auto;cursor:pointer;font-size:15px;line-height:1;color:var(--dim);width:22px;height:22px;
+        border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .12s,color .12s}
+      header .x:hover{background:rgba(255,255,255,.07);color:var(--text)}
+      .body{padding:16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:13px}
+      .chat{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;letter-spacing:.1px}
+      .tag{font-size:10px;color:var(--dim)}
+      .link{display:flex;align-items:center;gap:7px;padding:9px 11px;border-radius:12px;border:1px solid var(--hair);
+        background:rgba(255,255,255,.025)}
+      .link.ok{border-color:#34d39940;background:#34d3990d}
+      .link.no{border-color:#f59e0b40;background:#f59e0b0d}
+      .dot{width:6px;height:6px;border-radius:50%;flex:none}
       .ok .dot{background:#34d399}.no .dot{background:#f59e0b}
       .link span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      button{border:0;border-radius:10px;cursor:pointer;font-weight:600;font-size:12px;padding:9px 10px;transition:filter .12s}
+      button{border:0;border-radius:11px;cursor:pointer;font-weight:600;font-size:12px;padding:9px 12px;
+        letter-spacing:.15px;transition:filter .12s,opacity .12s,background .12s}
       button:hover{filter:brightness(1.08)}
       button:disabled{opacity:.5;cursor:default;filter:none}
-      .b{background:#f97316;color:#fff;width:100%}
-      .g{background:rgba(255,255,255,.05);color:#e2e8f0;border:1px solid rgba(255,255,255,.08);width:100%}
-      .pill{width:100%;border-radius:10px;font-weight:600;padding:10px;border:1px solid;background:transparent}
-      .pill-orange{color:#fb923c;border-color:#f9731655;background:#f9731614}
-      .pill-red{color:#f87171;border-color:#f8717155;background:#f8717114}
-      input,select{width:100%;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);
-        background:rgba(255,255,255,.04);color:#f8fafc;font-family:inherit;font-size:12px}
+      .b{background:linear-gradient(135deg,#fb923c,#ea580c);color:#fff;width:100%;
+        box-shadow:0 6px 16px -6px rgba(249,115,22,.55)}
+      .g{background:rgba(255,255,255,.04);color:#e2e8f0;border:1px solid var(--hair);width:100%;font-weight:500}
+      .g:hover{background:rgba(255,255,255,.065)}
+      .pill{width:100%;border-radius:99px;font-weight:600;padding:10px;border:1px solid;background:transparent}
+      .pill-orange{color:#fb923c;border-color:#f9731645;background:#f9731610}
+      .pill-red{color:#f87171;border-color:#f8717145;background:#f8717110}
+      input,select{width:100%;padding:9px 11px;border-radius:11px;border:1px solid var(--hair);
+        background:rgba(255,255,255,.03);color:var(--text);font-family:inherit;font-size:12px;transition:border-color .12s}
+      input:focus,select:focus,textarea:focus{outline:none;border-color:#f9731666}
       select{cursor:pointer}
-      .lista{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
-      .item{padding:9px 10px;border-radius:8px;cursor:pointer;color:#d4d4d8;white-space:nowrap;overflow:hidden;
-        text-overflow:ellipsis;line-height:1.3}
-      .item:hover{background:rgba(255,255,255,.06);color:#fff}
+      .lista{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+      .item{padding:9px 11px;border-radius:10px;cursor:pointer;color:#c7ccd3;white-space:nowrap;overflow:hidden;
+        text-overflow:ellipsis;line-height:1.3;transition:background .1s}
+      .item:hover{background:rgba(255,255,255,.055);color:#fff}
       .row{display:flex;gap:8px}
       .msgs{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
-      .msg{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
-      .msg.mim{background:#f9731618;border-color:#f9731633}
-      .msg .qm{color:#94a3b8;font-size:10px;margin-bottom:2px}
+      .msg{padding:9px 11px;border-radius:12px;background:rgba(255,255,255,.025);border:1px solid var(--hair)}
+      .msg.mim{background:#f9731612;border-color:#f9731628}
+      .msg .qm{color:var(--dim);font-size:10px;margin-bottom:2px}
       .msg .tx{color:#e2e8f0;white-space:pre-wrap;word-break:break-word}
-      .muted{color:#71717a;font-size:10px}
-      .sec{border-top:1px solid rgba(255,255,255,.06);padding-top:12px;display:flex;flex-direction:column;gap:7px}
-      .sec .titulo{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
-      .linha2{display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;padding:4px 0;
-        border-bottom:1px solid rgba(255,255,255,.05)}
-      .linha2 b{color:#f8fafc;font-weight:600}
-      .linha2.alerta{color:#fbbf24;border-color:#78350f55}
+      .muted{color:#6b7480;font-size:10px}
+      .sec{border-top:1px solid var(--hair);padding-top:13px;display:flex;flex-direction:column;gap:8px}
+      .sec .titulo{font-size:9.5px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+      .linha2{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);padding:5px 0;
+        border-bottom:1px solid var(--hair)}
+      .linha2 b{color:var(--text);font-weight:600}
+      .linha2.alerta{color:#fbbf24;border-color:#78350f40}
       .prob{display:flex;align-items:center;gap:8px;padding:2px 0}
-      .prob .barra{flex:1;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+      .prob .barra{flex:1;height:4px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
       .prob .barra i{display:block;height:100%;background:linear-gradient(90deg,#f97316,#fb923c);border-radius:99px}
-      .prob b{font-size:12px;color:#fff;min-width:32px;text-align:right}
+      .prob b{font-size:12px;color:var(--text);min-width:32px;text-align:right;font-weight:600}
       .padrao{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto}
-      .padrao .item2{padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);cursor:pointer}
-      .padrao .item2:hover{border-color:#f9731688;background:#f9731610}
-      .padrao .item2 .t{font-weight:600;color:#fff;font-size:11px}
-      .padrao .item2 .p{color:#8a8a93;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-      textarea{width:100%;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);
-        background:rgba(255,255,255,.04);color:#f8fafc;font-family:inherit;font-size:12px;resize:vertical}
-      .stageCard{border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 10px;margin-bottom:6px;
-        background:rgba(255,255,255,.02)}
-      .stageCard.atual{border-color:#f9731688;background:#f9731612}
-      .stageTop{display:flex;align-items:center;gap:6px;font-size:11px;color:#f8fafc;font-weight:600;margin-bottom:4px}
-      .stageTop .badge{background:#f97316;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:99px;
-        letter-spacing:.4px}
-      .stageTop .contagem{margin-left:auto;color:#94a3b8;font-weight:600;font-size:10px}
+      .padrao .item2{padding:9px 11px;border-radius:12px;border:1px solid var(--hair);background:rgba(255,255,255,.025);cursor:pointer;transition:border-color .12s,background .12s}
+      .padrao .item2:hover{border-color:#f9731655;background:#f973160a}
+      .padrao .item2 .t{font-weight:600;color:var(--text);font-size:11px}
+      .padrao .item2 .p{color:#838a93;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+      textarea{width:100%;padding:9px 11px;border-radius:11px;border:1px solid var(--hair);
+        background:rgba(255,255,255,.03);color:var(--text);font-family:inherit;font-size:12px;resize:vertical}
+      .stageCard{border:1px solid var(--hair);border-radius:12px;padding:9px 11px;margin-bottom:6px;
+        background:rgba(255,255,255,.015)}
+      .stageCard.atual{border-color:#f9731650;background:#f973160c}
+      .stageTop{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);font-weight:600;margin-bottom:4px}
+      .stageTop .badge{background:transparent;border:1px solid var(--accent);color:#fb923c;font-size:9px;font-weight:700;
+        padding:2px 7px;border-radius:99px;letter-spacing:.4px}
+      .stageTop .contagem{margin-left:auto;color:var(--dim);font-weight:600;font-size:10px}
       .itemCk{display:flex;gap:6px;align-items:flex-start;padding:3px 0;cursor:pointer;font-size:11px;color:#cbd5e1}
       .itemCk input{width:auto;margin-top:2px;flex:none}
       .itemCk span{flex:1}
       summary{outline:none}
       [hidden]{display:none!important}
     </style>
-    <div class="aba" id="aba">🪶 AMOR IN</div>
+    <div class="aba" id="aba">🪶&nbsp;&nbsp;Amor In</div>
     <div class="painel aberto" id="painel">
-      <header>🪶 Amor In <span class="x" id="fechar">&times;</span></header>
+      <header><span class="marca">🪶 <b>Amor In</b></span><span class="x" id="fechar">&times;</span></header>
       <div class="body" id="body"><span class="muted">Abrindo…</span></div>
     </div>
   `;
   const $ = (id) => root.getElementById(id);
   const painelEl = $('painel');
+  const abaEl = $('aba');
+
+  // O próprio WhatsApp Web também abre coisas (menu de "Editar" mensagem,
+  // seletor de emoji, modal de encaminhar...) como filho direto de <body>,
+  // igual o nosso host. Como o painel usava z-index praticamente infinito,
+  // ele sempre ficava por cima e escondia esses menus atrás. Detecta quando
+  // algo assim aparece e recua o painel enquanto durar.
+  const overlaysExternos = new Set();
+  const overlayObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const n of m.addedNodes) {
+        if (n.nodeType !== 1 || n === host || n.id === 'app') continue;
+        const r = n.getBoundingClientRect();
+        if (r.width >= 4 && r.height >= 4) overlaysExternos.add(n);
+      }
+      for (const n of m.removedNodes) overlaysExternos.delete(n);
+    }
+    const atras = overlaysExternos.size > 0;
+    painelEl.classList.toggle('atras-de-overlay', atras);
+    abaEl.classList.toggle('atras-de-overlay', atras);
+  });
+  overlayObserver.observe(document.body, { childList: true });
 
   // Empurra o WhatsApp Web (não só cobre por cima) — o app deles usa
   // #app { position:absolute; inset:0; width:100% } (testado de verdade no
