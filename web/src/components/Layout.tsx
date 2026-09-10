@@ -136,12 +136,18 @@ export default function Layout() {
   // Seções do menu (Comercial, Financeiro, Operação...) minimizáveis por clique no
   // título — preferência salva no navegador, e uma seção nunca fica escondendo a
   // página em que o usuário está agora, mesmo se tiver sido colapsada antes.
+  const TODAS_SECOES_COLAPSADAS: Record<string, boolean> = {}
+  NAVIGATION_SECTIONS.forEach((s) => {
+    if (s.section) TODAS_SECOES_COLAPSADAS[s.section] = true
+  })
   const [secoesColapsadas, setSecoesColapsadas] = useState<Record<string, boolean>>(() => {
     try {
       const raw = localStorage.getItem('amorin_menu_secoes_colapsadas')
-      return raw ? JSON.parse(raw) : {}
+      // Padrão (primeira visita, sem preferência salva): tudo minimizado, o
+      // usuário clica no título da seção pra abrir o que quiser ver.
+      return raw ? JSON.parse(raw) : TODAS_SECOES_COLAPSADAS
     } catch {
-      return {}
+      return TODAS_SECOES_COLAPSADAS
     }
   })
   const alternarSecao = (secao: string) => {
