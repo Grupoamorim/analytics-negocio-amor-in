@@ -31,6 +31,7 @@ import Financeiro from '@/pages/Financeiro'
 import DRE from '@/pages/DRE'
 import Projecoes from '@/pages/Projecoes'
 import Relatorios from '@/pages/Relatorios'
+import Equipamentos from '@/pages/Equipamentos'
 import Admin from '@/pages/Admin'
 
 const TELA_CARREGANDO = (
@@ -102,6 +103,7 @@ const App = () => (
               <Route path="/dre" element={<RotaComPermissao path="/dre"><DRE /></RotaComPermissao>} />
               <Route path="/projecoes" element={<RotaComPermissao path="/projecoes"><Projecoes /></RotaComPermissao>} />
               <Route path="/relatorios" element={<RotaComPermissao path="/relatorios"><Relatorios /></RotaComPermissao>} />
+              <Route path="/equipamentos" element={<RotaComPermissao path="/equipamentos"><Equipamentos /></RotaComPermissao>} />
               <Route path="/configuracoes" element={<Navigate to="/admin" replace />} />
               <Route
                 path="/admin"

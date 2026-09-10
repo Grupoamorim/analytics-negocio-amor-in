@@ -996,6 +996,117 @@ export type Database = {
         }
         Relationships: []
       }
+      equipamento_movimentacoes: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          equipamento_id: string
+          foto_url: string
+          fotografo_id: string
+          id: string
+          observacao: string | null
+          tipo: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          equipamento_id: string
+          foto_url: string
+          fotografo_id: string
+          id?: string
+          observacao?: string | null
+          tipo: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          equipamento_id?: string
+          foto_url?: string
+          fotografo_id?: string
+          id?: string
+          observacao?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipamento_movimentacoes_equipamento_id_fkey"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipamento_movimentacoes_fotografo_id_fkey"
+            columns: ["fotografo_id"]
+            isOneToOne: false
+            referencedRelation: "fotografos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipamentos: {
+        Row: {
+          ativo: boolean
+          categoria: string | null
+          codigo: string | null
+          created_at: string
+          foto_url: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria?: string | null
+          codigo?: string | null
+          created_at?: string
+          foto_url?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string | null
+          codigo?: string | null
+          created_at?: string
+          foto_url?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fotografos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       funil_eventos: {
         Row: {
           avancou_apesar_prob_baixa: boolean | null

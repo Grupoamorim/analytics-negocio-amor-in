@@ -29,6 +29,7 @@ import {
   UserPlus,
   CalendarClock,
   MessageSquare,
+  Package,
 } from 'lucide-react'
 import { getTurmaDisplayName, getFullTurmaName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { matchesSearch } from '@/utils/searchMatch'
@@ -73,6 +74,10 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
       { path: '/dre', label: 'DRE', icon: TrendingUp },
       { path: '/projecoes', label: 'Projeções', icon: Rocket },
     ],
+  },
+  {
+    section: 'Operação',
+    items: [{ path: '/equipamentos', label: 'Equipamentos', icon: Package }],
   },
   {
     section: null,

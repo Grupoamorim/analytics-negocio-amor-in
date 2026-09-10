@@ -5,7 +5,7 @@
 export interface PaginaDef {
   path: string
   label: string
-  grupo: 'Geral' | 'Comercial' | 'Financeiro'
+  grupo: 'Geral' | 'Comercial' | 'Financeiro' | 'Operação'
 }
 
 export const PAGINAS: PaginaDef[] = [
@@ -25,6 +25,7 @@ export const PAGINAS: PaginaDef[] = [
   { path: '/dre', label: 'DRE', grupo: 'Financeiro' },
   { path: '/projecoes', label: 'Projeções', grupo: 'Financeiro' },
   { path: '/relatorios', label: 'Relatórios', grupo: 'Geral' },
+  { path: '/equipamentos', label: 'Equipamentos', grupo: 'Operação' },
 ]
 
 export const TODAS_PAGINAS: string[] = PAGINAS.map((p) => p.path)
