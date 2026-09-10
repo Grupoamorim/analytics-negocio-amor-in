@@ -30,6 +30,7 @@ import {
   CalendarClock,
   MessageSquare,
   Package,
+  ChevronDown,
 } from 'lucide-react'
 import { getTurmaDisplayName, getFullTurmaName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { matchesSearch } from '@/utils/searchMatch'
@@ -53,6 +54,7 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
     section: 'Comercial',
     items: [
       { path: '/', label: 'Painel Comercial', icon: LayoutDashboard },
+      { path: '/adesoes', label: 'Adesões', icon: UserPlus },
       { path: '/agenda', label: 'Agenda', icon: CalendarClock },
       { path: '/captacao', label: 'Mapa de Mercado', icon: QrCode },
       { path: '/pipeline', label: 'Funil Amor In', icon: Kanban },
@@ -69,7 +71,6 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
     section: 'Financeiro',
     items: [
       { path: '/painel-financeiro', label: 'Painel Financeiro', icon: LayoutDashboard },
-      { path: '/adesoes', label: 'Adesões', icon: UserPlus },
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign },
       { path: '/dre', label: 'DRE', icon: TrendingUp },
       { path: '/projecoes', label: 'Projeções', icon: Rocket },
@@ -131,6 +132,31 @@ export default function Layout() {
       })).filter((sec) => sec.items.length > 0),
     [podeVer],
   )
+
+  // Seções do menu (Comercial, Financeiro, Operação...) minimizáveis por clique no
+  // título — preferência salva no navegador, e uma seção nunca fica escondendo a
+  // página em que o usuário está agora, mesmo se tiver sido colapsada antes.
+  const [secoesColapsadas, setSecoesColapsadas] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem('amorin_menu_secoes_colapsadas')
+      return raw ? JSON.parse(raw) : {}
+    } catch {
+      return {}
+    }
+  })
+  const alternarSecao = (secao: string) => {
+    setSecoesColapsadas((prev) => {
+      const next = { ...prev, [secao]: !prev[secao] }
+      try {
+        localStorage.setItem('amorin_menu_secoes_colapsadas', JSON.stringify(next))
+      } catch {
+        // localStorage indisponível (modo privado etc.) - só não persiste, sem quebrar o menu
+      }
+      return next
+    })
+  }
+  const secaoEstaAberta = (sec: { section: string | null; items: NavItem[] }) =>
+    !sec.section || !secoesColapsadas[sec.section] || sec.items.some((i) => i.path === location.pathname)
 
   const mostrarFiltroResponsavel = PATHS_COM_FILTRO_RESPONSAVEL.has(location.pathname)
 
@@ -588,42 +614,51 @@ export default function Layout() {
 
         {/* Menu de Navegação Vertical, setorizado por módulo */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {visibleSections.map((sec, idx) => (
-            <div key={sec.section ?? `sec-${idx}`} className={idx > 0 ? 'pt-3' : ''}>
-              {sec.section && (
-                <div className="px-3.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  {sec.section}
-                </div>
-              )}
-              {sec.items.map((item) => {
-                const Icon = item.icon
-                const isActive = location.pathname === item.path
-
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`relative flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
-                      isActive
-                        ? 'text-white bg-orange-500/15 border border-orange-500/20 shadow-sm'
-                        : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'
-                    }`}
+          {visibleSections.map((sec, idx) => {
+            const aberta = secaoEstaAberta(sec)
+            return (
+              <div key={sec.section ?? `sec-${idx}`} className={idx > 0 ? 'pt-3' : ''}>
+                {sec.section && (
+                  <button
+                    type="button"
+                    onClick={() => alternarSecao(sec.section!)}
+                    className="w-full flex items-center justify-between px-3.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
                   >
-                    {/* Indicador Ativo Lateral Esquerdo de 3px */}
-                    {isActive && (
-                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-orange-500 to-orange-500" />
-                    )}
-                    <Icon
-                      className={`w-5 h-5 transition-colors ${
-                        isActive ? 'text-orange-400' : 'text-slate-400 group-hover:text-slate-200'
-                      }`}
-                    />
-                    <span className="tracking-tight">{item.label}</span>
-                  </Link>
-                )
-              })}
-            </div>
-          ))}
+                    <span>{sec.section}</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${aberta ? '' : '-rotate-90'}`} />
+                  </button>
+                )}
+                {aberta &&
+                  sec.items.map((item) => {
+                    const Icon = item.icon
+                    const isActive = location.pathname === item.path
+
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={`relative flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
+                          isActive
+                            ? 'text-white bg-orange-500/15 border border-orange-500/20 shadow-sm'
+                            : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'
+                        }`}
+                      >
+                        {/* Indicador Ativo Lateral Esquerdo de 3px */}
+                        {isActive && (
+                          <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-orange-500 to-orange-500" />
+                        )}
+                        <Icon
+                          className={`w-5 h-5 transition-colors ${
+                            isActive ? 'text-orange-400' : 'text-slate-400 group-hover:text-slate-200'
+                          }`}
+                        />
+                        <span className="tracking-tight">{item.label}</span>
+                      </Link>
+                    )
+                  })}
+              </div>
+            )
+          })}
         </nav>
 
         {/* Rodapé da Sidebar: Perfil Compacto */}
@@ -689,37 +724,46 @@ export default function Layout() {
 
             {/* Menu Mobile, setorizado por módulo */}
             <nav className="flex-1 py-4 space-y-1.5 overflow-y-auto">
-              {visibleSections.map((sec, idx) => (
-                <div key={sec.section ?? `msec-${idx}`} className={idx > 0 ? 'pt-2' : ''}>
-                  {sec.section && (
-                    <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      {sec.section}
-                    </div>
-                  )}
-                  {sec.items.map((item) => {
-                    const Icon = item.icon
-                    const isActive = location.pathname === item.path
-
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
-                          isActive
-                            ? 'text-white bg-orange-500/20 border border-orange-500/30'
-                            : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'
-                        }`}
+              {visibleSections.map((sec, idx) => {
+                const aberta = secaoEstaAberta(sec)
+                return (
+                  <div key={sec.section ?? `msec-${idx}`} className={idx > 0 ? 'pt-2' : ''}>
+                    {sec.section && (
+                      <button
+                        type="button"
+                        onClick={() => alternarSecao(sec.section!)}
+                        className="w-full flex items-center justify-between px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500"
                       >
-                        <Icon
-                          className={`w-5 h-5 ${isActive ? 'text-orange-400' : 'text-slate-400'}`}
-                        />
-                        <span>{item.label}</span>
-                      </Link>
-                    )
-                  })}
-                </div>
-              ))}
+                        <span>{sec.section}</span>
+                        <ChevronDown className={`w-3 h-3 transition-transform ${aberta ? '' : '-rotate-90'}`} />
+                      </button>
+                    )}
+                    {aberta &&
+                      sec.items.map((item) => {
+                        const Icon = item.icon
+                        const isActive = location.pathname === item.path
+
+                        return (
+                          <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
+                              isActive
+                                ? 'text-white bg-orange-500/20 border border-orange-500/30'
+                                : 'text-slate-400 hover:text-white hover:bg-white/[0.05]'
+                            }`}
+                          >
+                            <Icon
+                              className={`w-5 h-5 ${isActive ? 'text-orange-400' : 'text-slate-400'}`}
+                            />
+                            <span>{item.label}</span>
+                          </Link>
+                        )
+                      })}
+                  </div>
+                )
+              })}
             </nav>
 
             <div className="pt-3 border-t border-white/[0.08]">
