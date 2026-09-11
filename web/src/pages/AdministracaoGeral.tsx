@@ -5,6 +5,7 @@ import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
 import { useMetasNegocio } from '@/hooks/useMetasNegocio'
 import PaceBand from '@/components/dashboard/PaceBand'
+import RetrospectivaPace from '@/components/dashboard/RetrospectivaPace'
 import { pontosComerciais } from '@/utils/comercialMetrics'
 
 const HOJE = new Date().toISOString().slice(0, 10)
@@ -40,7 +41,7 @@ export default function AdministracaoGeral() {
   const pontosContratos = useMemo(() => pontosComerciais(leadsFiltrados, 'contratos'), [leadsFiltrados])
   const pontosAlunos = useMemo(() => pontosComerciais(leadsFiltrados, 'alunos'), [leadsFiltrados])
 
-  const { metaVigente } = useMetasNegocio()
+  const { metas, metaVigente } = useMetasNegocio()
   const metaReceita = metaVigente('receita', HOJE)
   const metaAdesoes = metaVigente('adesoes', HOJE)
   const metaContratos = metaVigente('contratos', HOJE)
@@ -69,6 +70,16 @@ export default function AdministracaoGeral() {
       <PaceBand titulo="Meta de adesões" metrica="adesoes" meta={metaAdesoes} pontos={pontosAdesoes} />
       <PaceBand titulo="Meta de contratos fechados" metrica="contratos" meta={metaContratos} pontos={pontosContratos} />
       <PaceBand titulo="Meta de alunos fechados" metrica="alunos" meta={metaAlunos} pontos={pontosAlunos} />
+
+      <RetrospectivaPace
+        metas={metas}
+        metricas={[
+          { metrica: 'receita', pontos: pontosReceita },
+          { metrica: 'adesoes', pontos: pontosAdesoes },
+          { metrica: 'contratos', pontos: pontosContratos },
+          { metrica: 'alunos', pontos: pontosAlunos },
+        ]}
+      />
     </div>
   )
 }

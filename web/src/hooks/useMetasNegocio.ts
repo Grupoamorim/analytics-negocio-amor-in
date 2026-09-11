@@ -60,6 +60,34 @@ export function intervaloDaMeta(m: Pick<MetaNegocio, 'escopo' | 'ano' | 'periodo
   return { ini: iso(new Date(m.ano, 0, 1)), fim: iso(new Date(m.ano, 11, 31)) }
 }
 
+/** [ini,fim] (YYYY-MM-DD) coberto por um conjunto de meses (1-12) de um ano — usado pra
+ * retrospectiva por trimestre/semestre/ano, que agrega os meses em vez de depender de um
+ * cadastro específico daquele escopo maior. */
+export function intervaloDosMeses(ano: number, meses: number[]): { ini: string; fim: string } {
+  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const min = Math.min(...meses)
+  const max = Math.max(...meses)
+  return { ini: iso(new Date(ano, min - 1, 1)), fim: iso(new Date(ano, max, 0)) }
+}
+
+/** Soma as metas mensais cadastradas de uma métrica que caem dentro dos meses informados
+ * (mesmo ano). Não inventa meses sem meta cadastrada — só soma o que existe e informa
+ * quantos dos meses pedidos realmente têm meta, pra a UI avisar quando a soma é parcial. */
+export function metaSomaMeses(
+  metas: MetaNegocio[],
+  metrica: MetricaMeta,
+  ano: number,
+  meses: number[],
+): { valor: number; mesesComMeta: number; mesesTotal: number } {
+  const porMes = new Map<number, number>()
+  metas
+    .filter((m) => m.metrica === metrica && m.escopo === 'mensal' && m.ano === ano)
+    .forEach((m) => porMes.set(m.periodo, m.valorMeta))
+  const comMeta = meses.filter((m) => porMes.has(m))
+  const valor = comMeta.reduce((acc, m) => acc + (porMes.get(m) || 0), 0)
+  return { valor, mesesComMeta: comMeta.length, mesesTotal: meses.length }
+}
+
 export function rotuloPeriodoMeta(m: Pick<MetaNegocio, 'escopo' | 'ano' | 'periodo'>): string {
   const NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
   if (m.escopo === 'mensal') return `${NOMES[(m.periodo || 1) - 1]}/${m.ano}`
