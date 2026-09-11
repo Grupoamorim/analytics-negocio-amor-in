@@ -5,10 +5,11 @@
 export interface PaginaDef {
   path: string
   label: string
-  grupo: 'Geral' | 'Comercial' | 'Financeiro' | 'Operação'
+  grupo: 'Geral' | 'Comercial' | 'Financeiro' | 'Operação' | 'Administração'
 }
 
 export const PAGINAS: PaginaDef[] = [
+  { path: '/administracao', label: 'Dashboard Geral', grupo: 'Administração' },
   { path: '/', label: 'Painel Comercial', grupo: 'Comercial' },
   { path: '/painel-financeiro', label: 'Painel Financeiro', grupo: 'Financeiro' },
   { path: '/agenda', label: 'Agenda', grupo: 'Comercial' },
@@ -24,7 +25,7 @@ export const PAGINAS: PaginaDef[] = [
   { path: '/financeiro', label: 'Financeiro', grupo: 'Financeiro' },
   { path: '/dre', label: 'DRE', grupo: 'Financeiro' },
   { path: '/projecoes', label: 'Projeções', grupo: 'Financeiro' },
-  { path: '/relatorios', label: 'Relatórios', grupo: 'Geral' },
+  { path: '/relatorios', label: 'Relatórios', grupo: 'Administração' },
   { path: '/equipamentos', label: 'Equipamentos', grupo: 'Operação' },
 ]
 
@@ -68,6 +69,7 @@ export const PAGINAS_PADRAO_POR_CARGO: Record<string, string[]> = {
   comercial_admin: PAGINAS_PADRAO_COMERCIAL,
   financeiro: [...PAGINAS_FINANCEIRO, '/relatorios'],
   comercial: PAGINAS_PADRAO_COMERCIAL,
+  fotografo: ['/agenda', '/equipamentos', '/notas'],
   membro: ['/', '/agenda', '/leads', '/probabilidade', '/whatsapp-comercial', '/notas'],
 }
 

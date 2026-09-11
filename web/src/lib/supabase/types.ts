@@ -2722,6 +2722,53 @@ export type Database = {
         }
         Relationships: []
       }
+      solicitacoes_cadastro: {
+        Row: {
+          cargo_definido: string | null
+          created_at: string
+          decidido_em: string | null
+          decidido_por: string | null
+          email: string
+          id: string
+          mensagem: string | null
+          nome: string
+          status: string
+          telefone: string | null
+        }
+        Insert: {
+          cargo_definido?: string | null
+          created_at?: string
+          decidido_em?: string | null
+          decidido_por?: string | null
+          email: string
+          id?: string
+          mensagem?: string | null
+          nome: string
+          status?: string
+          telefone?: string | null
+        }
+        Update: {
+          cargo_definido?: string | null
+          created_at?: string
+          decidido_em?: string | null
+          decidido_por?: string | null
+          email?: string
+          id?: string
+          mensagem?: string | null
+          nome?: string
+          status?: string
+          telefone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacoes_cadastro_decidido_por_fkey"
+            columns: ["decidido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stage_transitions: {
         Row: {
           changed_at: string

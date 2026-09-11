@@ -43,25 +43,37 @@ export default function PaceBand({
   metrica,
   meta,
   pontos,
+  periodoOverride,
 }: {
   titulo: string
   metrica: MetricaMeta
   meta: MetaNegocio | null
   pontos: PontoDiario[]
+  /** Quando presente, mostra o pace desse período em vez do vigente-hoje derivado de `meta`
+   * (usado pra "pré-visualizar" um trimestre/mês/ano escolhido no filtro). `meta` continua
+   * opcional aqui — só serve de fonte do `contexto` pro prompt de IA, quando existir. */
+  periodoOverride?: { ini: string; fim: string; rotulo: string; valorMeta: number; temMeta: boolean }
 }) {
   const unidade = METRICA_UNIDADE[metrica]
   const [analise, setAnalise] = useState<string | null>(null)
   const [carregandoIA, setCarregandoIA] = useState(false)
   const [erroIA, setErroIA] = useState<string | null>(null)
 
+  const temMeta = periodoOverride ? periodoOverride.temMeta : !!meta
+  const rotulo = periodoOverride ? periodoOverride.rotulo : meta ? rotuloPeriodoMeta(meta) : ''
+
   const pace = useMemo(() => {
-    if (!meta) return null
-    const { ini, fim } = intervaloDaMeta(meta)
-    return calcularPace(meta.valorMeta, ini, fim, pontos)
-  }, [meta, pontos])
+    if (!temMeta) return null
+    if (periodoOverride) {
+      return calcularPace(periodoOverride.valorMeta, periodoOverride.ini, periodoOverride.fim, pontos)
+    }
+    const { ini, fim } = intervaloDaMeta(meta!)
+    return calcularPace(meta!.valorMeta, ini, fim, pontos)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, pontos, periodoOverride, temMeta])
 
   async function analisarComIA() {
-    if (!meta || !pace) return
+    if (!pace) return
     if (!getGeminiApiKey()) {
       setErroIA('Configure a chave do Gemini em Administração → IA.')
       return
@@ -76,14 +88,14 @@ Analise o andamento da meta abaixo e responda em português, direto e prático, 
 
 Convenção de trimestre: o sistema usa T1-T4. Se o contexto abaixo mencionar "Q1"-"Q4" (nomenclatura em inglês, comum em documentos de planejamento), trate como sinônimo do mesmo trimestre (ex: Q3 = T3, terceiro trimestre).
 
-META: ${METRICA_LABEL[metrica]} — período ${rotuloPeriodoMeta(meta)}
-Valor da meta: ${fmt(meta.valorMeta, unidade)}
+META: ${METRICA_LABEL[metrica]} — período ${rotulo}
+Valor da meta: ${fmt(pace.meta, unidade)}
 Realizado até hoje: ${fmt(pace.realizado, unidade)} (${(pace.indicePace * 100).toFixed(0)}% do que deveria estar a esta altura)
 Onde deveríamos estar hoje (meta linear): ${fmt(pace.metaProRata, unidade)}
 Projeção de fechamento no ritmo atual: ${fmt(pace.projecao, unidade)}
 Falta: ${fmt(pace.faltam, unidade)} em ${pace.diasRestantes} dias
 Ritmo atual: ${fmt(pace.ritmoDiarioAtual, unidade)}/dia • Ritmo necessário: ${fmt(pace.ritmoDiarioNecessario, unidade)}/dia (${fmt(pace.ritmoSemanalNecessario, unidade)}/semana)
-${meta.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.contexto}"""` : ''}`
+${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.contexto}"""` : ''}`
       const res = await callGemini(prompt)
       setAnalise(res)
     } catch (e: any) {
@@ -93,7 +105,7 @@ ${meta.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.c
     }
   }
 
-  if (!meta || !pace) {
+  if (!temMeta || !pace) {
     return (
       <div className="bg-[#111820] border border-dashed border-white/[0.12] rounded-xl p-6 shadow-lg">
         <SectionTitle ajuda="Defina a meta do período (mensal, trimestral ou anual) para acompanhar o ritmo (pace) — o quanto já foi feito vs. onde deveríamos estar, e o que falta por dia/semana pra bater.">
@@ -101,7 +113,7 @@ ${meta.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.c
         </SectionTitle>
         <p className="mt-3 text-sm text-slate-400">
           Nenhuma meta de <strong>{METRICA_LABEL[metrica].toLowerCase()}</strong> cadastrada para o
-          período atual.{' '}
+          período {periodoOverride ? `escolhido (${periodoOverride.rotulo})` : 'atual'}.{' '}
           <Link to="/admin" className="text-orange-400 hover:underline">
             Cadastrar em Administração → Metas
           </Link>
@@ -122,7 +134,7 @@ ${meta.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.c
           </span>
         }
       >
-        {titulo} — {rotuloPeriodoMeta(meta)}
+        {titulo} — {rotulo}
       </SectionTitle>
 
       {/* Cards */}

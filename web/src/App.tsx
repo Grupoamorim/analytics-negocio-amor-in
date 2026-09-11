@@ -35,6 +35,7 @@ import Relatorios from '@/pages/Relatorios'
 import Equipamentos from '@/pages/Equipamentos'
 import Admin from '@/pages/Admin'
 import AdministracaoGeral from '@/pages/AdministracaoGeral'
+import SolicitarCadastro from '@/pages/SolicitarCadastro'
 
 const TELA_CARREGANDO = (
   <div className="min-h-screen bg-[#0a0f14] flex items-center justify-center text-slate-400 text-sm">
@@ -118,15 +119,16 @@ const App = () => (
               <Route
                 path="/administracao"
                 element={
-                  <AdminRoute>
+                  <RotaComPermissao path="/administracao">
                     <AdministracaoGeral />
-                  </AdminRoute>
+                  </RotaComPermissao>
                 }
               />
             </Route>
             <Route path="/captacao/form" element={<CaptacaoForm />} />
             <Route path="/captacao/acao/:slug" element={<CaptacaoAcaoForm />} />
             <Route path="/p/:token" element={<ApresentacaoPublica />} />
+            <Route path="/cadastro" element={<SolicitarCadastro />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>

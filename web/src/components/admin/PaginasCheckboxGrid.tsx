@@ -1,6 +1,6 @@
 import { PAGINAS, type PaginaDef } from '@/utils/paginas'
 
-const ORDEM_GRUPOS: PaginaDef['grupo'][] = ['Comercial', 'Financeiro', 'Operação', 'Geral']
+const ORDEM_GRUPOS: PaginaDef['grupo'][] = ['Administração', 'Comercial', 'Financeiro', 'Operação', 'Geral']
 
 /** Grade de checkboxes das abas do menu, agrupada por setor (Comercial/Financeiro/
  * Operação/Geral) com um checkbox "mestre" por grupo — marca/desmarca todas as abas

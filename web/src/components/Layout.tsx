@@ -52,6 +52,14 @@ type NavItem = { path: string; label: string; icon: typeof LayoutDashboard }
 // várias telas dentro de "Comercial".
 const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
   {
+    section: 'Administração',
+    items: [
+      { path: '/administracao', label: 'Dashboard Geral', icon: Gauge },
+      { path: '/relatorios', label: 'Relatórios', icon: Presentation },
+      { path: '/admin', label: 'Configurações', icon: ShieldCheck },
+    ],
+  },
+  {
     section: 'Comercial',
     items: [
       { path: '/', label: 'Painel Comercial', icon: LayoutDashboard },
@@ -80,17 +88,6 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
   {
     section: 'Operação',
     items: [{ path: '/equipamentos', label: 'Equipamentos', icon: Package }],
-  },
-  {
-    section: null,
-    items: [{ path: '/relatorios', label: 'Relatórios', icon: Presentation }],
-  },
-  {
-    section: 'Administração',
-    items: [
-      { path: '/administracao', label: 'Dashboard Geral', icon: Gauge },
-      { path: '/admin', label: 'Configurações', icon: ShieldCheck },
-    ],
   },
 ]
 
@@ -142,35 +139,19 @@ export default function Layout() {
   )
 
   // Seções do menu (Comercial, Financeiro, Operação...) minimizáveis por clique no
-  // título — preferência salva no navegador, e uma seção nunca fica escondendo a
-  // página em que o usuário está agora, mesmo se tiver sido colapsada antes.
+  // título. Sempre começam todas minimizadas a cada abertura do site (sem persistir
+  // entre recarregamentos) — e não têm mais a exceção de "abrir sozinha na página
+  // atual", que impedia clicar e realmente colapsar a seção em que você está.
   const TODAS_SECOES_COLAPSADAS: Record<string, boolean> = {}
   NAVIGATION_SECTIONS.forEach((s) => {
     if (s.section) TODAS_SECOES_COLAPSADAS[s.section] = true
   })
-  const [secoesColapsadas, setSecoesColapsadas] = useState<Record<string, boolean>>(() => {
-    try {
-      const raw = localStorage.getItem('amorin_menu_secoes_colapsadas')
-      // Padrão (primeira visita, sem preferência salva): tudo minimizado, o
-      // usuário clica no título da seção pra abrir o que quiser ver.
-      return raw ? JSON.parse(raw) : TODAS_SECOES_COLAPSADAS
-    } catch {
-      return TODAS_SECOES_COLAPSADAS
-    }
-  })
+  const [secoesColapsadas, setSecoesColapsadas] = useState<Record<string, boolean>>(TODAS_SECOES_COLAPSADAS)
   const alternarSecao = (secao: string) => {
-    setSecoesColapsadas((prev) => {
-      const next = { ...prev, [secao]: !prev[secao] }
-      try {
-        localStorage.setItem('amorin_menu_secoes_colapsadas', JSON.stringify(next))
-      } catch {
-        // localStorage indisponível (modo privado etc.) - só não persiste, sem quebrar o menu
-      }
-      return next
-    })
+    setSecoesColapsadas((prev) => ({ ...prev, [secao]: !prev[secao] }))
   }
   const secaoEstaAberta = (sec: { section: string | null; items: NavItem[] }) =>
-    !sec.section || !secoesColapsadas[sec.section] || sec.items.some((i) => i.path === location.pathname)
+    !sec.section || !secoesColapsadas[sec.section]
 
   const mostrarFiltroResponsavel = PATHS_COM_FILTRO_RESPONSAVEL.has(location.pathname)
 

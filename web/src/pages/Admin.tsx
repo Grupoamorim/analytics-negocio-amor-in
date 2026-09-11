@@ -87,15 +87,43 @@ import {
   GraduationCap,
   TrendingDown,
   Package,
+  Link2,
+  Copy,
+  UserCheck,
+  UserX,
 } from 'lucide-react'
 
 interface Perfil {
   id: string
   email: string
   nome: string
-  role: 'admin' | 'comercial_admin' | 'financeiro' | 'comercial' | 'membro'
+  role: 'admin' | 'comercial_admin' | 'financeiro' | 'comercial' | 'membro' | 'fotografo'
   ativo?: boolean
   created_at: string
+}
+
+interface SolicitacaoCadastro {
+  id: string
+  nome: string
+  email: string
+  telefone: string | null
+  mensagem: string | null
+  status: 'pendente' | 'aprovada' | 'recusada'
+  created_at: string
+}
+
+/** supabase.functions.invoke() não expõe o corpo JSON do erro em error.message quando o
+ * Edge Function responde 4xx/5xx (fica só um texto genérico tipo "Edge Function returned
+ * a non-2xx status code") — isso lê o corpo de verdade (error.context é a Response) pra
+ * mostrar o motivo real (ex: "email rate limit exceeded", "Cargo inválido"). */
+async function mensagemDoErroFuncao(error: any): Promise<string> {
+  try {
+    const body = await error?.context?.json?.()
+    if (body?.error) return body.error
+  } catch {
+    // corpo não é JSON ou já foi consumido — cai no fallback abaixo
+  }
+  return error?.message || 'Não foi possível completar a operação.'
 }
 
 const CARGOS: { value: Perfil['role']; label: string }[] = [
@@ -103,6 +131,7 @@ const CARGOS: { value: Perfil['role']; label: string }[] = [
   { value: 'comercial_admin', label: 'Adm Comercial — edita e apaga turmas' },
   { value: 'financeiro', label: 'Financeiro' },
   { value: 'comercial', label: 'Comercial' },
+  { value: 'fotografo', label: 'Fotógrafo' },
   { value: 'membro', label: 'Membro' },
 ]
 
@@ -138,6 +167,14 @@ export default function Admin() {
   const [resetandoSenhaId, setResetandoSenhaId] = useState<string | null>(null)
   const [reenviandoEmailId, setReenviandoEmailId] = useState<string | null>(null)
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
+
+  // Solicitações de cadastro (link público /cadastro)
+  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoCadastro[]>([])
+  const [carregandoSolicitacoes, setCarregandoSolicitacoes] = useState(true)
+  const [decisoesSolicitacao, setDecisoesSolicitacao] = useState<
+    Record<string, { role: Perfil['role']; paginas: string[] }>
+  >({})
+  const [decidindoSolicitacaoId, setDecidindoSolicitacaoId] = useState<string | null>(null)
 
   // Vendedores / SDR
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
@@ -325,7 +362,7 @@ export default function Admin() {
         body: { resend: true, email: p.email },
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (error) throw error
+      if (error) throw new Error(await mensagemDoErroFuncao(error))
       if (data?.error) throw new Error(data.error)
 
       toast({
@@ -372,7 +409,7 @@ export default function Admin() {
         body: { userId: p.id },
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (error) throw error
+      if (error) throw new Error(await mensagemDoErroFuncao(error))
       if (data?.error) throw new Error(data.error)
 
       setPerfis((prev) => prev.filter((x) => x.id !== p.id))
@@ -410,7 +447,7 @@ export default function Admin() {
         },
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (error) throw error
+      if (error) throw new Error(await mensagemDoErroFuncao(error))
       if (data?.error) throw new Error(data.error)
 
       toast({
@@ -434,6 +471,101 @@ export default function Admin() {
     } finally {
       setEnviandoConvite(false)
     }
+  }
+
+  // Solicitações de cadastro (link público /cadastro) — pendentes esperando o
+  // admin escolher cargo + abas e aprovar (dispara o mesmo invite-user de cima).
+  useEffect(() => {
+    async function carregarSolicitacoes() {
+      setCarregandoSolicitacoes(true)
+      const { data } = await (supabase as any)
+        .from('solicitacoes_cadastro')
+        .select('*')
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: true })
+      setSolicitacoes((data || []) as SolicitacaoCadastro[])
+      setCarregandoSolicitacoes(false)
+    }
+    carregarSolicitacoes()
+  }, [])
+
+  function decisaoDe(id: string): { role: Perfil['role']; paginas: string[] } {
+    return decisoesSolicitacao[id] || { role: 'membro', paginas: paginasPadraoPorCargo('membro') }
+  }
+
+  function atualizarDecisao(id: string, patch: Partial<{ role: Perfil['role']; paginas: string[] }>) {
+    setDecisoesSolicitacao((prev) => ({ ...prev, [id]: { ...decisaoDe(id), ...patch } }))
+  }
+
+  async function aprovarSolicitacao(s: SolicitacaoCadastro) {
+    const d = decisaoDe(s.id)
+    setDecidindoSolicitacaoId(s.id)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Sessão expirada, faça login novamente.')
+
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: {
+          email: s.email,
+          nome: s.nome,
+          role: d.role,
+          paginas: d.role === 'admin' ? [] : d.paginas,
+        },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (error) throw new Error(await mensagemDoErroFuncao(error))
+      if (data?.error) throw new Error(data.error)
+
+      await (supabase as any)
+        .from('solicitacoes_cadastro')
+        .update({
+          status: 'aprovada',
+          decidido_em: new Date().toISOString(),
+          decidido_por: user?.id,
+          cargo_definido: d.role,
+        })
+        .eq('id', s.id)
+
+      setSolicitacoes((prev) => prev.filter((x) => x.id !== s.id))
+      toast({
+        title: 'Cadastro aprovado',
+        description: `${s.email} vai receber um e-mail pra definir a própria senha.`,
+      })
+      const { data: perfisAtualizados } = await supabase.from('profiles').select('*').order('created_at')
+      setPerfis((perfisAtualizados || []) as Perfil[])
+      recarregarAcesso()
+    } catch (err: any) {
+      toast({ title: 'Erro ao aprovar', description: err.message, variant: 'destructive' })
+    } finally {
+      setDecidindoSolicitacaoId(null)
+    }
+  }
+
+  async function recusarSolicitacao(s: SolicitacaoCadastro) {
+    if (!confirm(`Recusar o cadastro de "${s.nome}"?`)) return
+    setDecidindoSolicitacaoId(s.id)
+    try {
+      const { error } = await (supabase as any)
+        .from('solicitacoes_cadastro')
+        .update({ status: 'recusada', decidido_em: new Date().toISOString(), decidido_por: user?.id })
+        .eq('id', s.id)
+      if (error) throw error
+      setSolicitacoes((prev) => prev.filter((x) => x.id !== s.id))
+      toast({ title: 'Cadastro recusado' })
+    } catch (err: any) {
+      toast({ title: 'Erro ao recusar', description: err.message, variant: 'destructive' })
+    } finally {
+      setDecidindoSolicitacaoId(null)
+    }
+  }
+
+  function copiarLinkCadastro() {
+    const url = `${window.location.origin}/cadastro`
+    navigator.clipboard
+      .writeText(url)
+      .then(() => toast({ title: 'Link copiado', description: url }))
+      .catch(() => toast({ title: 'Não foi possível copiar', description: url, variant: 'destructive' }))
   }
 
   useEffect(() => {
@@ -986,6 +1118,103 @@ export default function Admin() {
 
         {/* ABA: USUÁRIOS E CARGOS */}
         <TabsContent value="usuarios" className="space-y-4">
+          {/* Link público de cadastro + solicitações pendentes de aprovação */}
+          <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-orange-400" /> Cadastro público
+              {solicitacoes.length > 0 && (
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                  {solicitacoes.length} pendente{solicitacoes.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-slate-400 mb-3">
+              Envie esse link pra quem precisa pedir acesso (ex: um fotógrafo novo) — a pessoa preenche
+              nome/e-mail, e a solicitação cai aqui pra você aprovar (escolhendo cargo e abas) ou
+              recusar. Ninguém entra sem sua aprovação.
+            </p>
+            <button
+              type="button"
+              onClick={copiarLinkCadastro}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded-lg px-3 py-1.5 hover:bg-orange-500/20 mb-4"
+            >
+              <Copy className="w-3.5 h-3.5" /> Copiar link de cadastro
+            </button>
+
+            {carregandoSolicitacoes ? (
+              <div className="text-xs text-slate-500">Carregando solicitações...</div>
+            ) : solicitacoes.length === 0 ? (
+              <p className="text-xs text-slate-500">Nenhuma solicitação pendente no momento.</p>
+            ) : (
+              <div className="space-y-4">
+                {solicitacoes.map((s) => {
+                  const d = decisaoDe(s.id)
+                  const decidindo = decidindoSolicitacaoId === s.id
+                  return (
+                    <div key={s.id} className="border border-white/[0.08] rounded-lg p-4 bg-white/[0.02]">
+                      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                        <div>
+                          <div className="text-sm font-semibold text-white">{s.nome}</div>
+                          <div className="text-xs text-slate-400">
+                            {s.email}
+                            {s.telefone ? ` · ${s.telefone}` : ''}
+                          </div>
+                          {s.mensagem && <div className="text-xs text-slate-500 mt-1 italic">"{s.mensagem}"</div>}
+                          <div className="text-[10px] text-slate-600 mt-1">
+                            Enviado em {new Date(s.created_at).toLocaleString('pt-BR')}
+                          </div>
+                        </div>
+                        <select
+                          value={d.role}
+                          onChange={(e) => {
+                            const role = e.target.value as Perfil['role']
+                            atualizarDecisao(s.id, { role, paginas: paginasPadraoPorCargo(role) })
+                          }}
+                          className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-2 text-slate-200 text-xs"
+                        >
+                          {CARGOS.map((c) => (
+                            <option key={c.value} value={c.value}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {d.role !== 'admin' && (
+                        <div className="mb-3">
+                          <PaginasCheckboxGrid
+                            value={d.paginas}
+                            onChange={(next) => atualizarDecisao(s.id, { paginas: next })}
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          onClick={() => aprovarSolicitacao(s)}
+                          disabled={decidindo}
+                          className="bg-orange-500 hover:bg-orange-600 text-white text-xs h-8"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 mr-1" />
+                          {decidindo ? 'Processando...' : 'Aprovar e convidar'}
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => recusarSolicitacao(s)}
+                          disabled={decidindo}
+                          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-rose-400 disabled:opacity-50"
+                        >
+                          <UserX className="w-3.5 h-3.5" /> Recusar
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
           <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
             <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
               <Users className="w-4 h-4 text-orange-400" /> Usuários e Cargos

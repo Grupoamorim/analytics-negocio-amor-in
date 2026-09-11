@@ -70,22 +70,40 @@ export function intervaloDosMeses(ano: number, meses: number[]): { ini: string; 
   return { ini: iso(new Date(ano, min - 1, 1)), fim: iso(new Date(ano, max, 0)) }
 }
 
+/** Soma as metas mensais cadastradas de uma métrica cujo intervalo cai inteiro dentro de
+ * [ini,fim] — funciona pra qualquer período (mês/trimestre/semestre/ano/personalizado), não só
+ * os fixos T1-T4. Não inventa mês sem meta cadastrada — só soma o que existe, e informa quantos
+ * meses de calendário o período tem vs. quantos têm meta, pra UI avisar quando é parcial. */
+export function metaSomaIntervalo(
+  metas: MetaNegocio[],
+  metrica: MetricaMeta,
+  ini: string,
+  fim: string,
+): { valor: number; mesesComMeta: number; mesesTotal: number } {
+  const dentro = metas.filter((m) => {
+    if (m.metrica !== metrica || m.escopo !== 'mensal') return false
+    const iv = intervaloDaMeta(m)
+    return iv.ini >= ini && iv.fim <= fim
+  })
+  const valor = dentro.reduce((acc, m) => acc + m.valorMeta, 0)
+  const mesesTotal =
+    (new Date(`${fim}T00:00:00`).getFullYear() - new Date(`${ini}T00:00:00`).getFullYear()) * 12 +
+    (new Date(`${fim}T00:00:00`).getMonth() - new Date(`${ini}T00:00:00`).getMonth()) +
+    1
+  return { valor, mesesComMeta: dentro.length, mesesTotal }
+}
+
 /** Soma as metas mensais cadastradas de uma métrica que caem dentro dos meses informados
- * (mesmo ano). Não inventa meses sem meta cadastrada — só soma o que existe e informa
- * quantos dos meses pedidos realmente têm meta, pra a UI avisar quando a soma é parcial. */
+ * (mesmo ano). Usado pela retrospectiva fixa (T1-T4/S1/S2/Ano) — por baixo, delega pro
+ * intervalo equivalente em `metaSomaIntervalo`. */
 export function metaSomaMeses(
   metas: MetaNegocio[],
   metrica: MetricaMeta,
   ano: number,
   meses: number[],
 ): { valor: number; mesesComMeta: number; mesesTotal: number } {
-  const porMes = new Map<number, number>()
-  metas
-    .filter((m) => m.metrica === metrica && m.escopo === 'mensal' && m.ano === ano)
-    .forEach((m) => porMes.set(m.periodo, m.valorMeta))
-  const comMeta = meses.filter((m) => porMes.has(m))
-  const valor = comMeta.reduce((acc, m) => acc + (porMes.get(m) || 0), 0)
-  return { valor, mesesComMeta: comMeta.length, mesesTotal: meses.length }
+  const { ini, fim } = intervaloDosMeses(ano, meses)
+  return metaSomaIntervalo(metas, metrica, ini, fim)
 }
 
 export function rotuloPeriodoMeta(m: Pick<MetaNegocio, 'escopo' | 'ano' | 'periodo'>): string {
