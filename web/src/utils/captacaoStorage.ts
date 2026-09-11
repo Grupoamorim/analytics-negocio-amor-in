@@ -24,6 +24,7 @@ function mapRowToLead(row: CaptacaoLeadRow): CaptacaoLead {
     dataCadastro: row.data_cadastro || new Date().toISOString(),
     origem: row.origem || '',
     observacao: row.observacao || '',
+    comissao: row.comissao || false,
   }
 }
 
@@ -40,6 +41,7 @@ function mapLeadToRow(input: Partial<CaptacaoLead>): CaptacaoLeadWrite {
   if (input.sdr !== undefined) row.sdr = input.sdr
   if (input.origem !== undefined) row.origem = input.origem || null
   if (input.observacao !== undefined) row.observacao = input.observacao || null
+  if (input.comissao !== undefined) row.comissao = input.comissao
   return row
 }
 

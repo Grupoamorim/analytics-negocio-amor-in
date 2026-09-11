@@ -238,6 +238,7 @@ export type Database = {
         Row: {
           ano_formatura: string
           cidade: string
+          comissao: boolean
           curso: string
           data_cadastro: string
           email: string
@@ -253,6 +254,7 @@ export type Database = {
         Insert: {
           ano_formatura?: string
           cidade?: string
+          comissao?: boolean
           curso?: string
           data_cadastro?: string
           email?: string
@@ -268,6 +270,7 @@ export type Database = {
         Update: {
           ano_formatura?: string
           cidade?: string
+          comissao?: boolean
           curso?: string
           data_cadastro?: string
           email?: string

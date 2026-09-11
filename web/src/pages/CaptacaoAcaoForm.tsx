@@ -1,9 +1,9 @@
 // Formulário público de uma "Ação de Captação" (ex: ação de Direito num
 // evento) — mais rápido que o link de captação normal: curso já vem quase
-// pronto, lista as turmas que já temos por faculdade coloridas pelo status
-// (verde = já é nossa, azul = ainda em prospecção, vermelho = já perdemos
-// essa turma antes), e ao confirmar redireciona pro grupo do WhatsApp da
-// ação. Config de cada ação em `utils/captacaoAcoes.ts`.
+// pronto, faculdade e semestre em botões simples (sem cor/status visível
+// pra pessoa — isso fica só na observação interna do lead), e ao confirmar
+// redireciona pro grupo do WhatsApp da ação. Config de cada ação em
+// `utils/captacaoAcoes.ts`.
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { ArrowLeft, Send, CheckCircle2 } from 'lucide-react'
@@ -13,6 +13,7 @@ import { fetchCidadeFaculdades } from '@/utils/mercadoFaculdades'
 import { fetchCursosConhecidos } from '@/utils/mercadoCursos'
 import { getCampanhaCaptacao } from '@/utils/captacaoAcoes'
 import { formatPhoneBR } from '@/utils/phoneMask'
+import { listarDuracaoCursos, acharDuracaoAnos, semestreDaTurma } from '@/utils/duracaoCursos'
 
 const OUTRO = '__outro__'
 
@@ -24,35 +25,27 @@ interface TurmaStatus {
   anoFormatura: string
   cidade: string
   funilStatus: string | null
+  periodoAtual: number | null
 }
 
-type Cor = 'verde' | 'azul' | 'vermelho'
-
-function corDaTurma(funilStatus: string | null): Cor {
-  if (funilStatus === 'Convertido') return 'verde'
-  if (funilStatus === 'Perdido') return 'vermelho'
-  return 'azul'
+// Turno pelo sufixo do nome da turma (ex: "Turma 41N" -> Noturno, "Turma
+// 41M" -> Matutino) — evita mostrar "5º período" duas vezes quando há mais
+// de uma turma no mesmo período (uma de cada turno).
+function turnoDaTurma(turma: string): string | null {
+  const m = turma.match(/(\d)\s*([A-Za-z])\s*$/)
+  if (!m) return null
+  const letra = m[2].toUpperCase()
+  if (letra === 'M') return 'Matutino'
+  if (letra === 'N') return 'Noturno'
+  if (letra === 'T') return 'Tarde'
+  return null
 }
 
-const CARD_COR: Record<Cor, { border: string; bg: string; tag: string; tagTexto: string }> = {
-  verde: {
-    border: 'border-emerald-500/40 hover:border-emerald-400/70',
-    bg: 'bg-emerald-500/[0.06] hover:bg-emerald-500/[0.1]',
-    tag: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-    tagTexto: 'Já é nossa',
-  },
-  azul: {
-    border: 'border-blue-500/40 hover:border-blue-400/70',
-    bg: 'bg-blue-500/[0.06] hover:bg-blue-500/[0.1]',
-    tag: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-    tagTexto: 'Em conversa',
-  },
-  vermelho: {
-    border: 'border-red-500/40 hover:border-red-400/70',
-    bg: 'bg-red-500/[0.06] hover:bg-red-500/[0.1]',
-    tag: 'bg-red-500/15 text-red-300 border-red-500/30',
-    tagTexto: 'Não fechamos antes',
-  },
+// Só pra anotar na observação interna do lead — não aparece pra quem preenche.
+function statusTexto(funilStatus: string | null): string {
+  if (funilStatus === 'Convertido') return 'turma já é nossa'
+  if (funilStatus === 'Perdido') return 'já tentamos essa turma antes'
+  return 'turma em prospecção'
 }
 
 type Etapa = 'curso' | 'faculdade' | 'turma' | 'semestre' | 'dados' | 'sucesso'
@@ -64,6 +57,7 @@ export default function CaptacaoAcaoForm() {
   const [logoUrl, setLogoUrl] = useState('')
   const [cursosConhecidos, setCursosConhecidos] = useState<string[]>([])
   const [faculdadeCidade, setFaculdadeCidade] = useState<Record<string, string[]>>({})
+  const [duracoes, setDuracoes] = useState<Awaited<ReturnType<typeof listarDuracaoCursos>>>([])
 
   const [etapa, setEtapa] = useState<Etapa>('curso')
   const [mostrarOutroCurso, setMostrarOutroCurso] = useState(false)
@@ -82,6 +76,7 @@ export default function CaptacaoAcaoForm() {
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
   const [email, setEmail] = useState('')
+  const [comissao, setComissao] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -93,6 +88,7 @@ export default function CaptacaoAcaoForm() {
       .then(({ data }) => setLogoUrl(data?.logo_url || ''))
     fetchCursosConhecidos().then(setCursosConhecidos)
     fetchCidadeFaculdades().then(setFaculdadeCidade)
+    listarDuracaoCursos().then(setDuracoes)
   }, [])
 
   // Faculdade -> cidade(s) onde ela aparece (pra preencher cidade sozinho
@@ -148,16 +144,28 @@ export default function CaptacaoAcaoForm() {
       .select('id, curso, faculdade, turma, ano_formatura, cidade, funil_status')
       .eq('curso', cursoFinal)
       .eq('faculdade', faculdadeFinal)
-    const lista: TurmaStatus[] = (data || []).map((t: any) => ({
-      id: t.id,
-      curso: t.curso || '',
-      faculdade: t.faculdade || '',
-      turma: t.turma || '',
-      anoFormatura: t.ano_formatura || '',
-      cidade: t.cidade || '',
-      funilStatus: t.funil_status,
-    }))
-    lista.sort((a, b) => a.anoFormatura.localeCompare(b.anoFormatura, 'pt-BR'))
+    const duracaoAnos = acharDuracaoAnos(duracoes, cursoFinal, faculdadeFinal)
+    const lista: TurmaStatus[] = (data || []).map((t: any) => {
+      const s = semestreDaTurma(t.ano_formatura, duracaoAnos)
+      return {
+        id: t.id,
+        curso: t.curso || '',
+        faculdade: t.faculdade || '',
+        turma: t.turma || '',
+        anoFormatura: t.ano_formatura || '',
+        cidade: t.cidade || '',
+        funilStatus: t.funil_status,
+        periodoAtual: s && !s.formado && !s.naoIniciado ? s.atual : null,
+      }
+    })
+    // Semestre primeiro (1º, 2º...) — é o que a pessoa reconhece de cara.
+    // Sem duração cadastrada pro curso, cai pra ordem por ano de formatura.
+    lista.sort((a, b) => {
+      if (a.periodoAtual !== null && b.periodoAtual !== null) return a.periodoAtual - b.periodoAtual
+      if (a.periodoAtual !== null) return -1
+      if (b.periodoAtual !== null) return 1
+      return a.anoFormatura.localeCompare(b.anoFormatura, 'pt-BR')
+    })
     setTurmas(lista)
     setBuscandoTurmas(false)
   }
@@ -192,9 +200,10 @@ export default function CaptacaoAcaoForm() {
     e.preventDefault()
     if (!validarDados()) return
 
-    const observacao = turmaEscolhida
-      ? `Ação ${campanha.curso} · turma "${turmaEscolhida.turma}" — ${CARD_COR[corDaTurma(turmaEscolhida.funilStatus)].tagTexto}.`
+    const observacaoBase = turmaEscolhida
+      ? `Ação ${campanha.curso} · turma "${turmaEscolhida.turma}" — ${statusTexto(turmaEscolhida.funilStatus)}.`
       : `Ação ${campanha.curso} · sem turma encontrada — semestre informado: ${semestre.trim()}.`
+    const observacao = comissao ? `${observacaoBase} Faz parte da comissão.` : observacaoBase
 
     try {
       setSubmitting(true)
@@ -210,6 +219,7 @@ export default function CaptacaoAcaoForm() {
         sdr: '',
         origem: campanha.slug,
         observacao,
+        comissao,
       })
       setEtapa('sucesso')
       setTimeout(() => {
@@ -376,30 +386,34 @@ export default function CaptacaoAcaoForm() {
                 <ArrowLeft className="w-3 h-3" /> {faculdadeFinal}
               </button>
               <p className="text-xs text-slate-400">
-                Encontre a sua turma abaixo e clique nela — se não achar, pule essa etapa.
+                Clique no semestre em que você está — se não achar, pule essa etapa.
               </p>
               {buscandoTurmas && <p className="text-xs text-slate-500">Buscando turmas...</p>}
               {!buscandoTurmas && turmas.length === 0 && (
                 <p className="text-xs text-slate-500 italic">Nenhuma turma encontrada ainda por aqui.</p>
               )}
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {turmas.map((t) => {
-                  const cor = CARD_COR[corDaTurma(t.funilStatus)]
+                  const turno = turnoDaTurma(t.turma)
+                  // Duas turmas podem cair no mesmo período (ex: duas comissões
+                  // formando no mesmo semestre, sem turno pra diferenciar) —
+                  // nesse caso, cai pro nome da turma pra não repetir o botão.
+                  const repetido = t.periodoAtual !== null &&
+                    turmas.filter((o) => o.periodoAtual === t.periodoAtual).length > 1
+                  const legenda = turno || (repetido ? t.turma : null)
                   return (
                     <button
                       key={t.id}
                       type="button"
                       onClick={() => escolherTurma(t)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors ${cor.border} ${cor.bg}`}
+                      className="p-3 rounded-lg bg-[#0a0f14] border border-white/10 hover:border-orange-500/50 hover:bg-orange-500/[0.04] transition-colors text-center"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-white">
-                          {t.turma} · Formatura {t.anoFormatura}
-                        </span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 ${cor.tag}`}>
-                          {cor.tagTexto}
-                        </span>
+                      <div className="text-sm font-semibold text-white">
+                        {t.periodoAtual ? `${t.periodoAtual}º período` : t.turma}
                       </div>
+                      {t.periodoAtual !== null && legenda && (
+                        <div className="text-[11px] text-slate-500 mt-0.5">{legenda}</div>
+                      )}
                     </button>
                   )
                 })}
@@ -509,6 +523,16 @@ export default function CaptacaoAcaoForm() {
                 />
                 {errors.email && <p className="text-xs text-red-400 mt-1">{errors.email}</p>}
               </div>
+
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={comissao}
+                  onChange={(e) => setComissao(e.target.checked)}
+                  className="w-4 h-4 accent-orange-500"
+                />
+                Faço parte da comissão
+              </label>
 
               <button
                 type="submit"

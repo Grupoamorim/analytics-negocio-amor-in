@@ -14,6 +14,7 @@ export interface CaptacaoLead {
   dataCadastro: string // ISO string
   origem?: string // slug da ação de captação (ex: "direito"), vazio = link normal
   observacao?: string // nota livre: semestre informado, ou status da turma escolhida
+  comissao?: boolean // marcado no formulário: a pessoa faz parte da comissão da turma
 }
 
 // Garante que o campo turma tenha o prefixo "Turma" + número.
