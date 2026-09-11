@@ -145,34 +145,76 @@ export default function Pipeline() {
   // Barra de rolagem "espelho" em cima do Kanban — a nativa só aparece embaixo
   // da coluna mais alta, que costuma ficar fora da tela sem rolar a página
   // toda; essa daqui fica logo acima dos cards e rola o Kanban junto.
+  // Desenhada na mão (track + thumb via divs) em vez de usar overflow-x nativo:
+  // no Chrome/macOS o scrollbar nativo (mesmo estilizado com scrollbar-color/
+  // ::-webkit-scrollbar) é tratado como overlay e só pinta o thumb no hover,
+  // então "sempre visível" não funcionava de verdade.
   const kanbanScrollRef = useRef<HTMLDivElement>(null)
-  const kanbanTopScrollRef = useRef<HTMLDivElement>(null)
+  const kanbanTrackRef = useRef<HTMLDivElement>(null)
+  const kanbanThumbRef = useRef<HTMLDivElement>(null)
   const [kanbanContentWidth, setKanbanContentWidth] = useState(0)
-  const sincronizandoScrollRef = useRef(false)
+  const atualizarThumb = () => {
+    const scrollEl = kanbanScrollRef.current
+    const thumbEl = kanbanThumbRef.current
+    if (!scrollEl || !thumbEl) return
+    const { scrollWidth, clientWidth, scrollLeft } = scrollEl
+    if (scrollWidth <= clientWidth) {
+      thumbEl.style.width = '100%'
+      thumbEl.style.left = '0%'
+      return
+    }
+    const widthPct = Math.max((clientWidth / scrollWidth) * 100, 4)
+    const maxLeftPct = 100 - widthPct
+    const leftPct = (scrollLeft / (scrollWidth - clientWidth)) * maxLeftPct
+    thumbEl.style.width = `${widthPct}%`
+    thumbEl.style.left = `${Math.min(Math.max(leftPct, 0), maxLeftPct)}%`
+  }
   useEffect(() => {
     const el = kanbanScrollRef.current?.firstElementChild as HTMLElement | null
     if (!el) return
-    const atualizar = () => setKanbanContentWidth(el.scrollWidth)
+    const atualizar = () => {
+      setKanbanContentWidth(el.scrollWidth)
+      atualizarThumb()
+    }
     atualizar()
     const ro = new ResizeObserver(atualizar)
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  const handleTopScroll = () => {
-    if (sincronizandoScrollRef.current) return
-    sincronizandoScrollRef.current = true
-    if (kanbanScrollRef.current && kanbanTopScrollRef.current) {
-      kanbanScrollRef.current.scrollLeft = kanbanTopScrollRef.current.scrollLeft
-    }
-    sincronizandoScrollRef.current = false
-  }
   const handleKanbanScroll = () => {
-    if (sincronizandoScrollRef.current) return
-    sincronizandoScrollRef.current = true
-    if (kanbanScrollRef.current && kanbanTopScrollRef.current) {
-      kanbanTopScrollRef.current.scrollLeft = kanbanScrollRef.current.scrollLeft
+    atualizarThumb()
+  }
+  // Clicar na track (fora do thumb) pula a rolagem pra posição clicada.
+  const handleTrackClick = (e: React.MouseEvent) => {
+    const scrollEl = kanbanScrollRef.current
+    const trackEl = kanbanTrackRef.current
+    if (!scrollEl || !trackEl || e.target !== trackEl) return
+    const trackRect = trackEl.getBoundingClientRect()
+    const { scrollWidth, clientWidth } = scrollEl
+    const ratio = (e.clientX - trackRect.left) / trackRect.width
+    scrollEl.scrollLeft = ratio * scrollWidth - clientWidth / 2
+  }
+  // Arrastar o thumb move o Kanban pelo mesmo delta, escalado pra proporção da track.
+  const handleThumbDragStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const scrollEl = kanbanScrollRef.current
+    const trackEl = kanbanTrackRef.current
+    if (!scrollEl || !trackEl) return
+    const trackWidth = trackEl.getBoundingClientRect().width
+    const startX = e.clientX
+    const startScrollLeft = scrollEl.scrollLeft
+    const { scrollWidth } = scrollEl
+    const onMouseMove = (ev: MouseEvent) => {
+      const deltaX = ev.clientX - startX
+      scrollEl.scrollLeft = startScrollLeft + deltaX * (scrollWidth / trackWidth)
     }
-    sincronizandoScrollRef.current = false
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
   }
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
   const [probWhyDealId, setProbWhyDealId] = useState<string | null>(null)
@@ -782,12 +824,16 @@ export default function Pipeline() {
       {/* Barra de rolagem espelho, sempre visível em cima do Kanban */}
       {kanbanContentWidth > 0 && (
         <div
-          ref={kanbanTopScrollRef}
-          onScroll={handleTopScroll}
-          className="overflow-x-auto scroll-x-hover-visible -mx-2 px-2"
-          style={{ height: 14 }}
+          ref={kanbanTrackRef}
+          onMouseDown={handleTrackClick}
+          className="relative h-3.5 rounded-full bg-white/[0.06] cursor-pointer -mx-2"
         >
-          <div style={{ width: kanbanContentWidth, height: 1 }} />
+          <div
+            ref={kanbanThumbRef}
+            onMouseDown={handleThumbDragStart}
+            className="absolute top-0 h-full rounded-full bg-slate-400/50 hover:bg-slate-400/70 active:bg-slate-400/80 cursor-grab active:cursor-grabbing"
+            style={{ width: '100%', left: 0 }}
+          />
         </div>
       )}
 
