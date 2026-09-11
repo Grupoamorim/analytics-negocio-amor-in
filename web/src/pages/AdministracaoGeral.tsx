@@ -57,6 +57,10 @@ export default function AdministracaoGeral() {
             PACE da empresa inteira — receita, adesões, contratos e alunos fechados, tudo contra a meta
             do período.
           </p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Realizado 100% automático: puxa direto do SGE (pagamentos, adesões e turmas fechadas),
+            sincronizado sozinho a cada 3-12h — nada aqui é digitado à mão.
+          </p>
         </div>
         <EmpresaFilterBar options={empresaOptions} selected={selectedEmpresas} onChange={setSelectedEmpresas} />
       </div>
