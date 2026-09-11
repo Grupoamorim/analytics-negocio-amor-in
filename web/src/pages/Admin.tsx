@@ -24,6 +24,7 @@ import {
   paginasPadraoPorCargo,
 } from '@/utils/paginas'
 import MetasAdmin from '@/components/admin/MetasAdmin'
+import PaginasCheckboxGrid from '@/components/admin/PaginasCheckboxGrid'
 import { translateAuthError } from '@/lib/authErrors'
 import {
   saveGeminiApiKey,
@@ -265,12 +266,6 @@ export default function Admin() {
     // Sem acesso customizado ainda: começa do padrão do cargo da pessoa.
     setRascunhoAcesso(atual && atual.length ? atual : paginasPadraoPorCargo(p.role))
     setEditandoAcessoId((cur) => (cur === p.id ? null : p.id))
-  }
-
-  function toggleRascunhoPagina(path: string) {
-    setRascunhoAcesso((prev) =>
-      prev.includes(path) ? prev.filter((x) => x !== path) : [...prev, path],
-    )
   }
 
   async function salvarAcesso(p: Perfil) {
@@ -1055,26 +1050,13 @@ export default function Admin() {
                       </button>
                     )}
                   </p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                    {PAGINAS.map((pg) => (
-                      <label key={pg.path} className="flex items-center gap-1.5 text-[11px] text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={convitePaginas.includes(pg.path)}
-                          onChange={() => {
-                            setConvitePaginasTocado(true)
-                            setConvitePaginas((prev) =>
-                              prev.includes(pg.path)
-                                ? prev.filter((x) => x !== pg.path)
-                                : [...prev, pg.path],
-                            )
-                          }}
-                          className="accent-orange-500"
-                        />
-                        {pg.label}
-                      </label>
-                    ))}
-                  </div>
+                  <PaginasCheckboxGrid
+                    value={convitePaginas}
+                    onChange={(next) => {
+                      setConvitePaginasTocado(true)
+                      setConvitePaginas(next)
+                    }}
+                  />
                 </div>
               )}
             </form>
@@ -1188,19 +1170,8 @@ export default function Admin() {
                                 Marque as abas que <strong className="text-slate-200">{p.nome || p.email}</strong> pode ver.
                                 Nas telas comerciais ele começa vendo só o que é dele — pode tirar o filtro, mas volta ao dele a cada atualização.
                               </p>
-                              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                                {PAGINAS.map((pg) => (
-                                  <label key={pg.path} className="flex items-center gap-1.5 text-[11px] text-slate-300">
-                                    <input
-                                      type="checkbox"
-                                      checked={rascunhoAcesso.includes(pg.path)}
-                                      onChange={() => toggleRascunhoPagina(pg.path)}
-                                      className="accent-orange-500"
-                                    />
-                                    {pg.label}
-                                    <span className="text-slate-600">· {pg.grupo}</span>
-                                  </label>
-                                ))}
+                              <div className="mb-3">
+                                <PaginasCheckboxGrid value={rascunhoAcesso} onChange={setRascunhoAcesso} />
                               </div>
                               <div className="flex items-center gap-2">
                                 <Button
