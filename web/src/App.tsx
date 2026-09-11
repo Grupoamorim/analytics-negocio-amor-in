@@ -34,6 +34,7 @@ import Projecoes from '@/pages/Projecoes'
 import Relatorios from '@/pages/Relatorios'
 import Equipamentos from '@/pages/Equipamentos'
 import Admin from '@/pages/Admin'
+import AdministracaoGeral from '@/pages/AdministracaoGeral'
 
 const TELA_CARREGANDO = (
   <div className="min-h-screen bg-[#0a0f14] flex items-center justify-center text-slate-400 text-sm">
@@ -111,6 +112,14 @@ const App = () => (
                 element={
                   <AdminRoute>
                     <Admin />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/administracao"
+                element={
+                  <AdminRoute>
+                    <AdministracaoGeral />
                   </AdminRoute>
                 }
               />

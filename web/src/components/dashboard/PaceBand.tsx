@@ -74,6 +74,8 @@ Analise o andamento da meta abaixo e responda em português, direto e prático, 
 1) uma frase dizendo se vamos bater e o tamanho do gap;
 2) 3 a 4 ações concretas e priorizadas pra fechar o gap no tempo que resta.
 
+Convenção de trimestre: o sistema usa T1-T4. Se o contexto abaixo mencionar "Q1"-"Q4" (nomenclatura em inglês, comum em documentos de planejamento), trate como sinônimo do mesmo trimestre (ex: Q3 = T3, terceiro trimestre).
+
 META: ${METRICA_LABEL[metrica]} — período ${rotuloPeriodoMeta(meta)}
 Valor da meta: ${fmt(meta.valorMeta, unidade)}
 Realizado até hoje: ${fmt(pace.realizado, unidade)} (${(pace.indicePace * 100).toFixed(0)}% do que deveria estar a esta altura)

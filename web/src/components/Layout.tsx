@@ -31,6 +31,7 @@ import {
   MessageSquare,
   Package,
   ChevronDown,
+  Gauge,
 } from 'lucide-react'
 import { getTurmaDisplayName, getFullTurmaName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { matchesSearch } from '@/utils/searchMatch'
@@ -84,6 +85,13 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
     section: null,
     items: [{ path: '/relatorios', label: 'Relatórios', icon: Presentation }],
   },
+  {
+    section: 'Administração',
+    items: [
+      { path: '/administracao', label: 'Dashboard Geral', icon: Gauge },
+      { path: '/admin', label: 'Configurações', icon: ShieldCheck },
+    ],
+  },
 ]
 
 const NAVIGATION_ITEMS: NavItem[] = NAVIGATION_SECTIONS.flatMap((s) => s.items)
@@ -107,7 +115,7 @@ export default function Layout() {
   const { toast } = useToast()
   const { user, signOut } = useAuth()
   const { config: configuracoes } = useConfiguracoes()
-  const { nome: nomeAcesso, role: roleAcesso, isAdmin, podeVer } = useAcesso()
+  const { nome: nomeAcesso, role: roleAcesso, podeVer } = useAcesso()
   const perfil = { nome: nomeAcesso, role: roleAcesso }
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -808,17 +816,6 @@ export default function Layout() {
         {/* Footer Discreto 48px */}
         <footer className="h-12 border-t border-white/[0.04] flex items-center justify-center gap-3 text-xs text-[#64748b] px-4">
           <span>Amor In Formaturas — Gestão do Negócio</span>
-          {isAdmin && (
-            <>
-              <span className="text-white/10">·</span>
-              <Link
-                to="/admin"
-                className="flex items-center gap-1 text-[#64748b] hover:text-orange-400 transition-colors"
-              >
-                <ShieldCheck className="w-3 h-3" /> Modo Administrador
-              </Link>
-            </>
-          )}
         </footer>
       </main>
 
