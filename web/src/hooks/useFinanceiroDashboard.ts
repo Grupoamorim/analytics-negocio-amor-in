@@ -244,11 +244,24 @@ export function useFinanceiroDashboard(
 
   /** Série dia-a-dia (valor do dia) de uma métrica financeira, pra cálculo de pace. */
   const pontosDiarios = useCallback(
-    (metrica: 'receita' | 'adesoes'): PontoDiario[] => {
-      if (metrica === 'receita') {
-        return pagamentos
+    (metrica: 'receita' | 'adesoes' | 'despesas' | 'resultado'): PontoDiario[] => {
+      const pontosReceita = (): PontoDiario[] =>
+        pagamentos
           .filter((p) => p.status === 'pago' && p.data_pagamento && daEmpresaFn(p.empresa))
           .map((p) => ({ data: p.data_pagamento!.slice(0, 10), valor: Number(p.valor_pago || 0) }))
+
+      const pontosDespesas = (): PontoDiario[] =>
+        contasPagar
+          .filter((c) => c.status === 'pago' && c.data_pagamento && daEmpresaFn(c.empresa))
+          .map((c) => ({ data: c.data_pagamento!.slice(0, 10), valor: Number(c.valor || 0) }))
+
+      if (metrica === 'receita') return pontosReceita()
+      if (metrica === 'despesas') return pontosDespesas()
+      if (metrica === 'resultado') {
+        const porDia = new Map<string, number>()
+        pontosReceita().forEach((p) => porDia.set(p.data, (porDia.get(p.data) || 0) + p.valor))
+        pontosDespesas().forEach((p) => porDia.set(p.data, (porDia.get(p.data) || 0) - p.valor))
+        return Array.from(porDia.entries()).map(([data, valor]) => ({ data, valor }))
       }
       const adesaoDaEmpresa = (turma: string | null) =>
         empresas.length === 0 || empresas.includes((turma || '').trim().split(/\s+/)[0])
@@ -256,7 +269,7 @@ export function useFinanceiroDashboard(
         .filter((a) => a.data_adesao && adesaoDaEmpresa(a.turma))
         .map((a) => ({ data: a.data_adesao!.slice(0, 10), valor: 1 }))
     },
-    [pagamentos, adesoes, empresas, daEmpresaFn],
+    [pagamentos, contasPagar, adesoes, empresas, daEmpresaFn],
   )
 
   return { agregado, loading, pontosDiarios }

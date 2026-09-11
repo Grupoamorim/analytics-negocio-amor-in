@@ -234,6 +234,41 @@ export type Database = {
           },
         ]
       }
+      caixa_snapshots: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data: string
+          id: string
+          observacao: string | null
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data: string
+          id?: string
+          observacao?: string | null
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          id?: string
+          observacao?: string | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caixa_snapshots_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       captacao_leads: {
         Row: {
           ano_formatura: string
@@ -1151,6 +1186,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      escolas_visitadas: {
+        Row: {
+          cidade: string | null
+          created_at: string
+          created_by: string | null
+          curso_alvo: string | null
+          data: string
+          escola: string
+          id: string
+          observacao: string | null
+          responsavel: string | null
+        }
+        Insert: {
+          cidade?: string | null
+          created_at?: string
+          created_by?: string | null
+          curso_alvo?: string | null
+          data: string
+          escola: string
+          id?: string
+          observacao?: string | null
+          responsavel?: string | null
+        }
+        Update: {
+          cidade?: string | null
+          created_at?: string
+          created_by?: string | null
+          curso_alvo?: string | null
+          data?: string
+          escola?: string
+          id?: string
+          observacao?: string | null
+          responsavel?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escolas_visitadas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fotografos: {
         Row: {

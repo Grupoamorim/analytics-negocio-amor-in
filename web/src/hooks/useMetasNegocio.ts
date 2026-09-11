@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 
-export type MetricaMeta = 'receita' | 'adesoes' | 'contratos' | 'alunos'
+export type MetricaMeta =
+  | 'receita'
+  | 'adesoes'
+  | 'contratos'
+  | 'alunos'
+  | 'resultado_liquido'
+  | 'vgv'
+  | 'escolas_visitadas'
+  | 'caixa'
 export type EscopoMeta = 'mensal' | 'trimestral' | 'anual'
 
 export interface MetaNegocio {
@@ -20,6 +28,10 @@ export const METRICA_LABEL: Record<MetricaMeta, string> = {
   adesoes: 'Adesões (quantidade)',
   contratos: 'Contratos fechados (turmas)',
   alunos: 'Alunos fechados',
+  resultado_liquido: 'Resultado líquido (R$)',
+  vgv: 'VGV de novas vendas (R$)',
+  escolas_visitadas: 'Escolas visitadas (Family Day)',
+  caixa: 'Caixa fim de período (R$)',
 }
 
 export const METRICA_UNIDADE: Record<MetricaMeta, 'R$' | 'un'> = {
@@ -27,6 +39,10 @@ export const METRICA_UNIDADE: Record<MetricaMeta, 'R$' | 'un'> = {
   adesoes: 'un',
   contratos: 'un',
   alunos: 'un',
+  resultado_liquido: 'R$',
+  vgv: 'R$',
+  escolas_visitadas: 'un',
+  caixa: 'R$',
 }
 
 function mapRow(r: any): MetaNegocio {

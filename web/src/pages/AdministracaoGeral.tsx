@@ -6,9 +6,13 @@ import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
 import { usePeriodoFiltro, NOMES_MES, type PeriodoFiltroState } from '@/hooks/usePeriodoFiltro'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
 import { useMetasNegocio, metaSomaIntervalo, type MetricaMeta } from '@/hooks/useMetasNegocio'
+import { useEscolasVisitadas } from '@/hooks/useEscolasVisitadas'
+import { calcularPace } from '@/utils/pace'
 import PaceBand from '@/components/dashboard/PaceBand'
 import RetrospectivaPace from '@/components/dashboard/RetrospectivaPace'
 import RankingGamificado from '@/components/dashboard/RankingGamificado'
+import EscolasVisitadasLog from '@/components/dashboard/EscolasVisitadasLog'
+import CaixaFimPeriodoCard from '@/components/dashboard/CaixaFimPeriodoCard'
 import { pontosComerciais } from '@/utils/comercialMetrics'
 
 const HOJE = new Date().toISOString().slice(0, 10)
@@ -52,15 +56,29 @@ export default function AdministracaoGeral() {
   const { pontosDiarios } = useFinanceiroDashboard(HOJE, HOJE, selectedEmpresas)
   const pontosReceita = useMemo(() => pontosDiarios('receita'), [pontosDiarios])
   const pontosAdesoes = useMemo(() => pontosDiarios('adesoes'), [pontosDiarios])
+  const pontosResultado = useMemo(() => pontosDiarios('resultado'), [pontosDiarios])
   const pontosContratos = useMemo(() => pontosComerciais(leadsFiltrados, 'contratos'), [leadsFiltrados])
   const pontosAlunos = useMemo(() => pontosComerciais(leadsFiltrados, 'alunos'), [leadsFiltrados])
+  const pontosVgv = useMemo(() => pontosComerciais(leadsFiltrados, 'vgv'), [leadsFiltrados])
 
-  const { metas } = useMetasNegocio()
+  const escolasVisitadas = useEscolasVisitadas()
+  const pontosEscolas = useMemo(
+    () => escolasVisitadas.visitas.map((v) => ({ data: v.data, valor: 1 })),
+    [escolasVisitadas.visitas],
+  )
+
+  const { metas, metaVigente } = useMetasNegocio()
   const rotuloFiltro = rotuloDoFiltro(f)
   const overrideDoFiltro = (metrica: MetricaMeta) => {
     const { valor, mesesComMeta } = metaSomaIntervalo(metas, metrica, f.dtIni, f.dtFim)
     return { ini: f.dtIni, fim: f.dtFim, rotulo: rotuloFiltro, valorMeta: valor, temMeta: mesesComMeta > 0 }
   }
+
+  // Margem líquida do período filtrado = resultado líquido ÷ receita, só informativo (não é uma
+  // meta própria — proporções não somam dia a dia como calcularPace espera).
+  const realizadoReceitaFiltro = calcularPace(0, f.dtIni, f.dtFim, pontosReceita).realizado
+  const realizadoResultadoFiltro = calcularPace(0, f.dtIni, f.dtFim, pontosResultado).realizado
+  const margemFiltro = realizadoReceitaFiltro > 0 ? (realizadoResultadoFiltro / realizadoReceitaFiltro) * 100 : null
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -112,6 +130,49 @@ export default function AdministracaoGeral() {
         periodoOverride={overrideDoFiltro('alunos')}
       />
 
+      <div className="space-y-2">
+        <PaceBand
+          titulo="Meta de resultado líquido"
+          metrica="resultado_liquido"
+          meta={null}
+          pontos={pontosResultado}
+          periodoOverride={overrideDoFiltro('resultado_liquido')}
+        />
+        {margemFiltro !== null && (
+          <p className="text-xs text-slate-400 px-1">
+            Margem líquida do período ({rotuloFiltro}):{' '}
+            <strong className={margemFiltro >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+              {margemFiltro.toFixed(1)}%
+            </strong>{' '}
+            (resultado líquido ÷ receita recebida — informativo, sem meta própria).
+          </p>
+        )}
+      </div>
+
+      <PaceBand
+        titulo="Meta de VGV de novas vendas"
+        metrica="vgv"
+        meta={null}
+        pontos={pontosVgv}
+        periodoOverride={overrideDoFiltro('vgv')}
+      />
+
+      <PaceBand
+        titulo="Meta de escolas visitadas"
+        metrica="escolas_visitadas"
+        meta={null}
+        pontos={pontosEscolas}
+        periodoOverride={overrideDoFiltro('escolas_visitadas')}
+      />
+      <EscolasVisitadasLog
+        visitas={escolasVisitadas.visitas}
+        loading={escolasVisitadas.loading}
+        adicionar={escolasVisitadas.adicionar}
+        remover={escolasVisitadas.remover}
+      />
+
+      <CaixaFimPeriodoCard meta={metaVigente('caixa', HOJE)} />
+
       <RankingGamificado leads={leadsFiltrados} deals={deals} />
 
       <RetrospectivaPace
@@ -121,6 +182,9 @@ export default function AdministracaoGeral() {
           { metrica: 'adesoes', pontos: pontosAdesoes },
           { metrica: 'contratos', pontos: pontosContratos },
           { metrica: 'alunos', pontos: pontosAlunos },
+          { metrica: 'resultado_liquido', pontos: pontosResultado },
+          { metrica: 'vgv', pontos: pontosVgv },
+          { metrica: 'escolas_visitadas', pontos: pontosEscolas },
         ]}
       />
     </div>
