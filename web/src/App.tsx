@@ -24,6 +24,7 @@ import Notes from '@/pages/Notes'
 import NotFound from '@/pages/NotFound'
 import Captacao from '@/pages/Captacao'
 import CaptacaoForm from '@/pages/CaptacaoForm'
+import CaptacaoAcaoForm from '@/pages/CaptacaoAcaoForm'
 import Contatos from '@/pages/Contatos'
 import Clientes from '@/pages/Clientes'
 import Adesoes from '@/pages/Adesoes'
@@ -115,6 +116,7 @@ const App = () => (
               />
             </Route>
             <Route path="/captacao/form" element={<CaptacaoForm />} />
+            <Route path="/captacao/acao/:slug" element={<CaptacaoAcaoForm />} />
             <Route path="/p/:token" element={<ApresentacaoPublica />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

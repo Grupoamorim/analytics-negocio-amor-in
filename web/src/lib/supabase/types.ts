@@ -222,6 +222,13 @@ export type Database = {
             foreignKeyName: "apresentacao_publica_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: true
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apresentacao_publica_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: true
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -237,6 +244,8 @@ export type Database = {
           faculdade: string
           id: string
           nome: string
+          observacao: string | null
+          origem: string | null
           sdr: string | null
           telefone: string
           turma: string
@@ -250,6 +259,8 @@ export type Database = {
           faculdade?: string
           id?: string
           nome?: string
+          observacao?: string | null
+          origem?: string | null
           sdr?: string | null
           telefone?: string
           turma?: string
@@ -263,6 +274,8 @@ export type Database = {
           faculdade?: string
           id?: string
           nome?: string
+          observacao?: string | null
+          origem?: string | null
           sdr?: string | null
           telefone?: string
           turma?: string
@@ -329,6 +342,13 @@ export type Database = {
             foreignKeyName: "checklist_eventos_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_eventos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -381,6 +401,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -511,6 +538,13 @@ export type Database = {
             foreignKeyName: "contas_pagar_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contas_pagar_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -563,6 +597,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contatos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -647,6 +688,13 @@ export type Database = {
             foreignKeyName: "conversa_dm_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversa_dm_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -699,6 +747,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversa_grupos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -794,6 +849,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_whatsapp_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -948,6 +1010,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: true
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: true
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -1194,6 +1263,13 @@ export type Database = {
             foreignKeyName: "funil_eventos_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funil_eventos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -1294,6 +1370,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "metas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -1403,6 +1486,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -1870,6 +1960,13 @@ export type Database = {
             foreignKeyName: "pacotes_turma_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacotes_turma_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -1950,6 +2047,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -2082,6 +2186,13 @@ export type Database = {
             foreignKeyName: "planilha_alunos_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planilha_alunos_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -2191,6 +2302,13 @@ export type Database = {
             foreignKeyName: "reunioes_agendadas_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reunioes_agendadas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -2262,6 +2380,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sem_resposta_episodios_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -2724,6 +2849,13 @@ export type Database = {
             foreignKeyName: "transcricoes_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transcricoes_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -2881,6 +3013,13 @@ export type Database = {
             foreignKeyName: "turmas_mesma_turma_fisica_de_fkey"
             columns: ["mesma_turma_fisica_de"]
             isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turmas_mesma_turma_fisica_de_fkey"
+            columns: ["mesma_turma_fisica_de"]
+            isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
             referencedColumns: ["id"]
           },
@@ -2896,6 +3035,13 @@ export type Database = {
             columns: ["turma_origem_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turmas_turma_origem_id_fkey"
+            columns: ["turma_origem_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -2980,6 +3126,13 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas_captacao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas_captacao_status"
             referencedColumns: ["id"]
           },
           {
@@ -3075,6 +3228,39 @@ export type Database = {
           curso?: string | null
           empresa?: string | null
           faculdade?: string | null
+          id?: string | null
+          turma?: string | null
+        }
+        Relationships: []
+      }
+      turmas_captacao_status: {
+        Row: {
+          ano_formatura: string | null
+          cidade: string | null
+          curso: string | null
+          empresa: string | null
+          faculdade: string | null
+          funil_status: string | null
+          id: string | null
+          turma: string | null
+        }
+        Insert: {
+          ano_formatura?: string | null
+          cidade?: string | null
+          curso?: string | null
+          empresa?: string | null
+          faculdade?: string | null
+          funil_status?: string | null
+          id?: string | null
+          turma?: string | null
+        }
+        Update: {
+          ano_formatura?: string | null
+          cidade?: string | null
+          curso?: string | null
+          empresa?: string | null
+          faculdade?: string | null
+          funil_status?: string | null
           id?: string | null
           turma?: string | null
         }

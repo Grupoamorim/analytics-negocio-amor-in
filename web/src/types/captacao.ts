@@ -12,6 +12,8 @@ export interface CaptacaoLead {
   email: string
   sdr: string // vendedor/SDR escolhido pelo cliente no formulário público
   dataCadastro: string // ISO string
+  origem?: string // slug da ação de captação (ex: "direito"), vazio = link normal
+  observacao?: string // nota livre: semestre informado, ou status da turma escolhida
 }
 
 // Garante que o campo turma tenha o prefixo "Turma" + número.

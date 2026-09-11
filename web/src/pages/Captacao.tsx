@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import QRCode from 'qrcode'
 import { loadLeads, updateLead, deleteLead } from '@/utils/captacaoStorage'
+import { CAMPANHAS_CAPTACAO, type CampanhaCaptacao } from '@/utils/captacaoAcoes'
 import { CaptacaoLead, normalizeTurma, extractTurmaNumber } from '@/types/captacao'
 import { formatPhoneBR } from '@/utils/phoneMask'
 import { fetchVendedoresAtivos } from '@/utils/vendedores'
@@ -321,6 +322,22 @@ export default function Captacao() {
         </div>
       </div>
 
+      {/* Ações de Captação: formulários rápidos por curso/evento, um link (com QR) por ação */}
+      {CAMPANHAS_CAPTACAO.length > 0 && (
+        <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 sm:p-6 shadow-xl space-y-3">
+          <h2 className="text-sm font-semibold text-white">Ações de Captação</h2>
+          <p className="text-xs text-slate-400">
+            Links rápidos por curso pra eventos/plantões — curso quase pronto, mostra as turmas
+            que já temos coloridas por status e termina redirecionando pro grupo do WhatsApp.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {CAMPANHAS_CAPTACAO.map((c) => (
+              <AcaoCaptacaoCard key={c.slug} campanha={c} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Navegação por abas */}
       <div className="flex items-center gap-1 p-1 bg-[rgba(255,255,255,0.03)] border border-white/[0.06] rounded-xl w-fit">
         <TabButton
@@ -424,6 +441,11 @@ export default function Captacao() {
                         <div className="font-semibold text-white group-hover:text-orange-300 transition-colors">
                           {lead.nome}
                         </div>
+                        {lead.origem && (
+                          <span className="inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                            Ação {lead.origem}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-slate-300 whitespace-nowrap">
                         {lead.telefone}
@@ -695,6 +717,11 @@ function EditLeadModal({ lead, onClose, onSave }: EditModalProps) {
           <div>
             <h3 className="text-lg font-bold text-white">Editar Lead Captado</h3>
             <p className="text-xs text-slate-400">Atualize os dados do contato</p>
+            {lead.origem && (
+              <p className="text-[11px] text-orange-300 mt-1">
+                Veio da ação "{lead.origem}"{lead.observacao ? ` — ${lead.observacao}` : ''}
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -861,6 +888,63 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
       {icon}
       {label}
     </button>
+  )
+}
+
+function AcaoCaptacaoCard({ campanha }: { campanha: CampanhaCaptacao }) {
+  const [qr, setQr] = useState('')
+  const [copiado, setCopiado] = useState(false)
+
+  const url = useMemo(() => {
+    if (typeof window === 'undefined') return `/captacao/acao/${campanha.slug}`
+    const { origin, pathname } = window.location
+    const base = pathname.replace(/\/captacao.*$/, '')
+    return `${origin}${base}/captacao/acao/${campanha.slug}`
+  }, [campanha.slug])
+
+  useEffect(() => {
+    let active = true
+    QRCode.toDataURL(url, {
+      width: 120,
+      margin: 1,
+      color: { dark: '#0a0f14', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    })
+      .then((d) => active && setQr(d))
+      .catch(() => active && setQr(''))
+    return () => {
+      active = false
+    }
+  }, [url])
+
+  const copiar = async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(url)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      /* falha silenciosa - o campo de texto abaixo já mostra o link pra copiar na mão */
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-[#0a0f14] border border-white/[0.08]">
+      <div className="w-[64px] h-[64px] bg-white rounded-lg p-1 flex items-center justify-center shrink-0">
+        {qr ? <img src={qr} alt={`QR ${campanha.curso}`} className="w-full h-full" /> : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold text-white">Ação {campanha.curso}</div>
+        <div className="text-[11px] text-slate-500 truncate font-mono">{url}</div>
+      </div>
+      <button
+        type="button"
+        onClick={copiar}
+        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-200 text-xs font-semibold transition-colors"
+      >
+        {copiado ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+        {copiado ? 'Copiado' : 'Copiar'}
+      </button>
+    </div>
   )
 }
 
