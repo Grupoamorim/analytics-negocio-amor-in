@@ -3,7 +3,7 @@ import { Gauge } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
-import { usePeriodoFiltro, NOMES_MES, type PeriodoFiltroState } from '@/hooks/usePeriodoFiltro'
+import { usePeriodoFiltro, rotuloDoFiltro } from '@/hooks/usePeriodoFiltro'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
 import { useMetasNegocio, metaSomaIntervalo, type MetricaMeta } from '@/hooks/useMetasNegocio'
 import { useEscolasVisitadas } from '@/hooks/useEscolasVisitadas'
@@ -16,15 +16,6 @@ import CaixaFimPeriodoCard from '@/components/dashboard/CaixaFimPeriodoCard'
 import { pontosComerciais } from '@/utils/comercialMetrics'
 
 const HOJE = new Date().toISOString().slice(0, 10)
-
-function rotuloDoFiltro(f: PeriodoFiltroState): string {
-  if (f.periodo === 'mes') return `${NOMES_MES[f.mesRef - 1]}/${f.anoRef}`
-  if (f.periodo === 'trimestre') return `T${f.trimestreRef}/${f.anoRef}`
-  if (f.periodo === 'semestre') return `S${f.semestreRef}/${f.anoRef}`
-  if (f.periodo === 'ano') return `Ano ${f.anoRef}`
-  if (f.periodo === 'ate_hoje') return `Até hoje (${f.anoRef})`
-  return `${f.dtIni} a ${f.dtFim}`
-}
 
 // Dashboard Geral (Administração) — junta num só lugar o PACE das metas que hoje
 // ficam espalhadas: receita/adesões (Painel Financeiro) e contratos/alunos

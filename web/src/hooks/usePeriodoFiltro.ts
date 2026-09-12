@@ -128,3 +128,15 @@ export function usePeriodoFiltro(periodoInicial: Periodo = 'ate_hoje') {
 }
 
 export type PeriodoFiltroState = ReturnType<typeof usePeriodoFiltro>
+
+/** Rótulo curto do período selecionado (ex: "Set/2026", "T3/2026") — usado nos
+ * PaceBand/telas que "pré-visualizam" o período escolhido no filtro em vez do
+ * vigente-hoje. Compartilhado entre Dashboard Geral e Painel Comercial. */
+export function rotuloDoFiltro(f: PeriodoFiltroState): string {
+  if (f.periodo === 'mes') return `${NOMES_MES[f.mesRef - 1]}/${f.anoRef}`
+  if (f.periodo === 'trimestre') return `T${f.trimestreRef}/${f.anoRef}`
+  if (f.periodo === 'semestre') return `S${f.semestreRef}/${f.anoRef}`
+  if (f.periodo === 'ano') return `Ano ${f.anoRef}`
+  if (f.periodo === 'ate_hoje') return `Até hoje (${f.anoRef})`
+  return `${f.dtIni} a ${f.dtFim}`
+}

@@ -15,15 +15,16 @@ import {
 import { useCRM } from '@/context/CRMContext'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
-import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
+import { usePeriodoFiltro, rotuloDoFiltro } from '@/hooks/usePeriodoFiltro'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import KpiCard from '@/components/dashboard/KpiCard'
 import SectionTitle from '@/components/dashboard/SectionTitle'
 import InfoHint from '@/components/dashboard/InfoHint'
 import PaceBand from '@/components/dashboard/PaceBand'
+import RankingGamificado from '@/components/dashboard/RankingGamificado'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import MetricasComerciaisPanel from '@/components/MetricasComerciaisPanel'
-import { useMetasNegocio } from '@/hooks/useMetasNegocio'
+import { useMetasNegocio, metaSomaIntervalo, type MetricaMeta } from '@/hooks/useMetasNegocio'
 import { getTurmaDisplayName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import {
   funilAberto,
@@ -89,11 +90,21 @@ export default function Index() {
     return Math.round(abertos.reduce((a, d) => a + (d.probability ?? 0), 0) / abertos.length)
   }, [deals])
 
-  const { metaVigente } = useMetasNegocio()
+  const { metas, metaVigente } = useMetasNegocio()
   const hoje = new Date().toISOString().slice(0, 10)
   const metaContratos = metaVigente('contratos', hoje) || metaVigente('alunos', hoje)
   const metaMetrica: 'contratos' | 'alunos' = metaContratos?.metrica === 'alunos' ? 'alunos' : 'contratos'
   const pontosMeta = useMemo(() => pontosComerciais(leads, metaMetrica), [leads, metaMetrica])
+  const pontosVgv = useMemo(() => pontosComerciais(leads, 'vgv'), [leads])
+
+  // Pace/metas "pré-visualizando" o período escolhido no filtro (Mês/Trimestre/
+  // Semestre/Ano/Até Hoje), igual ao Dashboard Geral — antes ficava preso ao mês/
+  // trimestre vigente-hoje, ignorando o PeriodoFiltroBar já mostrado na tela.
+  const rotuloFiltro = rotuloDoFiltro(f)
+  const overrideDoFiltro = (metrica: MetricaMeta) => {
+    const { valor, mesesComMeta } = metaSomaIntervalo(metas, metrica, f.dtIni, f.dtFim)
+    return { ini: f.dtIni, fim: f.dtFim, rotulo: rotuloFiltro, valorMeta: valor, temMeta: mesesComMeta > 0 }
+  }
 
   const distCurso = useMemo(() => distribuicao(leads, (l) => l.curso), [leads])
   const distMarca = useMemo(() => distribuicao(leads, (l) => l.empresa || 'Sem marca'), [leads])
@@ -189,6 +200,14 @@ export default function Index() {
         metrica={metaMetrica}
         meta={metaContratos}
         pontos={pontosMeta}
+        periodoOverride={overrideDoFiltro(metaMetrica)}
+      />
+      <PaceBand
+        titulo="Meta de VGV de novas vendas"
+        metrica="vgv"
+        meta={null}
+        pontos={pontosVgv}
+        periodoOverride={overrideDoFiltro('vgv')}
       />
 
       {/* ============ KPIs ============ */}
@@ -295,6 +314,9 @@ export default function Index() {
           ))}
         </div>
       </div>
+
+      {/* ============ Ranking gamificado (pódio) ============ */}
+      <RankingGamificado leads={leads} deals={deals} />
 
       {/* ============ Ranking de Vendedores ============ */}
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">
