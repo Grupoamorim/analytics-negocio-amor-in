@@ -10,8 +10,17 @@ import {
 import { useCRM } from '@/context/CRMContext'
 import { Lead, Deal } from '@/types/crm'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
+import type { PontoDiario } from '@/utils/pace'
+import { oportunidadesPorFaculdade, type OportunidadeFaculdade } from '@/utils/oportunidadesCurso'
 
 const ORANGE = '#f97316'
+const HOJE = new Date().toISOString().slice(0, 10)
+
+/** Soma os pontos diários (ex.: VGV real de adesões) dentro de [ini,fim]. */
+function somaPontos(pontos: PontoDiario[], ini: string, fim: string): number {
+  return pontos.filter((p) => p.data >= ini && p.data <= fim).reduce((acc, p) => acc + p.valor, 0)
+}
 
 function brl(v: number): string {
   return `R$ ${(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -61,7 +70,6 @@ interface FechamentoInfo {
   lead: Lead
   deal: Deal | undefined
   closeDate: Date | null
-  valor: number
 }
 
 const MESES_NOME = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -135,18 +143,21 @@ export default function Relatorios() {
     return null
   }
 
-  // Todas as turmas com data de fechamento resolvida (ganhas ou perdidas)
+  // VGV real (soma do valor das adesões — alunos que assinaram — sincronizadas do SGE),
+  // mesma fonte confiável já usada em Adesões/Financeiro/Painel Comercial. Substitui o valor
+  // fictício por turma (deal.value/potentialValue) que existia aqui antes.
+  const { pontosDiarios } = useFinanceiroDashboard(HOJE, HOJE, selectedEmpresas)
+  const pontosVgv = useMemo(() => pontosDiarios('vgv'), [pontosDiarios])
+
+  // Todas as turmas com data de fechamento resolvida (ganhas ou perdidas) — usado pras
+  // contagens de turmas (fechadas/perdidas, por cidade, pipeline, market share), que
+  // continuam reais e turma-a-turma. O valor em R$ não vem mais daqui (ver pontosVgv acima).
   const leadsComFechamento: FechamentoInfo[] = useMemo(() => {
     return leads
       .filter((l) => l.status === 'Convertido' || l.status === 'Perdido')
       .map((l) => {
         const deal = dealByLeadId.get(l.id)
-        return {
-          lead: l,
-          deal,
-          closeDate: getCloseDate(l, deal),
-          valor: deal?.value || l.potentialValue || 0,
-        }
+        return { lead: l, deal, closeDate: getCloseDate(l, deal) }
       })
   }, [leads, dealByLeadId])
 
@@ -160,10 +171,10 @@ export default function Relatorios() {
   const turmasFechadas = useMemo(() => turmasFechadasEm(periodo.ini, periodo.fim), [leadsComFechamento, periodo])
   const turmasPerdidas = useMemo(() => turmasPerdidasEm(periodo.ini, periodo.fim), [leadsComFechamento, periodo])
 
-  const vgvTotal = useMemo(() => turmasFechadas.reduce((acc, x) => acc + x.valor, 0), [turmasFechadas])
+  const vgvTotal = useMemo(() => somaPontos(pontosVgv, periodo.ini, periodo.fim), [pontosVgv, periodo])
   const vgvAnoAnterior = useMemo(
-    () => turmasFechadasEm(periodoAnoAnterior.ini, periodoAnoAnterior.fim).reduce((acc, x) => acc + x.valor, 0),
-    [leadsComFechamento, periodoAnoAnterior],
+    () => somaPontos(pontosVgv, periodoAnoAnterior.ini, periodoAnoAnterior.fim),
+    [pontosVgv, periodoAnoAnterior],
   )
   const crescimentoPct = vgvAnoAnterior > 0 ? ((vgvTotal - vgvAnoAnterior) / vgvAnoAnterior) * 100 : null
   const crescimentoValor = vgvTotal - vgvAnoAnterior
@@ -176,26 +187,38 @@ export default function Relatorios() {
   const totalNegociado = turmasFechadas.length + turmasPerdidas.length
   const pctPerdidas = totalNegociado > 0 ? (turmasPerdidas.length / totalNegociado) * 100 : 0
 
-  // Performance mensal (3 meses do trimestre), com filtro opcional de cidade
-  function performanceMensal(ini: string, cidade?: string) {
+  // Performance mensal de VGV (3 meses do trimestre) — real, a partir das adesões (pontosVgv).
+  function performanceMensalVgv(ini: string) {
+    const mesIniIdx = new Date(`${ini}T00:00:00`).getMonth()
+    const anoBase = new Date(`${ini}T00:00:00`).getFullYear()
+    return [0, 1, 2].map((i) => {
+      const mesIdx = mesIniIdx + i
+      const anoMes = anoBase + Math.floor(mesIdx / 12)
+      const mesReal = mesIdx % 12
+      const iniMes = `${anoMes}-${pad2(mesReal + 1)}-01`
+      const fimMes = toISO(new Date(anoMes, mesReal + 1, 0))
+      return { mes: MESES_NOME[mesReal], valor: somaPontos(pontosVgv, iniMes, fimMes) }
+    })
+  }
+
+  // Turmas fechadas por mês numa cidade — a cidade só existe na turma, não na adesão
+  // (sge_adesoes não tem esse dado), então essa quebra usa contagem real de turmas, não R$.
+  function turmasFechadasMensalPorCidade(ini: string, cidade: string) {
     const mesIniIdx = new Date(`${ini}T00:00:00`).getMonth()
     const anoBase = new Date(`${ini}T00:00:00`).getFullYear()
     return [0, 1, 2].map((i) => {
       const mesIdx = mesIniIdx + i
       const chave = `${anoBase}-${pad2(mesIdx + 1)}`
-      const valor = turmasFechadas
-        .filter((x) => {
-          if (!x.closeDate) return false
-          if (cidade && x.lead.cidade !== cidade) return false
-          const c = `${x.closeDate.getFullYear()}-${pad2(x.closeDate.getMonth() + 1)}`
-          return c === chave
-        })
-        .reduce((acc, x) => acc + x.valor, 0)
+      const valor = turmasFechadas.filter((x) => {
+        if (!x.closeDate || x.lead.cidade !== cidade) return false
+        const c = `${x.closeDate.getFullYear()}-${pad2(x.closeDate.getMonth() + 1)}`
+        return c === chave
+      }).length
       return { mes: MESES_NOME[mesIdx % 12], valor }
     })
   }
 
-  const performanceMensalGeral = useMemo(() => performanceMensal(periodo.ini), [turmasFechadas, periodo])
+  const performanceMensalGeral = useMemo(() => performanceMensalVgv(periodo.ini), [pontosVgv, periodo])
   const destaqueMes = useMemo(
     () => performanceMensalGeral.reduce((a, b) => (b.valor > a.valor ? b : a), performanceMensalGeral[0]),
     [performanceMensalGeral],
@@ -277,13 +300,20 @@ export default function Relatorios() {
     return { comissao, turma, conversao }
   }, [deals, periodo])
 
+  // Oportunidades (cross-sell de curso dentro de faculdades onde já temos relação comprovada)
+  // — estrutural, não muda por trimestre, então usa o portfólio inteiro (todas as marcas
+  // selecionadas no filtro do topo, igual ao resto da página).
+  const oportunidades = useMemo(() => oportunidadesPorFaculdade(leads), [leads])
+
   // Navegação de slides
   const slideKeys = useMemo(() => {
     const keys = ['capa', 'vgv', 'resultados', 'performance-mensal']
     cidadesComFechamento.forEach((c) => keys.push(`cidade-${c}`))
-    keys.push('pipeline', 'market-share', 'funil')
+    keys.push('pipeline', 'market-share')
+    if (oportunidades.length > 0) keys.push('oportunidades')
+    keys.push('funil')
     return keys
-  }, [cidadesComFechamento])
+  }, [cidadesComFechamento, oportunidades])
 
   const [slideIndex, setSlideIndex] = useState(0)
   useEffect(() => {
@@ -509,14 +539,12 @@ export default function Relatorios() {
       )
     if (key.startsWith('cidade-')) {
       const cidade = key.replace('cidade-', '')
-      const dadosCidade = performanceMensal(periodo.ini, cidade)
+      const dadosCidade = turmasFechadasMensalPorCidade(periodo.ini, cidade)
       const maxCidade = Math.max(...dadosCidade.map((m) => m.valor), 1)
-      const vgvAtualCidade = turmasFechadas
-        .filter((x) => x.lead.cidade === cidade)
-        .reduce((acc, x) => acc + x.valor, 0)
-      const vgvAnteriorCidade = turmasFechadasEm(periodoAnterior.ini, periodoAnterior.fim)
-        .filter((x) => x.lead.cidade === cidade)
-        .reduce((acc, x) => acc + x.valor, 0)
+      const turmasCidadeAtual = turmasFechadas.filter((x) => x.lead.cidade === cidade).length
+      const turmasCidadeAnterior = turmasFechadasEm(periodoAnterior.ini, periodoAnterior.fim).filter(
+        (x) => x.lead.cidade === cidade,
+      ).length
       return (
         <SlidePerformanceMensalCidade
           cidade={cidade}
@@ -524,13 +552,14 @@ export default function Relatorios() {
           triAnterior={trimestreAnterior(tri, ano).tri}
           dados={dadosCidade}
           maxValor={maxCidade}
-          vgvAtual={vgvAtualCidade}
-          vgvAnterior={vgvAnteriorCidade}
+          turmasAtual={turmasCidadeAtual}
+          turmasAnterior={turmasCidadeAnterior}
         />
       )
     }
     if (key === 'pipeline') return <SlidePipeline tri={tri} cursos={pipelinePorCurso} />
     if (key === 'market-share') return <SlideMarketShare tri={tri} cursos={marketSharePorCurso} />
+    if (key === 'oportunidades') return <SlideOportunidades tri={tri} oportunidades={oportunidades} />
     if (key === 'funil') return <SlideFunil tri={tri} funil={funil} />
     return null
   }
@@ -697,12 +726,20 @@ function SlideResultados({
   )
 }
 
-function BarChartSimples({ dados, maxValor }: { dados: { mes: string; valor: number }[]; maxValor: number }) {
+function BarChartSimples({
+  dados,
+  maxValor,
+  unidade = 'R$',
+}: {
+  dados: { mes: string; valor: number }[]
+  maxValor: number
+  unidade?: 'R$' | 'un'
+}) {
   return (
     <div className="flex items-end justify-around h-full gap-4 px-2">
       {dados.map((m) => (
         <div key={m.mes} className="flex flex-col items-center flex-1 h-full justify-end">
-          <div className="text-xs font-semibold text-white mb-2">{brl(m.valor)}</div>
+          <div className="text-xs font-semibold text-white mb-2">{unidade === 'R$' ? brl(m.valor) : m.valor}</div>
           <div
             className="w-full rounded-t"
             style={{
@@ -764,41 +801,41 @@ function SlidePerformanceMensalCidade({
   triAnterior,
   dados,
   maxValor,
-  vgvAtual,
-  vgvAnterior,
+  turmasAtual,
+  turmasAnterior,
 }: {
   cidade: string
   tri: number
   triAnterior: number
   dados: { mes: string; valor: number }[]
   maxValor: number
-  vgvAtual: number
-  vgvAnterior: number
+  turmasAtual: number
+  turmasAnterior: number
 }) {
-  const variacao = vgvAnterior > 0 ? (vgvAtual / vgvAnterior) * 100 : null
+  const variacao = turmasAnterior > 0 ? (turmasAtual / turmasAnterior) * 100 : null
   return (
     <SlideChrome eyebrow={`Relatório Comercial ${tri}º Tri`} titulo={`Performance Mensal ${cidade.toUpperCase()}`}>
       <div className="grid grid-cols-3 gap-6 h-full">
         <div className="col-span-2 h-full">
-          <BarChartSimples dados={dados} maxValor={maxValor} />
+          <BarChartSimples dados={dados} maxValor={maxValor} unidade="un" />
         </div>
         <div className="bg-[#111111] border border-white/10 rounded-lg p-4 space-y-4 text-xs">
           <div>
             <div className="uppercase tracking-wider font-semibold" style={{ color: ORANGE }}>
-              VGV {tri}º Trimestre
+              Turmas fechadas {tri}º Trimestre
             </div>
-            <div className="text-xl font-bold text-white mt-1">{brl(vgvAtual)}</div>
+            <div className="text-xl font-bold text-white mt-1">{turmasAtual}</div>
             {variacao !== null && (
               <div className="text-slate-400 mt-1">
-                Representa {variacao.toFixed(2)}% do resultado do trimestre anterior.
+                Representa {variacao.toFixed(0)}% do resultado do trimestre anterior.
               </div>
             )}
           </div>
           <div>
             <div className="uppercase tracking-wider font-semibold text-slate-400">
-              VGV {triAnterior}º Trimestre
+              Turmas fechadas {triAnterior}º Trimestre
             </div>
-            <div className="text-xl font-bold text-white mt-1">{brl(vgvAnterior)}</div>
+            <div className="text-xl font-bold text-white mt-1">{turmasAnterior}</div>
           </div>
         </div>
       </div>
@@ -883,6 +920,59 @@ function SlideMarketShare({
           ))}
         </div>
       )}
+    </SlideChrome>
+  )
+}
+
+function SlideOportunidades({
+  tri,
+  oportunidades,
+}: {
+  tri: number
+  oportunidades: OportunidadeFaculdade[]
+}) {
+  const top = oportunidades.slice(0, 6)
+  return (
+    <SlideChrome
+      eyebrow={`Relatório Comercial ${tri}º Tri`}
+      titulo="Oportunidades — Próximo Ataque Estratégico"
+      destaque={
+        <div className="text-[10px] text-slate-500 mt-2">
+          Cross-sell dentro de faculdades onde já fechamos turma: curso já validado em outra
+          faculdade do portfólio, mas ainda não vendido aqui. Laranja = curso-âncora (Medicina,
+          Odontologia, Direito) — prioridade, mas atendemos todos os cursos.
+        </div>
+      }
+    >
+      <div className="grid grid-cols-2 gap-4 h-full overflow-y-auto pr-1">
+        {top.map((o) => (
+          <div key={o.faculdade} className="bg-[#111111] border border-white/10 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="font-bold text-white text-sm truncate">{o.faculdade}</div>
+              <div className="text-[10px] text-slate-400 whitespace-nowrap ml-2">
+                {o.turmasConvertidas} turma{o.turmasConvertidas === 1 ? '' : 's'} fechada
+                {o.turmasConvertidas === 1 ? '' : 's'}
+              </div>
+            </div>
+            {o.cidade && <div className="text-[10px] text-slate-500">{o.cidade}</div>}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {o.cursosFaltantes.slice(0, 6).map((c) => (
+                <span
+                  key={c.curso}
+                  className="text-[10px] font-semibold px-2 py-1 rounded-full border"
+                  style={
+                    c.ancora
+                      ? { color: ORANGE, borderColor: `${ORANGE}55`, background: `${ORANGE}1a` }
+                      : { color: '#cbd5e1', borderColor: 'rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)' }
+                  }
+                >
+                  {c.curso} · {c.faculdadesQueTem} fac.
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </SlideChrome>
   )
 }

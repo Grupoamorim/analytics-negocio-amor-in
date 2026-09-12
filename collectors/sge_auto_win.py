@@ -272,7 +272,7 @@ def _enviar_email_resumo_sge(sb, criadas, vinculadas_extra, nao_identificadas):
     enviar_email(sb, LUCAS_EMAIL, "SGE: novidades de turmas detectadas", html)
 
 
-def sincronizar_turmas_novas_do_sge(sb, turmas: list, turma_variacoes: list):
+def sincronizar_turmas_novas_do_sge(sb, turmas: list, turma_variacoes: list, today_br: str):
     """
     Segunda fase (roda depois do Auto-Win de vendas): olha `sge_contas_receber`
     - ja sincronizado sozinho por outro coletor 2x/dia, e muito mais completo
@@ -329,11 +329,19 @@ def sincronizar_turmas_novas_do_sge(sb, turmas: list, turma_variacoes: list):
                 # em que estágio do funil ela estivesse antes. O gatilho
                 # sincronizar_deal_com_funil_status() move o deal sozinho
                 # pra Fechou/Ganhou quando funil_status vira Convertido.
-                sb.table("turmas").update(
-                    {"codigo_sge": codigo, "funil_status": "Convertido"}
-                ).eq("id", matched["id"]).execute()
+                # Data de Fechamento: se ainda não tinha (a maioria não tem,
+                # ninguém preenche isso à mão), grava hoje - é o primeiro
+                # momento real em que a gente enxergou o aluno fechado e
+                # vinculado ao SGE, roda a cada poucas horas então fica
+                # próximo da data real. Nunca sobrescreve uma data já
+                # existente (pode ter sido preenchida à mão com a data real).
+                payload = {"codigo_sge": codigo, "funil_status": "Convertido"}
+                if not matched.get("fechamento_contrato"):
+                    payload["fechamento_contrato"] = today_br
+                sb.table("turmas").update(payload).eq("id", matched["id"]).execute()
                 matched["codigo_sge"] = codigo
                 matched["funil_status"] = "Convertido"
+                matched["fechamento_contrato"] = matched.get("fechamento_contrato") or today_br
                 vinculadas_extra.append((codigo, next(iter(descricoes)), matched))
             continue
 
@@ -363,6 +371,9 @@ def sincronizar_turmas_novas_do_sge(sb, turmas: list, turma_variacoes: list):
                 # O gatilho sincronizar_deal_com_funil_status() cria sozinho o
                 # deal em Fechou/Ganhou (não precisamos inserir o deal aqui).
                 "funil_status": "Convertido",
+                # Mesmo raciocínio do ramo "vinculadas_extra" acima: nasce Convertido,
+                # então a data em que a gente detectou isso é a Data de Fechamento real.
+                "fechamento_contrato": today_br,
                 "total_alunos": 0,
                 "alunos_fechados": 0,
                 "observacoes": f'Turma criada automaticamente a partir do projeto {codigo} do SGE '
@@ -494,7 +505,7 @@ def main():
         # Segunda fase: turmas do SGE (via contas a receber, muito mais completo
         # que o endpoint de vendas) que a gente ainda nao tinha cadastradas.
         criadas_n, vinculadas_extra_n, nao_ident_n = sincronizar_turmas_novas_do_sge(
-            sb, turmas, turma_variacoes
+            sb, turmas, turma_variacoes, today_br
         )
 
         msg_final = (
