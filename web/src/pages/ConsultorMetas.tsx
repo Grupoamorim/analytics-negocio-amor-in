@@ -22,6 +22,11 @@ const PERSONA = `Você é um conselho formado pelas melhores mentes de gestão c
 
 Contexto do negócio: a Amor In Formaturas presta SERVIÇOS de fotografia de formaturas (não vende produto nem tem estoque) — o ciclo de venda é longo (meses de negociação por turma) e a entrega acontece ao longo de meses/anos até a formatura. Trate tudo com essa lógica de serviço, nunca como venda transacional de produto.
 
+Definições financeiras que você NUNCA pode confundir:
+- "Adesão" = um aluno/formando (ou responsável) assinando o contrato de uma turma, entrando num plano de pagamento que será parcelado ao longo de vários meses/anos. O VALOR de uma adesão é o valor total do contrato daquele aluno (parecido com VGV — venda em competência), NÃO é faturamento daquele mês.
+- "Faturamento/Receita real" = SOMENTE as entradas de caixa de verdade (parcelas efetivamente pagas, pela data de pagamento) — é isso que os cards de "Receita" e "Resultado líquido" mostram.
+- Nunca some ou trate valor de adesões como se fosse receita/faturamento do período — são conceitos diferentes (venda assinada vs. dinheiro que já entrou). Se alguém confundir isso na conversa, corrija educadamente.
+
 Seu jeito de trabalhar, sempre:
 1. Nunca responda só com uma recomendação seca. Faça pelo menos uma pergunta de volta pra entender o contexto completo antes de aconselhar às cegas.
 2. Questione decisões e trade-offs em vez de só concordar — se algo parecer arriscado, incompleto ou na contramão da melhor prática de mercado, diga isso claramente.
@@ -44,6 +49,10 @@ interface PropostaConhecimento {
   periodoValor: number | null
   titulo: string
   conteudo: string
+  /** Título exato de um registro já existente que a IA julga ser sobre o mesmo assunto (mesmo
+   * com título diferente) — dispara o aviso de conflito na revisão, pra decidir manualmente
+   * qual prevalece em vez de duplicar silenciosamente. */
+  possivelDuplicataDe: string | null
 }
 
 function extrairJson(texto: string): PropostaConhecimento[] {
@@ -56,6 +65,7 @@ function extrairJson(texto: string): PropostaConhecimento[] {
     periodoValor: x.periodoValor ?? null,
     titulo: String(x.titulo || '').slice(0, 120),
     conteudo: String(x.conteudo || ''),
+    possivelDuplicataDe: x.possivelDuplicataDe ? String(x.possivelDuplicataDe) : null,
   }))
 }
 
@@ -138,17 +148,18 @@ export default function ConsultorMetas() {
         .join('\n\n')
       const conhecimentoAtual = conhecimento
         .slice(0, 20)
-        .map((c) => `- [${c.periodoTipo} ${c.periodoValor ?? ''}/${c.ano ?? ''}] ${c.titulo}`)
+        .map((c) => `- [${c.periodoTipo} ${c.periodoValor ?? ''}/${c.ano ?? ''}] "${c.titulo}": ${c.conteudo}`)
         .join('\n')
       const prompt = `Leia a conversa abaixo entre a gestão da Amor In Formaturas e um consultor de IA sobre metas e estratégia. Extraia fatos, decisões e status da empresa que valem a pena ficar registrados permanentemente na base de conhecimento da empresa, organizados por período.
 
 Regras:
-- Cada item deve ter: ano (número ou null se não for de um período específico), periodoTipo ("mensal"|"trimestral"|"semestral"|"anual"|"geral"), periodoValor (mês 1-12, trimestre 1-4, semestre 1-2, ou null se anual/geral), titulo (curto, até 8 palavras), conteudo (um parágrafo objetivo).
-- Se o assunto for continuação de algo que já pode ter registro (veja a lista de títulos já existentes abaixo), escreva o conteúdo como uma versão atualizada e completa daquele tema, não só o incremento — quem ler depois não vai ver esta conversa, só esse texto. Se puder, repita o título exato já existente pra ficar claro que é atualização.
+- Cada item deve ter: ano (número ou null se não for de um período específico), periodoTipo ("mensal"|"trimestral"|"semestral"|"anual"|"geral"), periodoValor (mês 1-12, trimestre 1-4, semestre 1-2, ou null se anual/geral), titulo (curto, até 8 palavras), conteudo (um parágrafo objetivo), possivelDuplicataDe (string ou null).
+- Antes de criar um item novo, compare com os REGISTROS JÁ EXISTENTES abaixo (título + conteúdo). Se o assunto for sobre o MESMO tema de um registro existente — mesmo que com um título diferente, ou que pareça contradizer/atualizar o que já está lá — preencha "possivelDuplicataDe" com o título EXATO daquele registro existente, pra a gestão decidir manualmente qual versão prevalece (nunca decida isso sozinho). Se for assunto realmente novo, deixe "possivelDuplicataDe": null.
+- Quando marcar possivelDuplicataDe, ainda assim escreva o conteúdo como a versão atualizada e completa do tema (não só o incremento) — quem ler depois não vai ver esta conversa, só esse texto.
 - Não invente nada que não esteja na conversa.
 - Responda APENAS com um JSON válido (array de objetos com essas chaves), sem markdown, sem texto antes ou depois.
 
-TÍTULOS JÁ REGISTRADOS (pra evitar duplicar, atualizar em vez de criar novo quando for o mesmo assunto):
+REGISTROS JÁ EXISTENTES (compare o assunto, não só o título):
 ${conhecimentoAtual || '(nenhum ainda)'}
 
 CONVERSA:
@@ -311,8 +322,43 @@ ${transcricao}`
             A IA leu a conversa e propôs isso — revise, ajuste o que quiser, e salve cada item (se já
             existir um registro com o mesmo ano/período/título, ele é atualizado em vez de duplicado).
           </p>
-          {propostas.map((p, idx) => (
+          {propostas.map((p, idx) => {
+            const existente = p.possivelDuplicataDe
+              ? conhecimento.find((c) => c.titulo.trim().toLowerCase() === p.possivelDuplicataDe!.trim().toLowerCase())
+              : null
+            return (
             <div key={idx} className="border border-white/[0.08] rounded-lg p-4 space-y-3 bg-white/[0.02]">
+              {existente && (
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-2">
+                  <p>
+                    ⚠️ Isso parece ser sobre o <strong>mesmo assunto</strong> que o registro já existente{' '}
+                    <strong>"{existente.titulo}"</strong> ({existente.periodoTipo === 'geral' ? 'geral' : `${existente.periodoTipo} ${existente.periodoValor ?? ''}/${existente.ano ?? ''}`}). Qual deve prevalecer?
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        atualizarProposta(idx, {
+                          ano: existente.ano,
+                          periodoTipo: existente.periodoTipo,
+                          periodoValor: existente.periodoValor,
+                          titulo: existente.titulo,
+                        })
+                      }
+                      className="text-[11px] font-semibold text-amber-200 bg-amber-500/20 border border-amber-500/40 rounded-lg px-2.5 py-1 hover:bg-amber-500/30"
+                    >
+                      Substituir "{existente.titulo}" por essa versão
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => atualizarProposta(idx, { possivelDuplicataDe: null })}
+                      className="text-[11px] text-slate-400 hover:text-white underline decoration-dotted"
+                    >
+                      Manter os dois separados
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <label className="text-xs text-slate-400 flex flex-col gap-1 sm:col-span-2">
                   Título
@@ -385,7 +431,8 @@ ${transcricao}`
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
