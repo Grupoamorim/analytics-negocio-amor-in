@@ -707,7 +707,11 @@ export default function AmorInFamily() {
                       <td className="py-3.5 px-4">
                         <div className="font-bold text-white flex items-center gap-2">
                           <GraduationCap className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                          <span>{leadMatch ? getTurmaDisplayName(leadMatch) : tr.contactName || tr.company}</span>
+                          <span>
+                            {leadMatch
+                              ? getTurmaDisplayName(leadMatch)
+                              : tr.contactName || tr.company || tr.title.replace(`${MEETING_TYPE} - `, '')}
+                          </span>
                           {!leadMatch && tr.curso && (
                             <span className="px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 text-[10px] font-semibold border border-rose-500/20">
                               {tr.curso}
