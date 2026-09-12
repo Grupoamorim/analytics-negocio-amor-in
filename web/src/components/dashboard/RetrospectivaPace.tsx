@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Sparkles, Loader2, History } from 'lucide-react'
 import SectionTitle from './SectionTitle'
-import { calcularPace, type PaceResultado, type PontoDiario } from '@/utils/pace'
+import { calcularPace, addAnos, type PaceResultado, type PontoDiario } from '@/utils/pace'
 import {
   intervaloDosMeses,
   metaSomaMeses,
@@ -28,6 +28,8 @@ interface LinhaRetro {
   metaParcial: boolean
   situacao: Situacao
   pace: PaceResultado
+  /** Realizado no mesmo período (mesmos meses), um ano atrás — null se não há dado. */
+  anoAnteriorRealizado: number | null
 }
 
 function fmt(v: number, unidade: 'R$' | 'un'): string {
@@ -46,7 +48,21 @@ function calcularRetrospectiva(metas: MetaNegocio[], metrica: MetricaMeta, ponto
     else if (HOJE < ini) situacao = 'nao-comecou'
     else if (HOJE > fim) situacao = pace.status === 'batida' ? 'bateu' : 'nao-bateu'
     else situacao = 'em-andamento'
-    return { label: j.label, temMeta, metaParcial: temMeta && mesesComMeta < mesesTotal, situacao, pace }
+
+    // Mesmo período (mesmos meses), um ano atrás — pra comparar junto do meta x realizado.
+    const iniAnt = addAnos(ini, -1)
+    const fimAnt = addAnos(fim, -1)
+    const anoAnteriorRealizado =
+      HOJE > fimAnt ? calcularPace(0, iniAnt, fimAnt, pontos, fimAnt).realizado : null
+
+    return {
+      label: j.label,
+      temMeta,
+      metaParcial: temMeta && mesesComMeta < mesesTotal,
+      situacao,
+      pace,
+      anoAnteriorRealizado,
+    }
   })
 }
 
@@ -71,18 +87,23 @@ function TabelaRetrospectiva({
     <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
       <h3 className="text-sm font-semibold text-white mb-3">{titulo}</h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs min-w-[520px]">
+        <table className="w-full text-xs min-w-[620px]">
           <thead>
             <tr className="text-left text-slate-500 text-[10px] uppercase border-b border-white/[0.06]">
               <th className="py-2 pr-3">Período</th>
               <th className="py-2 px-2 text-right">Meta</th>
               <th className="py-2 px-2 text-right">Realizado</th>
+              <th className="py-2 px-2 text-right">Ano Anterior</th>
               <th className="py-2 pl-2">Situação</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.04]">
             {linhas.map((l) => {
               const st = SITUACAO_STYLE[l.situacao]
+              const deltaAnt =
+                l.anoAnteriorRealizado !== null && l.anoAnteriorRealizado > 0
+                  ? ((l.pace.realizado - l.anoAnteriorRealizado) / l.anoAnteriorRealizado) * 100
+                  : null
               return (
                 <tr key={l.label} className="hover:bg-white/[0.02]">
                   <td className="py-2.5 pr-3 text-slate-200 font-medium whitespace-nowrap">
@@ -94,6 +115,21 @@ function TabelaRetrospectiva({
                   </td>
                   <td className="py-2.5 px-2 text-right text-white font-semibold whitespace-nowrap">
                     {fmt(l.pace.realizado, unidade)}
+                  </td>
+                  <td className="py-2.5 px-2 text-right whitespace-nowrap">
+                    {l.anoAnteriorRealizado === null ? (
+                      <span className="text-slate-500">—</span>
+                    ) : (
+                      <>
+                        <span className="text-slate-300">{fmt(l.anoAnteriorRealizado, unidade)}</span>
+                        {deltaAnt !== null && (
+                          <span className={`ml-1 text-[10px] font-semibold ${deltaAnt >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            ({deltaAnt >= 0 ? '+' : ''}
+                            {deltaAnt.toFixed(0)}%)
+                          </span>
+                        )}
+                      </>
+                    )}
                   </td>
                   <td className={`py-2.5 pl-2 font-medium whitespace-nowrap ${st.cls}`}>
                     {st.txt}
@@ -184,8 +220,8 @@ ${linhasTexto}`
 
   return (
     <div className="space-y-4">
-      <SectionTitle ajuda="Trimestre, semestre e ano somam as metas mensais cadastradas dentro daquele período — se faltar mês cadastrado, a soma fica marcada como 'parcial'. Períodos futuros sem meta aparecem como 'ainda não começou'.">
-        Retrospectiva {ANO_ATUAL} — objetivo x realizado
+      <SectionTitle ajuda="Trimestre, semestre e ano somam as metas mensais cadastradas dentro daquele período — se faltar mês cadastrado, a soma fica marcada como 'parcial'. Períodos futuros sem meta aparecem como 'ainda não começou'. A coluna 'Ano Anterior' mostra o realizado no mesmo período um ano atrás (só aparece quando esse período já terminou) e a variação % contra o realizado atual.">
+        Retrospectiva {ANO_ATUAL} — objetivo x realizado x ano anterior
       </SectionTitle>
 
       {retrospectivas.map(({ metrica, linhas }) => (
