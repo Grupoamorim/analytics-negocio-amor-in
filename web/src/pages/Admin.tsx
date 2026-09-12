@@ -144,6 +144,8 @@ export default function Admin() {
   const [perfis, setPerfis] = useState<Perfil[]>([])
   const [carregandoPerfis, setCarregandoPerfis] = useState(true)
   const [salvandoId, setSalvandoId] = useState<string | null>(null)
+  // Cargo: só salva quando o admin clica "Salvar" (antes salvava sozinho ao trocar no dropdown).
+  const [rascunhoCargo, setRascunhoCargo] = useState<Record<string, Perfil['role']>>({})
 
   // Acessos por usuário (quais abas do menu cada não-admin vê)
   const { acessosPorUsuario, salvarAcessoUsuario, recarregar: recarregarAcesso } = useAcesso()
@@ -1323,18 +1325,56 @@ export default function Admin() {
                           </td>
                           <td className="py-2.5 text-slate-400">{p.email}</td>
                           <td className="py-2.5">
-                            <select
-                              value={p.role}
-                              disabled={salvandoId === p.id}
-                              onChange={(e) => mudarCargo(p.id, e.target.value as Perfil['role'])}
-                              className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1 text-slate-200 text-xs"
-                            >
-                              {CARGOS.map((c) => (
-                                <option key={c.value} value={c.value}>
-                                  {c.label}
-                                </option>
-                              ))}
-                            </select>
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                value={rascunhoCargo[p.id] ?? p.role}
+                                disabled={salvandoId === p.id}
+                                onChange={(e) =>
+                                  setRascunhoCargo((prev) => ({ ...prev, [p.id]: e.target.value as Perfil['role'] }))
+                                }
+                                className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1 text-slate-200 text-xs"
+                              >
+                                {CARGOS.map((c) => (
+                                  <option key={c.value} value={c.value}>
+                                    {c.label}
+                                  </option>
+                                ))}
+                              </select>
+                              {rascunhoCargo[p.id] && rascunhoCargo[p.id] !== p.role && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === p.id}
+                                    onClick={async () => {
+                                      await mudarCargo(p.id, rascunhoCargo[p.id])
+                                      setRascunhoCargo((prev) => {
+                                        const next = { ...prev }
+                                        delete next[p.id]
+                                        return next
+                                      })
+                                    }}
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-400 hover:text-orange-300"
+                                    title="Salvar cargo"
+                                  >
+                                    <Save className="w-3.5 h-3.5" />
+                                    {salvandoId === p.id ? 'Salvando...' : 'Salvar'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setRascunhoCargo((prev) => {
+                                        const next = { ...prev }
+                                        delete next[p.id]
+                                        return next
+                                      })
+                                    }
+                                    className="text-[11px] text-slate-500 hover:text-white"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 text-right space-x-3 whitespace-nowrap">
                             {!ehAdmin && (
