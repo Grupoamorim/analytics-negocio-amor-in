@@ -19,6 +19,7 @@ import Pipeline from '@/pages/Pipeline'
 import Leads from '@/pages/Leads'
 import Probability from '@/pages/Probability'
 import Transcripts from '@/pages/Transcripts'
+import AmorInFamily from '@/pages/AmorInFamily'
 import WhatsappComercial from '@/pages/WhatsappComercial'
 import Notes from '@/pages/Notes'
 import NotFound from '@/pages/NotFound'
@@ -99,6 +100,7 @@ const App = () => (
               <Route path="/clientes" element={<RotaComPermissao path="/clientes"><Clientes /></RotaComPermissao>} />
               <Route path="/probabilidade" element={<RotaComPermissao path="/probabilidade"><Probability /></RotaComPermissao>} />
               <Route path="/transcricoes" element={<RotaComPermissao path="/transcricoes"><Transcripts /></RotaComPermissao>} />
+              <Route path="/amor-in-family" element={<RotaComPermissao path="/amor-in-family"><AmorInFamily /></RotaComPermissao>} />
               <Route path="/whatsapp-comercial" element={<RotaComPermissao path="/whatsapp-comercial"><WhatsappComercial /></RotaComPermissao>} />
               <Route path="/notas" element={<RotaComPermissao path="/notas"><Notes /></RotaComPermissao>} />
               <Route path="/captacao" element={<RotaComPermissao path="/captacao"><Captacao /></RotaComPermissao>} />

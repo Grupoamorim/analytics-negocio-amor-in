@@ -21,6 +21,7 @@ export const PAGINAS: PaginaDef[] = [
   { path: '/contatos', label: 'Contatos', grupo: 'Comercial' },
   { path: '/probabilidade', label: 'Probabilidade', grupo: 'Comercial' },
   { path: '/transcricoes', label: 'Transcrições', grupo: 'Comercial' },
+  { path: '/amor-in-family', label: 'Amor in Family', grupo: 'Comercial' },
   { path: '/whatsapp-comercial', label: 'WhatsApp Comercial', grupo: 'Comercial' },
   { path: '/notas', label: 'Notas', grupo: 'Comercial' },
   { path: '/adesoes', label: 'Adesões', grupo: 'Financeiro' },
@@ -48,6 +49,7 @@ export const PAGINAS_PADRAO_COMERCIAL: string[] = [
   '/contatos',
   '/probabilidade',
   '/transcricoes',
+  '/amor-in-family',
   '/whatsapp-comercial',
   '/notas',
 ]
