@@ -403,7 +403,14 @@ export async function transcribeAudioWithGemini(
           ],
         },
       ],
-      generationConfig: { temperature: 0.1 },
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 65536,
+        // Sem isso o gemini-2.5-flash gasta boa parte (às vezes todo) o budget de
+        // output "pensando" antes de escrever a transcrição — em áudios longos isso
+        // estoura maxOutputTokens e a resposta vem cortada ou vazia.
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     }),
   })
   if (!res.ok) {
