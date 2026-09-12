@@ -22,8 +22,10 @@ import SectionTitle from '@/components/dashboard/SectionTitle'
 import InfoHint from '@/components/dashboard/InfoHint'
 import PaceBand from '@/components/dashboard/PaceBand'
 import RankingGamificado from '@/components/dashboard/RankingGamificado'
+import VgvComercialPanel from '@/components/dashboard/VgvComercialPanel'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import MetricasComerciaisPanel from '@/components/MetricasComerciaisPanel'
+import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
 import { useMetasNegocio, metaSomaIntervalo, type MetricaMeta } from '@/hooks/useMetasNegocio'
 import { getTurmaDisplayName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import {
@@ -90,12 +92,22 @@ export default function Index() {
     return Math.round(abertos.reduce((a, d) => a + (d.probability ?? 0), 0) / abertos.length)
   }, [deals])
 
+  // Adesões reais do SGE (mesma base confiável de Adesões/Financeiro) — alimentam VGV e
+  // "alunos fechados" com dado automático, no lugar do valor potencial fictício e da Data de
+  // Fechamento manual da turma (quase nunca preenchida), que deixavam essas metas zeradas.
+  const finance = useFinanceiroDashboard(f.dtIni, f.dtFim, selectedEmpresas)
+  const { pontosDiarios } = finance
+  const pontosAdesoesReais = useMemo(() => pontosDiarios('adesoes'), [pontosDiarios])
+  const pontosVgv = useMemo(() => pontosDiarios('vgv'), [pontosDiarios])
+
   const { metas, metaVigente } = useMetasNegocio()
   const hoje = new Date().toISOString().slice(0, 10)
   const metaContratos = metaVigente('contratos', hoje) || metaVigente('alunos', hoje)
   const metaMetrica: 'contratos' | 'alunos' = metaContratos?.metrica === 'alunos' ? 'alunos' : 'contratos'
-  const pontosMeta = useMemo(() => pontosComerciais(leads, metaMetrica), [leads, metaMetrica])
-  const pontosVgv = useMemo(() => pontosComerciais(leads, 'vgv'), [leads])
+  const pontosMeta = useMemo(
+    () => (metaMetrica === 'alunos' ? pontosAdesoesReais : pontosComerciais(leads, 'contratos')),
+    [metaMetrica, pontosAdesoesReais, leads],
+  )
 
   // Pace/metas "pré-visualizando" o período escolhido no filtro (Mês/Trimestre/
   // Semestre/Ano/Até Hoje), igual ao Dashboard Geral — antes ficava preso ao mês/
@@ -209,6 +221,9 @@ export default function Index() {
         pontos={pontosVgv}
         periodoOverride={overrideDoFiltro('vgv')}
       />
+
+      {/* ============ VGV (análise) ============ */}
+      <VgvComercialPanel agregado={finance.agregado} rotuloPeriodo={rotuloFiltro} loading={finance.loading} />
 
       {/* ============ KPIs ============ */}
       <div className="flex items-center justify-between">

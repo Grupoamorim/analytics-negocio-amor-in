@@ -49,8 +49,11 @@ export default function AdministracaoGeral() {
   const pontosAdesoes = useMemo(() => pontosDiarios('adesoes'), [pontosDiarios])
   const pontosResultado = useMemo(() => pontosDiarios('resultado'), [pontosDiarios])
   const pontosContratos = useMemo(() => pontosComerciais(leadsFiltrados, 'contratos'), [leadsFiltrados])
-  const pontosAlunos = useMemo(() => pontosComerciais(leadsFiltrados, 'alunos'), [leadsFiltrados])
-  const pontosVgv = useMemo(() => pontosComerciais(leadsFiltrados, 'vgv'), [leadsFiltrados])
+  // "Alunos fechados" e "VGV" agora vêm das adesões reais do SGE (mesma fonte de "Adesões"
+  // acima), não mais da Data de Fechamento manual da turma (quase nunca preenchida) nem do
+  // valor potencial fictício que existia no código — por isso ficavam zerados/errados.
+  const pontosAlunos = useMemo(() => pontosDiarios('adesoes'), [pontosDiarios])
+  const pontosVgv = useMemo(() => pontosDiarios('vgv'), [pontosDiarios])
 
   const escolasVisitadas = useEscolasVisitadas()
   const pontosEscolas = useMemo(
@@ -83,8 +86,9 @@ export default function AdministracaoGeral() {
             do período escolhido no filtro abaixo.
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
-            Realizado 100% automático: puxa direto do SGE (pagamentos, adesões e turmas fechadas),
-            sincronizado sozinho a cada 3-12h — nada aqui é digitado à mão.
+            Receita, adesões, alunos fechados e VGV são automáticos: puxam direto do SGE
+            (pagamentos e adesões reais), sincronizado sozinho a cada 3-12h. Só "Contratos
+            fechados" ainda depende da Data de Fechamento cadastrada em Turmas.
           </p>
         </div>
         <EmpresaFilterBar options={empresaOptions} selected={selectedEmpresas} onChange={setSelectedEmpresas} />

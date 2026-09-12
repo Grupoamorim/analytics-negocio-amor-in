@@ -96,8 +96,10 @@ export default function ConsultorMetas() {
       adesoes: pontosDiarios('adesoes'),
       resultado_liquido: pontosDiarios('resultado'),
       contratos: pontosComerciais(leads, 'contratos'),
-      alunos: pontosComerciais(leads, 'alunos'),
-      vgv: pontosComerciais(leads, 'vgv'),
+      // Alunos e VGV vêm das adesões reais do SGE (mesma base de "adesoes" acima), não mais
+      // da Data de Fechamento manual da turma nem do valor potencial fictício.
+      alunos: pontosDiarios('adesoes'),
+      vgv: pontosDiarios('vgv'),
       escolas_visitadas: visitas.map((v) => ({ data: v.data, valor: 1 })),
     }),
     [pontosDiarios, leads, visitas],

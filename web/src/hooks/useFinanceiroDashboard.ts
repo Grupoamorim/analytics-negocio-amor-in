@@ -244,7 +244,7 @@ export function useFinanceiroDashboard(
 
   /** Série dia-a-dia (valor do dia) de uma métrica financeira, pra cálculo de pace. */
   const pontosDiarios = useCallback(
-    (metrica: 'receita' | 'adesoes' | 'despesas' | 'resultado'): PontoDiario[] => {
+    (metrica: 'receita' | 'adesoes' | 'despesas' | 'resultado' | 'vgv'): PontoDiario[] => {
       const pontosReceita = (): PontoDiario[] =>
         pagamentos
           .filter((p) => p.status === 'pago' && p.data_pagamento && daEmpresaFn(p.empresa))
@@ -265,9 +265,18 @@ export function useFinanceiroDashboard(
       }
       const adesaoDaEmpresa = (turma: string | null) =>
         empresas.length === 0 || empresas.includes((turma || '').trim().split(/\s+/)[0])
+      // 'adesoes' conta 1 por aluno que assinou (real, sincronizado do SGE + import manual de
+      // 2025) — usado também como o "alunos fechados" real do Painel Comercial/Dashboard Geral,
+      // no lugar da Data de Fechamento manual da turma (raramente preenchida).
+      if (metrica === 'adesoes')
+        return adesoes
+          .filter((a) => a.data_adesao && adesaoDaEmpresa(a.turma))
+          .map((a) => ({ data: a.data_adesao!.slice(0, 10), valor: 1 }))
+      // 'vgv' = valor total das adesões (venda em competência, não é caixa) — mesma fonte real
+      // usada em Adesões, no lugar do valor potencial fictício que existia antes.
       return adesoes
         .filter((a) => a.data_adesao && adesaoDaEmpresa(a.turma))
-        .map((a) => ({ data: a.data_adesao!.slice(0, 10), valor: 1 }))
+        .map((a) => ({ data: a.data_adesao!.slice(0, 10), valor: Number(a.valor || 0) }))
     },
     [pagamentos, contasPagar, adesoes, empresas, daEmpresaFn],
   )
