@@ -508,6 +508,53 @@ export type Database = {
         }
         Relationships: []
       }
+      conhecimento_empresa: {
+        Row: {
+          ano: number | null
+          conteudo: string
+          created_at: string
+          id: string
+          origem: string
+          periodo_tipo: string
+          periodo_valor: number | null
+          titulo: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ano?: number | null
+          conteudo: string
+          created_at?: string
+          id?: string
+          origem?: string
+          periodo_tipo: string
+          periodo_valor?: number | null
+          titulo: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ano?: number | null
+          conteudo?: string
+          created_at?: string
+          id?: string
+          origem?: string
+          periodo_tipo?: string
+          periodo_valor?: number | null
+          titulo?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conhecimento_empresa_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contas_pagar: {
         Row: {
           categoria: string | null
@@ -1466,6 +1513,38 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "vw_resumo_turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      metas_chat_mensagens: {
+        Row: {
+          conteudo: string
+          created_at: string
+          created_by: string | null
+          id: string
+          role: string
+        }
+        Insert: {
+          conteudo: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role: string
+        }
+        Update: {
+          conteudo?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metas_chat_mensagens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

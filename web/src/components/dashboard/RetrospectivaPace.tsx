@@ -7,6 +7,7 @@ import {
   metaSomaMeses,
   METRICA_LABEL,
   METRICA_UNIDADE,
+  JANELAS_RETROSPECTIVA,
   type MetaNegocio,
   type MetricaMeta,
 } from '@/hooks/useMetasNegocio'
@@ -17,15 +18,7 @@ const ANO_ATUAL = new Date().getFullYear()
 
 // Trimestre/semestre/ano agregam os meses cadastrados em metas_negocio (não dependem de
 // um cadastro específico naquele escopo maior) — ver metaSomaMeses.
-const JANELAS: { label: string; meses: number[] }[] = [
-  { label: 'T1', meses: [1, 2, 3] },
-  { label: 'T2', meses: [4, 5, 6] },
-  { label: 'T3', meses: [7, 8, 9] },
-  { label: 'T4', meses: [10, 11, 12] },
-  { label: 'S1', meses: [1, 2, 3, 4, 5, 6] },
-  { label: 'S2', meses: [7, 8, 9, 10, 11, 12] },
-  { label: 'Ano', meses: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
-]
+const JANELAS = JANELAS_RETROSPECTIVA
 
 type Situacao = 'sem-meta' | 'nao-comecou' | 'em-andamento' | 'bateu' | 'nao-bateu'
 

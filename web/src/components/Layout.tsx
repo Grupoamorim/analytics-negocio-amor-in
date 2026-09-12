@@ -32,6 +32,8 @@ import {
   Package,
   ChevronDown,
   Gauge,
+  Bot,
+  BookOpen,
 } from 'lucide-react'
 import { getTurmaDisplayName, getFullTurmaName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import { matchesSearch } from '@/utils/searchMatch'
@@ -55,6 +57,8 @@ const NAVIGATION_SECTIONS: { section: string | null; items: NavItem[] }[] = [
     section: 'Administração',
     items: [
       { path: '/administracao', label: 'Dashboard Geral', icon: Gauge },
+      { path: '/consultor-metas', label: 'Consultor de Metas', icon: Bot },
+      { path: '/conhecimento-empresa', label: 'Conhecimento da Empresa', icon: BookOpen },
       { path: '/relatorios', label: 'Relatórios', icon: Presentation },
       { path: '/admin', label: 'Configurações', icon: ShieldCheck },
     ],

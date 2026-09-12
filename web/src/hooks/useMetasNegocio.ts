@@ -129,6 +129,33 @@ export function rotuloPeriodoMeta(m: Pick<MetaNegocio, 'escopo' | 'ano' | 'perio
   return `Ano ${m.ano}`
 }
 
+/** Janelas fixas usadas na retrospectiva por trimestre/semestre/ano (RetrospectivaPace.tsx) e no
+ * snapshot de metas enviado pra IA (utils/metasSnapshot.ts) — um único lugar pra essa definição. */
+export const JANELAS_RETROSPECTIVA: { label: string; meses: number[] }[] = [
+  { label: 'T1', meses: [1, 2, 3] },
+  { label: 'T2', meses: [4, 5, 6] },
+  { label: 'T3', meses: [7, 8, 9] },
+  { label: 'T4', meses: [10, 11, 12] },
+  { label: 'S1', meses: [1, 2, 3, 4, 5, 6] },
+  { label: 'S2', meses: [7, 8, 9, 10, 11, 12] },
+  { label: 'Ano', meses: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+]
+
+/** Meta vigente pra uma métrica numa data de referência — pega a mais específica que cobre a
+ * data (mensal > trimestral > anual). Função pura, reaproveitada pelo hook `useMetasNegocio` e
+ * por lugares fora de componente React (ex: utils/metasSnapshot.ts). */
+export function metaVigenteEm(metas: MetaNegocio[], metrica: MetricaMeta, ref: string): MetaNegocio | null {
+  const candidatas = metas
+    .filter((m) => m.metrica === metrica)
+    .filter((m) => {
+      const { ini, fim } = intervaloDaMeta(m)
+      return ref >= ini && ref <= fim
+    })
+  const ordem: Record<EscopoMeta, number> = { mensal: 0, trimestral: 1, anual: 2 }
+  candidatas.sort((a, b) => ordem[a.escopo] - ordem[b.escopo])
+  return candidatas[0] || null
+}
+
 export function useMetasNegocio() {
   const [metas, setMetas] = useState<MetaNegocio[]>([])
   const [loading, setLoading] = useState(true)
@@ -186,17 +213,7 @@ export function useMetasNegocio() {
    * específica que cobre a data: mensal > trimestral > anual.
    */
   const metaVigente = useCallback(
-    (metrica: MetricaMeta, ref: string): MetaNegocio | null => {
-      const candidatas = metas
-        .filter((m) => m.metrica === metrica)
-        .filter((m) => {
-          const { ini, fim } = intervaloDaMeta(m)
-          return ref >= ini && ref <= fim
-        })
-      const ordem: Record<EscopoMeta, number> = { mensal: 0, trimestral: 1, anual: 2 }
-      candidatas.sort((a, b) => ordem[a.escopo] - ordem[b.escopo])
-      return candidatas[0] || null
-    },
+    (metrica: MetricaMeta, ref: string): MetaNegocio | null => metaVigenteEm(metas, metrica, ref),
     [metas],
   )
 

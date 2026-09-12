@@ -10,6 +10,8 @@ export interface PaginaDef {
 
 export const PAGINAS: PaginaDef[] = [
   { path: '/administracao', label: 'Dashboard Geral', grupo: 'Administração' },
+  { path: '/consultor-metas', label: 'Consultor de Metas', grupo: 'Administração' },
+  { path: '/conhecimento-empresa', label: 'Conhecimento da Empresa', grupo: 'Administração' },
   { path: '/', label: 'Painel Comercial', grupo: 'Comercial' },
   { path: '/painel-financeiro', label: 'Painel Financeiro', grupo: 'Financeiro' },
   { path: '/agenda', label: 'Agenda', grupo: 'Comercial' },

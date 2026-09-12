@@ -36,6 +36,8 @@ import Equipamentos from '@/pages/Equipamentos'
 import Admin from '@/pages/Admin'
 import AdministracaoGeral from '@/pages/AdministracaoGeral'
 import SolicitarCadastro from '@/pages/SolicitarCadastro'
+import ConsultorMetas from '@/pages/ConsultorMetas'
+import ConhecimentoEmpresa from '@/pages/ConhecimentoEmpresa'
 
 const TELA_CARREGANDO = (
   <div className="min-h-screen bg-[#0a0f14] flex items-center justify-center text-slate-400 text-sm">
@@ -121,6 +123,22 @@ const App = () => (
                 element={
                   <RotaComPermissao path="/administracao">
                     <AdministracaoGeral />
+                  </RotaComPermissao>
+                }
+              />
+              <Route
+                path="/consultor-metas"
+                element={
+                  <RotaComPermissao path="/consultor-metas">
+                    <ConsultorMetas />
+                  </RotaComPermissao>
+                }
+              />
+              <Route
+                path="/conhecimento-empresa"
+                element={
+                  <RotaComPermissao path="/conhecimento-empresa">
+                    <ConhecimentoEmpresa />
                   </RotaComPermissao>
                 }
               />
