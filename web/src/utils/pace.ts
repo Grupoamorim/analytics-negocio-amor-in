@@ -45,6 +45,13 @@ function addDias(iso: string, n: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** Desloca uma data ISO em `n` anos (ex: -1 pra achar "o mesmo período do ano passado"). */
+export function addAnos(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00`)
+  d.setFullYear(d.getFullYear() + n)
+  return d.toISOString().slice(0, 10)
+}
+
 export function calcularPace(
   meta: number,
   ini: string,

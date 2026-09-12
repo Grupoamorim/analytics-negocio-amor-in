@@ -12,9 +12,9 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts'
-import { Target, Sparkles, Loader2, TrendingUp, Flag } from 'lucide-react'
+import { Target, Sparkles, Loader2, TrendingUp, Flag, History } from 'lucide-react'
 import SectionTitle from './SectionTitle'
-import { calcularPace } from '@/utils/pace'
+import { calcularPace, addAnos } from '@/utils/pace'
 import type { PontoDiario } from '@/utils/pace'
 import {
   intervaloDaMeta,
@@ -72,6 +72,46 @@ export default function PaceBand({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, pontos, periodoOverride, temMeta])
 
+  // Mesmo período, um ano atrás — pra comparar meta x resultado atual x resultado do
+  // ano passado ao mesmo tempo. hojeISO = fim do período deslocado pra não cortar
+  // nenhum dia como "ainda não realizado" (o ano passado já acabou inteiro).
+  const paceAnoAnterior = useMemo(() => {
+    if (!temMeta) return null
+    const { ini, fim } = periodoOverride
+      ? { ini: periodoOverride.ini, fim: periodoOverride.fim }
+      : intervaloDaMeta(meta!)
+    const iniAnt = addAnos(ini, -1)
+    const fimAnt = addAnos(fim, -1)
+    return calcularPace(0, iniAnt, fimAnt, pontos, fimAnt)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, pontos, periodoOverride, temMeta])
+
+  // Série do gráfico com as 3 linhas alinhadas por posição no período (dia 1 do
+  // período atual x dia 1 do mesmo período ano passado etc.), não por data.
+  const serieComparativa = useMemo(() => {
+    if (!pace) return []
+    return pace.serie.map((p, i) => ({
+      ...p,
+      'Ano Anterior': paceAnoAnterior?.serie[i]?.Realizado ?? null,
+    }))
+  }, [pace, paceAnoAnterior])
+
+  // Comparação "ao mesmo tempo": realizado até agora vs. o que já tínhamos feito
+  // no mesmo trecho do período, um ano atrás (mesma fração decorrida).
+  const realizadoAnoAnteriorMesmoPonto = useMemo(() => {
+    if (!pace || !paceAnoAnterior) return null
+    const idx = Math.min(
+      Math.round(pace.fracaoDecorrida * (paceAnoAnterior.serie.length - 1)),
+      paceAnoAnterior.serie.length - 1,
+    )
+    return paceAnoAnterior.serie[idx]?.Realizado ?? null
+  }, [pace, paceAnoAnterior])
+
+  const deltaVsAnoAnterior =
+    realizadoAnoAnteriorMesmoPonto !== null && realizadoAnoAnteriorMesmoPonto > 0 && pace
+      ? ((pace.realizado - realizadoAnoAnteriorMesmoPonto) / realizadoAnoAnteriorMesmoPonto) * 100
+      : null
+
   async function analisarComIA() {
     if (!pace) return
     if (!getGeminiApiKey()) {
@@ -127,7 +167,7 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
   return (
     <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg space-y-4">
       <SectionTitle
-        ajuda="A linha reta é a meta distribuída igual ao longo do período. A área é o realizado acumulado. Se a área está abaixo da linha na marca de hoje, estamos atrás do ritmo. A projeção assume que o ritmo atual se mantém até o fim."
+        ajuda="A linha laranja tracejada é a meta distribuída igual ao longo do período. A área verde é o realizado acumulado. A linha roxa é o realizado no mesmo período do ano passado (dia a dia, alinhado pela posição no período, não pela data). Se a área está abaixo da linha da meta na marca de hoje, estamos atrás do ritmo."
         right={
           <span className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${st.cls}`}>
             {st.txt}
@@ -138,7 +178,7 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
       </SectionTitle>
 
       {/* Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <MiniCard
           icon={Flag}
           label="Realizado / Meta"
@@ -167,12 +207,23 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
           sub={`atual ${fmt(pace.ritmoDiarioAtual * 7, unidade)}/sem`}
           tom={pace.ritmoDiarioNecessario <= pace.ritmoDiarioAtual * 1.1 ? 'verde' : 'vermelho'}
         />
+        <MiniCard
+          icon={History}
+          label="vs. Ano Anterior"
+          valor={deltaVsAnoAnterior === null ? '—' : `${deltaVsAnoAnterior >= 0 ? '+' : ''}${deltaVsAnoAnterior.toFixed(0)}%`}
+          sub={
+            realizadoAnoAnteriorMesmoPonto === null
+              ? 'sem dado no mesmo período do ano passado'
+              : `no mesmo trecho, ano passado: ${fmt(realizadoAnoAnteriorMesmoPonto, unidade)}`
+          }
+          tom={deltaVsAnoAnterior === null ? 'neutro' : deltaVsAnoAnterior >= 0 ? 'verde' : 'vermelho'}
+        />
       </div>
 
       {/* Gráfico */}
       <div className="h-60">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={pace.serie} margin={{ left: 8, right: 8 }}>
+          <ComposedChart data={serieComparativa} margin={{ left: 8, right: 8 }}>
             <defs>
               <linearGradient id={`pace-${metrica}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#34D399" stopOpacity={0.35} />
@@ -193,6 +244,14 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Line dataKey="Meta" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="5 4" />
+            <Line
+              dataKey="Ano Anterior"
+              stroke="#8B5CF6"
+              strokeWidth={2}
+              dot={false}
+              strokeDasharray="2 3"
+              connectNulls
+            />
             <Area
               dataKey="Realizado"
               stroke="#34D399"
