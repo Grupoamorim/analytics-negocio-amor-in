@@ -26,7 +26,7 @@ import {
 import { useCRM } from '@/context/CRMContext'
 import { Transcript, getTurmaDisplayName } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
-import { analyzeTranscriptWithGemini, getGeminiApiKey } from '@/utils/geminiApi'
+import { analyzeTranscriptWithGemini, getGeminiApiKey, transcribeAudioWithGemini } from '@/utils/geminiApi'
 import { analyzeTranscriptText } from '@/utils/probabilityEngine'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import { matchesSearch } from '@/utils/searchMatch'
@@ -76,10 +76,12 @@ export default function AmorInFamily() {
   const [manualModalOpen, setManualModalOpen] = useState(false)
   const [manualTurmaId, setManualTurmaId] = useState('')
   const [manualTurmaSearch, setManualTurmaSearch] = useState('')
+  const [manualCurso, setManualCurso] = useState('')
   const [manualFile, setManualFile] = useState<File | null>(null)
   const [manualText, setManualText] = useState('')
   const [manualAudioNotice, setManualAudioNotice] = useState(false)
   const [isAnalyzingManual, setIsAnalyzingManual] = useState(false)
+  const [isTranscrevendoAudio, setIsTranscrevendoAudio] = useState(false)
 
   // Modal 2: Reunião Online (Fathom)
   const [fathomModalOpen, setFathomModalOpen] = useState(false)
@@ -97,9 +99,20 @@ export default function AmorInFamily() {
     return sortByField(base, sortField, sortDirection, (t, f) => (t as any)[f])
   }, [familyTranscripts, searchQuery, sortField, sortDirection])
 
+  // Cursos conhecidos (das turmas cadastradas) — usado no seletor de curso do
+  // upload, pra não depender de vincular a turma exata (Amor in Family ainda
+  // não sabe a turma real de cada aluno, só o curso).
+  const cursoOptions = useMemo(() => {
+    const cursos = new Set<string>()
+    leads.forEach((l) => l.curso && cursos.add(l.curso))
+    return Array.from(cursos).sort()
+  }, [leads])
+
   // KPIs básicos (só o que dá pra calcular sem dado de venda)
   const kpis = useMemo(() => {
-    const turmasParticipantes = new Set(familyTranscripts.map((t) => t.leadId).filter(Boolean))
+    const turmasParticipantes = new Set(
+      familyTranscripts.map((t) => t.leadId || t.curso).filter(Boolean),
+    )
     const comAnalise = familyTranscripts.filter((t) => t.geminiAnalysis)
     const probMedia =
       comAnalise.length > 0
@@ -121,7 +134,8 @@ export default function AmorInFamily() {
     const faculdades = new Set<string>()
     familyTranscripts.forEach((t) => {
       const lead = leads.find((l) => l.id === t.leadId)
-      if (lead?.curso) cursos.add(lead.curso)
+      const curso = lead?.curso || t.curso
+      if (curso) cursos.add(curso)
       if (lead?.faculdade) faculdades.add(lead.faculdade)
     })
     return {
@@ -139,7 +153,8 @@ export default function AmorInFamily() {
 
     familyTranscripts.forEach((t) => {
       const lead = leads.find((l) => l.id === t.leadId)
-      if (objecoesCurso !== 'all' && lead?.curso !== objecoesCurso) return
+      const curso = lead?.curso || t.curso
+      if (objecoesCurso !== 'all' && curso !== objecoesCurso) return
       if (objecoesFaculdade !== 'all' && lead?.faculdade !== objecoesFaculdade) return
       const mes = t.date ? t.date.slice(0, 7) : ''
       if (objecoesPeriodo !== 'all' && mes !== objecoesPeriodo) return
@@ -236,6 +251,17 @@ export default function AmorInFamily() {
   const handleSaveManual = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    const leadMatch = leads.find((l) => l.id === manualTurmaId)
+
+    if (!manualTurmaId && !manualCurso) {
+      toast({
+        title: 'Turma ou curso obrigatório',
+        description: 'Selecione a turma (se já souber) ou, no mínimo, o curso do aluno.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     let contentToAnalyze = manualText.trim()
     let fileName = 'upload_manual.txt'
 
@@ -244,7 +270,28 @@ export default function AmorInFamily() {
       const isAudio = /\.(mp3|wav|m4a|ogg|aac|wma)$/i.test(manualFile.name)
       if (isAudio) {
         if (!contentToAnalyze) {
-          contentToAnalyze = `[Áudio gravado: ${manualFile.name}]. Transcrição da reunião do evento Amor in Family (cross-sell de álbuns).`
+          const apiKey = getGeminiApiKey()
+          if (!apiKey) {
+            toast({
+              title: 'Chave do Gemini necessária',
+              description: 'Configure em Administração → IA pra transcrever áudio automaticamente.',
+              variant: 'destructive',
+            })
+            return
+          }
+          setIsTranscrevendoAudio(true)
+          try {
+            contentToAnalyze = await transcribeAudioWithGemini(manualFile, apiKey)
+          } catch (err: any) {
+            toast({
+              title: 'Erro ao transcrever áudio',
+              description: err.message || 'Falha ao transcrever o áudio com o Gemini.',
+              variant: 'destructive',
+            })
+            setIsTranscrevendoAudio(false)
+            return
+          }
+          setIsTranscrevendoAudio(false)
         }
       } else {
         contentToAnalyze = await manualFile.text()
@@ -260,10 +307,9 @@ export default function AmorInFamily() {
       return
     }
 
-    const leadMatch = leads.find((l) => l.id === manualTurmaId)
     const turmaDisplayName = leadMatch
       ? getTurmaDisplayName(leadMatch)
-      : manualTurmaSearch || 'Turma Amor in Family'
+      : manualTurmaSearch || manualCurso || 'Turma Amor in Family'
 
     setIsAnalyzingManual(true)
     try {
@@ -272,9 +318,10 @@ export default function AmorInFamily() {
       const tr = await addTranscript({
         title: `${MEETING_TYPE} - ${turmaDisplayName}`,
         fileName,
-        company: leadMatch?.faculdade || turmaDisplayName,
+        company: leadMatch?.faculdade || manualCurso || turmaDisplayName,
         contactName: turmaDisplayName,
         leadId: manualTurmaId || undefined,
+        curso: leadMatch ? undefined : manualCurso || undefined,
         meetingType: MEETING_TYPE,
         sourceType: manualFile ? 'manual_upload' : 'manual_text',
         date: new Date().toISOString(),
@@ -300,6 +347,7 @@ export default function AmorInFamily() {
       setManualText('')
       setManualTurmaId('')
       setManualTurmaSearch('')
+      setManualCurso('')
       setManualAudioNotice(false)
 
       toast({
@@ -660,6 +708,11 @@ export default function AmorInFamily() {
                         <div className="font-bold text-white flex items-center gap-2">
                           <GraduationCap className="w-4 h-4 text-rose-400 flex-shrink-0" />
                           <span>{leadMatch ? getTurmaDisplayName(leadMatch) : tr.contactName || tr.company}</span>
+                          {!leadMatch && tr.curso && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 text-[10px] font-semibold border border-rose-500/20">
+                              {tr.curso}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-400 mt-0.5 truncate max-w-sm">
                           {tr.geminiAnalysis?.resumo || tr.title}
@@ -735,7 +788,7 @@ export default function AmorInFamily() {
             <form onSubmit={handleSaveManual} className="space-y-4 text-xs">
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">
-                  Selecionar Turma (já fechada) *
+                  Selecionar Turma (se já souber)
                 </label>
                 <input
                   type="text"
@@ -772,6 +825,29 @@ export default function AmorInFamily() {
 
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">
+                  Curso {manualTurmaId ? '(opcional — já tem turma selecionada)' : '*'}
+                </label>
+                <select
+                  value={manualCurso}
+                  onChange={(e) => setManualCurso(e.target.value)}
+                  disabled={!!manualTurmaId}
+                  className="w-full bg-[#0a0f14] border border-white/10 rounded-lg px-3 py-2 text-white disabled:opacity-40"
+                >
+                  <option value="">Selecione o curso...</option>
+                  {cursoOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Ainda não sabe a turma exata? Só o curso já serve — dá pra vincular a turma certa
+                  depois.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
                   Upload de Arquivo (Áudio .mp3/.wav/.m4a OU Texto .txt)
                 </label>
                 <input
@@ -791,8 +867,8 @@ export default function AmorInFamily() {
                   <div className="mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-center gap-2">
                     <FileAudio className="w-4 h-4 flex-shrink-0" />
                     <span>
-                      Arquivo de áudio salvo. Você também pode colar o texto resumido abaixo se
-                      preferir.
+                      Áudio detectado — se não colar texto abaixo, ele é transcrito automaticamente
+                      pelo Gemini ao salvar (pode levar um minuto ou mais, dependendo da duração).
                     </span>
                   </div>
                 )}
@@ -800,7 +876,8 @@ export default function AmorInFamily() {
 
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">
-                  Texto da Transcrição / Diálogo (Opcional se enviou .txt)
+                  Texto da Transcrição / Diálogo (opcional — se vazio e o arquivo for áudio, o Gemini
+                  transcreve sozinho)
                 </label>
                 <textarea
                   rows={5}
@@ -821,11 +898,15 @@ export default function AmorInFamily() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isAnalyzingManual}
+                  disabled={isAnalyzingManual || isTranscrevendoAudio}
                   className="px-5 py-2 font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-lg shadow-md flex items-center gap-2 disabled:opacity-50"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  {isAnalyzingManual ? 'Processando Gemini AI...' : 'Salvar e Analisar'}
+                  {isTranscrevendoAudio
+                    ? 'Transcrevendo áudio com Gemini...'
+                    : isAnalyzingManual
+                      ? 'Processando Gemini AI...'
+                      : 'Salvar e Analisar'}
                 </button>
               </div>
             </form>

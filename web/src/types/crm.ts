@@ -546,6 +546,8 @@ export interface Transcript {
   title: string
   fileName: string
   leadId?: string
+  /** Curso (texto livre) — usado quando ainda não há turma vinculada (ex: Amor in Family antes de saber a turma exata). */
+  curso?: string
   company: string
   contactName?: string
   meetingType?: MeetingType // "Reunião Comissão" | "Reunião Turma"

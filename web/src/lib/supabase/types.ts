@@ -2996,6 +2996,7 @@ export type Database = {
         Row: {
           conteudo: string | null
           created_at: string
+          curso: string | null
           id: string
           pontos_atencao: string | null
           pontos_fortes: string | null
@@ -3005,12 +3006,13 @@ export type Database = {
           sentimento: string | null
           tipo: string | null
           titulo: string
-          turma_id: string
+          turma_id: string | null
           url: string | null
         }
         Insert: {
           conteudo?: string | null
           created_at?: string
+          curso?: string | null
           id?: string
           pontos_atencao?: string | null
           pontos_fortes?: string | null
@@ -3020,12 +3022,13 @@ export type Database = {
           sentimento?: string | null
           tipo?: string | null
           titulo: string
-          turma_id: string
+          turma_id?: string | null
           url?: string | null
         }
         Update: {
           conteudo?: string | null
           created_at?: string
+          curso?: string | null
           id?: string
           pontos_atencao?: string | null
           pontos_fortes?: string | null
@@ -3035,7 +3038,7 @@ export type Database = {
           sentimento?: string | null
           tipo?: string | null
           titulo?: string
-          turma_id?: string
+          turma_id?: string | null
           url?: string | null
         }
         Relationships: [

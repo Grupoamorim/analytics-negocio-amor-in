@@ -326,3 +326,95 @@ function parseGeminiJsonResponse(raw: string): GeminiTranscriptAnalysis {
     }
   }
 }
+
+/**
+ * Sobe um arquivo de áudio pra Gemini File API (upload multipart) e devolve o
+ * `uri`/`name` do arquivo — usado antes de referenciá-lo num generateContent.
+ */
+async function uploadAudioToGemini(
+  file: File,
+  apiKey: string,
+): Promise<{ uri: string; name: string }> {
+  const metadata = { file: { display_name: file.name } }
+  const form = new FormData()
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
+  form.append('file', file)
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(apiKey)}`,
+    { method: 'POST', headers: { 'X-Goog-Upload-Protocol': 'multipart' }, body: form },
+  )
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    throw new Error(`Falha no upload do áudio pro Gemini (${res.status}): ${errText.slice(0, 200)}`)
+  }
+  const data = await res.json()
+  if (!data?.file?.uri || !data?.file?.name) {
+    throw new Error('Gemini não retornou o arquivo enviado.')
+  }
+  return { uri: data.file.uri, name: data.file.name }
+}
+
+/** Espera o arquivo de áudio enviado terminar de ser processado pelo Gemini (fica em PROCESSING um tempo). */
+async function waitForGeminiFileActive(
+  fileName: string,
+  apiKey: string,
+  timeoutMs = 180000,
+): Promise<void> {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${encodeURIComponent(apiKey)}`,
+    )
+    if (res.ok) {
+      const data = await res.json()
+      if (data.state === 'ACTIVE') return
+      if (data.state === 'FAILED') throw new Error('Gemini falhou ao processar o áudio enviado.')
+    }
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+  throw new Error('Tempo esgotado esperando o Gemini processar o áudio (tente novamente).')
+}
+
+/**
+ * Transcreve um arquivo de áudio (upload manual de reunião) usando a Gemini File API —
+ * sobe o áudio, espera processar e pede a transcrição completa em texto.
+ */
+export async function transcribeAudioWithGemini(
+  file: File,
+  apiKey: string,
+  model: string = GEMINI_DEFAULT_MODEL,
+): Promise<string> {
+  const uploaded = await uploadAudioToGemini(file, apiKey)
+  await waitForGeminiFileActive(uploaded.name, apiKey)
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { file_data: { mime_type: file.type || 'audio/mp3', file_uri: uploaded.uri } },
+            {
+              text: 'Transcreva integralmente este áudio em português do Brasil, identificando os falantes quando possível (ex: "Vendedor:", "Cliente:"). Devolva só o texto da transcrição, sem comentários nem resumo.',
+            },
+          ],
+        },
+      ],
+      generationConfig: { temperature: 0.1 },
+    }),
+  })
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    throw new Error(`Falha ao transcrever áudio com Gemini (${res.status}): ${errText.slice(0, 200)}`)
+  }
+  const data = await res.json()
+  const text = (data?.candidates?.[0]?.content?.parts || [])
+    .map((p: any) => p.text || '')
+    .join('\n')
+    .trim()
+  if (!text) throw new Error('Gemini não retornou nenhuma transcrição pra esse áudio.')
+  return text
+}

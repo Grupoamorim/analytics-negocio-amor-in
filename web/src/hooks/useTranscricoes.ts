@@ -38,6 +38,7 @@ function mapRowToTranscript(row: TranscricaoRow): CallTranscript {
     title: row.titulo || 'Transcrição de Chamada',
     fileName: row.titulo || 'audio.mp3',
     leadId: row.turma_id || undefined,
+    curso: row.curso || undefined,
     company: '',
     contactName: '',
     meetingType: (row.tipo as any) || 'Reunião Comissão',
@@ -61,7 +62,8 @@ function mapRowToTranscript(row: TranscricaoRow): CallTranscript {
 
 function mapTranscriptToInsert(transcript: Partial<CallTranscript>): TranscricaoInsert {
   const payload: TranscricaoInsert = {
-    turma_id: transcript.leadId || '',
+    turma_id: transcript.leadId || null,
+    curso: transcript.curso || null,
     titulo: transcript.title || 'Transcrição',
     conteudo: transcript.content || null,
     url: transcript.fathomUrl || null,
