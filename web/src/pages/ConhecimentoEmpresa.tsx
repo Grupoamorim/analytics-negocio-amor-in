@@ -45,6 +45,7 @@ export default function ConhecimentoEmpresa() {
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [rascunhoEdicao, setRascunhoEdicao] = useState<{ titulo: string; conteudo: string }>({ titulo: '', conteudo: '' })
   const [anosColapsados, setAnosColapsados] = useState<Record<string, boolean>>({})
+  const [cardsAbertos, setCardsAbertos] = useState<Record<string, boolean>>({})
 
   const gerais = useMemo(() => registros.filter((r) => r.periodoTipo === 'geral'), [registros])
   const porAno = useMemo(() => {
@@ -119,22 +120,36 @@ export default function ConhecimentoEmpresa() {
 
   function CardRegistro({ r }: { r: Registro }) {
     const emEdicao = editandoId === r.id
+    const aberto = emEdicao || !!cardsAbertos[r.id]
     return (
       <div className="border border-white/[0.08] rounded-lg p-4 bg-white/[0.02] space-y-2">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 border border-orange-500/25">
-              {rotuloPeriodo(r)}
-            </span>
+          <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
             {emEdicao ? (
-              <input
-                type="text"
-                value={rascunhoEdicao.titulo}
-                onChange={(e) => setRascunhoEdicao((prev) => ({ ...prev, titulo: e.target.value }))}
-                className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1 text-slate-200 text-xs"
-              />
+              <>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 border border-orange-500/25">
+                  {rotuloPeriodo(r)}
+                </span>
+                <input
+                  type="text"
+                  value={rascunhoEdicao.titulo}
+                  onChange={(e) => setRascunhoEdicao((prev) => ({ ...prev, titulo: e.target.value }))}
+                  className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1 text-slate-200 text-xs"
+                />
+              </>
             ) : (
-              <span className="text-sm font-semibold text-white">{r.titulo}</span>
+              <button
+                type="button"
+                onClick={() => setCardsAbertos((prev) => ({ ...prev, [r.id]: !aberto }))}
+                className="flex items-center gap-2 flex-wrap text-left min-w-0"
+              >
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform ${aberto ? '' : '-rotate-90'}`} />
+                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 border border-orange-500/25">
+                  {rotuloPeriodo(r)}
+                </span>
+                <span className="text-sm font-semibold text-white">{r.titulo}</span>
+              </button>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -167,19 +182,23 @@ export default function ConhecimentoEmpresa() {
             )}
           </div>
         </div>
-        {emEdicao ? (
-          <textarea
-            value={rascunhoEdicao.conteudo}
-            onChange={(e) => setRascunhoEdicao((prev) => ({ ...prev, conteudo: e.target.value }))}
-            rows={4}
-            className="w-full bg-[#0a0f14] border border-white/[0.1] rounded-lg px-3 py-2 text-slate-200 text-xs resize-y"
-          />
-        ) : (
-          <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{r.conteudo}</p>
+        {aberto && (
+          <>
+            {emEdicao ? (
+              <textarea
+                value={rascunhoEdicao.conteudo}
+                onChange={(e) => setRascunhoEdicao((prev) => ({ ...prev, conteudo: e.target.value }))}
+                rows={4}
+                className="w-full bg-[#0a0f14] border border-white/[0.1] rounded-lg px-3 py-2 text-slate-200 text-xs resize-y"
+              />
+            ) : (
+              <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{r.conteudo}</p>
+            )}
+            <p className="text-[10px] text-slate-600">
+              Atualizado em {new Date(r.updatedAt).toLocaleString('pt-BR')}
+            </p>
+          </>
         )}
-        <p className="text-[10px] text-slate-600">
-          Atualizado em {new Date(r.updatedAt).toLocaleString('pt-BR')}
-        </p>
       </div>
     )
   }
