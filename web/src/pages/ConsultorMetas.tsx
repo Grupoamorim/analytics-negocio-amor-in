@@ -160,12 +160,11 @@ export default function ConsultorMetas() {
   const pontosPorMetrica = useMemo<Partial<Record<MetricaMeta, PontoDiario[]>>>(
     () => ({
       receita: pontosDiarios('receita'),
+      // "adesoes" = alunos fechados — vem das adesões reais do SGE, não mais da Data de
+      // Fechamento manual da turma nem do valor potencial fictício.
       adesoes: pontosDiarios('adesoes'),
       resultado_liquido: pontosDiarios('resultado'),
       contratos: pontosComerciais(leads, 'contratos'),
-      // Alunos e VGV vêm das adesões reais do SGE (mesma base de "adesoes" acima), não mais
-      // da Data de Fechamento manual da turma nem do valor potencial fictício.
-      alunos: pontosDiarios('adesoes'),
       vgv: pontosDiarios('vgv'),
       escolas_visitadas: visitas.map((v) => ({ data: v.data, valor: 1 })),
     }),
@@ -233,7 +232,7 @@ Regras de "conhecimento" — cada item: ano (número ou null se não for de um p
 - Antes de criar um item novo, compare com os REGISTROS JÁ EXISTENTES abaixo (título + conteúdo). Se o assunto for sobre o MESMO tema de um registro existente — mesmo que com um título diferente, ou que pareça contradizer/atualizar o que já está lá — preencha "possivelDuplicataDe" com o título EXATO daquele registro existente, pra a gestão decidir manualmente qual versão prevalece (nunca decida isso sozinho). Se for assunto realmente novo, deixe "possivelDuplicataDe": null.
 - Quando marcar possivelDuplicataDe, ainda assim escreva o conteúdo como a versão atualizada e completa do tema (não só o incremento) — quem ler depois não vai ver esta conversa, só esse texto.
 
-Regras de "marcos" — cada item: titulo (curto, acionável), descricao (o que precisa ser feito, objetivo e completo — quem ler depois não vai ver esta conversa), prazo (YYYY-MM-DD ou null se não foi combinada uma data), metrica (uma destas ou null: receita|adesoes|contratos|alunos|resultado_liquido|vgv|escolas_visitadas|caixa), pontos (10 pra algo simples, até 50 pra algo grande/estratégico), riscoRealista (OBRIGATÓRIO — 1-2 frases bem críticas e realistas sobre o que pode dar errado ou o esforço real que isso exige, terminando com uma pergunta direta tipo "tem certeza que quer se comprometer com isso?").
+Regras de "marcos" — cada item: titulo (curto, acionável), descricao (o que precisa ser feito, objetivo e completo — quem ler depois não vai ver esta conversa), prazo (YYYY-MM-DD ou null se não foi combinada uma data), metrica (uma destas ou null: receita|adesoes|contratos|resultado_liquido|vgv|escolas_visitadas|caixa — "adesoes" cobre alunos fechados), pontos (10 pra algo simples, até 50 pra algo grande/estratégico), riscoRealista (OBRIGATÓRIO — 1-2 frases bem críticas e realistas sobre o que pode dar errado ou o esforço real que isso exige, terminando com uma pergunta direta tipo "tem certeza que quer se comprometer com isso?").
 - NÃO proponha um marco que já existe na lista de MARCOS JÁ REGISTRADOS abaixo (mesmo assunto, título diferente) — se for sobre o mesmo, ignore.
 - Só inclua um marco se a conversa realmente indicou uma decisão/compromisso — se for só uma ideia solta sem decisão, não conte como marco.
 

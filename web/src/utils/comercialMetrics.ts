@@ -286,19 +286,20 @@ export function distribuicao(
   return { linhas, totalTurmas, totalAlunos }
 }
 
-/** Série dia-a-dia para pace comercial: contratos fechados (1 por turma), alunos fechados, ou VGV
- * (valor potencial cadastrado da turma — mesmo campo usado no forecast ponderado e no Relatórios,
- * não é o valor recebido em caixa). */
+/** Série dia-a-dia para pace comercial: contratos fechados (1 por turma) ou VGV (valor potencial
+ * cadastrado da turma — mesmo campo usado no forecast ponderado e no Relatórios, não é o valor
+ * recebido em caixa). "Alunos fechados" não usa mais essa função — foi mesclado com "Adesões"
+ * (mesmo dado real do SGE, via pontosDiarios('adesoes')). */
 export function pontosComerciais(
   leads: Lead[],
-  metrica: 'contratos' | 'alunos' | 'vgv',
+  metrica: 'contratos' | 'vgv',
 ): { data: string; valor: number }[] {
   const out: { data: string; valor: number }[] = []
   for (const l of leads) {
     if (norm(l.status) !== 'convertido') continue
     const d = dataFechamento(l)
     if (!d) continue
-    const valor = metrica === 'contratos' ? 1 : metrica === 'alunos' ? l.alunosFechados || 0 : l.potentialValue || 0
+    const valor = metrica === 'contratos' ? 1 : l.potentialValue || 0
     out.push({ data: d, valor })
   }
   return out

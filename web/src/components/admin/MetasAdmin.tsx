@@ -83,7 +83,7 @@ export default function MetasAdmin() {
           <Target className="w-4 h-4 text-orange-400" /> Metas do Negócio
         </h2>
         <p className="text-xs text-slate-400 mb-4">
-          Defina metas de receita, adesões, contratos ou alunos por mês, trimestre (T1–T4) ou ano. O
+          Defina metas de receita, alunos fechados (adesões) ou contratos por mês, trimestre (T1–T4) ou ano. O
           texto de contexto/estratégia é usado pela IA no painel para dizer o que fazer pra bater a
           meta. A meta mais específica que cobre a data manda (mês &gt; trimestre &gt; ano). Pode
           escrever "Q3" ou "T3" à vontade no contexto — a IA entende os dois como o mesmo trimestre.

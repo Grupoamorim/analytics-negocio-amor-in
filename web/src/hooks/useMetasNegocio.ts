@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { calcularPace, type PontoDiario } from '@/utils/pace'
 
+// "alunos" existiu como métrica separada de "adesoes", mas as duas sempre leram o mesmo dado
+// (adesões reais do SGE) — foram mescladas numa só em 2026-09-13 pra não duplicar meta/menu com
+// o mesmo número por baixo. "Contratos" continua separado de propósito: conta TURMAS ganhas no
+// funil, não alunos — uma turma tem vários alunos, então é um número genuinamente diferente.
 export type MetricaMeta =
   | 'receita'
   | 'adesoes'
   | 'contratos'
-  | 'alunos'
   | 'resultado_liquido'
   | 'vgv'
   | 'escolas_visitadas'
@@ -32,9 +35,8 @@ export interface MetaNegocio {
 
 export const METRICA_LABEL: Record<MetricaMeta, string> = {
   receita: 'Receita recebida (R$)',
-  adesoes: 'Adesões (quantidade)',
+  adesoes: 'Alunos fechados (adesões)',
   contratos: 'Contratos fechados (turmas)',
-  alunos: 'Alunos fechados',
   resultado_liquido: 'Resultado líquido (R$)',
   vgv: 'VGV de novas vendas (R$)',
   escolas_visitadas: 'Escolas visitadas (Family Day)',
@@ -45,7 +47,6 @@ export const METRICA_UNIDADE: Record<MetricaMeta, 'R$' | 'un'> = {
   receita: 'R$',
   adesoes: 'un',
   contratos: 'un',
-  alunos: 'un',
   resultado_liquido: 'R$',
   vgv: 'R$',
   escolas_visitadas: 'un',

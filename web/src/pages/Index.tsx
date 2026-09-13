@@ -104,15 +104,18 @@ export default function Index() {
 
   const { metas, metaVigente, registrarExplicacao: registrarExplicacaoMeta, aplicarDecisao: aplicarDecisaoMeta } = useMetasNegocio()
   const hoje = new Date().toISOString().slice(0, 10)
-  const metaContratos = metaVigente('contratos', hoje) || metaVigente('alunos', hoje)
-  const metaMetrica: 'contratos' | 'alunos' = metaContratos?.metrica === 'alunos' ? 'alunos' : 'contratos'
-  const pontosMeta = useMemo(
-    () => (metaMetrica === 'alunos' ? pontosAdesoesReais : pontosComerciais(leads, 'contratos')),
-    [metaMetrica, pontosAdesoesReais, leads],
-  )
+  // Contratos (turmas ganhas) e adesões (alunos fechados) são bandas separadas de propósito —
+  // números diferentes (uma turma tem vários alunos), cada uma com sua própria meta.
+  const metaContratos = metaVigente('contratos', hoje)
+  const metaAdesoes = metaVigente('adesoes', hoje)
+  const pontosContratos = useMemo(() => pontosComerciais(leads, 'contratos'), [leads])
   const metaContratosPendenteDecisao = useMemo(
-    () => metaVencidaSemDecisao(metas, metaMetrica, pontosMeta, hoje),
-    [metas, metaMetrica, pontosMeta, hoje],
+    () => metaVencidaSemDecisao(metas, 'contratos', pontosContratos, hoje),
+    [metas, pontosContratos, hoje],
+  )
+  const metaAdesoesPendenteDecisao = useMemo(
+    () => metaVencidaSemDecisao(metas, 'adesoes', pontosAdesoesReais, hoje),
+    [metas, pontosAdesoesReais, hoje],
   )
   const metaVgvPendenteDecisao = useMemo(
     () => metaVencidaSemDecisao(metas, 'vgv', pontosVgv, hoje),
@@ -218,12 +221,22 @@ export default function Index() {
 
       {/* ============ Meta & Pace ============ */}
       <PaceBand
-        titulo={metaMetrica === 'alunos' ? 'Meta de alunos fechados' : 'Meta de contratos'}
-        metrica={metaMetrica}
+        titulo="Meta de contratos"
+        metrica="contratos"
         meta={metaContratos}
-        pontos={pontosMeta}
-        periodoOverride={overrideDoFiltro(metaMetrica)}
+        pontos={pontosContratos}
+        periodoOverride={overrideDoFiltro('contratos')}
         metaPendenteDecisao={metaContratosPendenteDecisao}
+        onRegistrarExplicacao={registrarExplicacaoMeta}
+        onAplicarDecisao={aplicarDecisaoMeta}
+      />
+      <PaceBand
+        titulo="Meta de alunos fechados"
+        metrica="adesoes"
+        meta={metaAdesoes}
+        pontos={pontosAdesoesReais}
+        periodoOverride={overrideDoFiltro('adesoes')}
+        metaPendenteDecisao={metaAdesoesPendenteDecisao}
         onRegistrarExplicacao={registrarExplicacaoMeta}
         onAplicarDecisao={aplicarDecisaoMeta}
       />

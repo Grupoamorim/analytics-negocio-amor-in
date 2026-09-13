@@ -19,11 +19,11 @@ import { pontosComerciais } from '@/utils/comercialMetrics'
 const HOJE = new Date().toISOString().slice(0, 10)
 
 // Dashboard Geral (Administração) — junta num só lugar o PACE das metas que hoje
-// ficam espalhadas: receita/adesões (Painel Financeiro) e contratos/alunos
-// (Painel Comercial). Não recalcula nada novo, só compõe os mesmos hooks e o
-// mesmo PaceBand já usados nessas duas páginas. O filtro de período (igual ao
-// resto do site) troca qual período os 4 PaceBands mostram — dá pra "pré-
-// visualizar" qualquer mês/trimestre/semestre/ano, não só o vigente hoje.
+// ficam espalhadas: receita/adesões (Painel Financeiro) e contratos (Painel
+// Comercial). Não recalcula nada novo, só compõe os mesmos hooks e o mesmo
+// PaceBand já usados nessas duas páginas. O filtro de período (igual ao resto
+// do site) troca qual período os PaceBands mostram — dá pra "pré-visualizar"
+// qualquer mês/trimestre/semestre/ano, não só o vigente hoje.
 export default function AdministracaoGeral() {
   const { leads = [], deals = [] } = useCRM()
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
@@ -47,13 +47,13 @@ export default function AdministracaoGeral() {
   // de cada PaceBand (via periodoOverride).
   const { pontosDiarios } = useFinanceiroDashboard(HOJE, HOJE, selectedEmpresas)
   const pontosReceita = useMemo(() => pontosDiarios('receita'), [pontosDiarios])
+  // "Adesões" = "Alunos fechados" (mesmo dado, métrica única desde 2026-09-13 — antes existiam
+  // como duas metas separadas mostrando o mesmo número por baixo).
   const pontosAdesoes = useMemo(() => pontosDiarios('adesoes'), [pontosDiarios])
   const pontosResultado = useMemo(() => pontosDiarios('resultado'), [pontosDiarios])
   const pontosContratos = useMemo(() => pontosComerciais(leadsFiltrados, 'contratos'), [leadsFiltrados])
-  // "Alunos fechados" e "VGV" agora vêm das adesões reais do SGE (mesma fonte de "Adesões"
-  // acima), não mais da Data de Fechamento manual da turma (quase nunca preenchida) nem do
-  // valor potencial fictício que existia no código — por isso ficavam zerados/errados.
-  const pontosAlunos = useMemo(() => pontosDiarios('adesoes'), [pontosDiarios])
+  // "VGV" vem das adesões reais do SGE, não mais do valor potencial fictício que existia no
+  // código antes — por isso ficava zerado/errado.
   const pontosVgv = useMemo(() => pontosDiarios('vgv'), [pontosDiarios])
 
   const escolasVisitadas = useEscolasVisitadas()
@@ -83,11 +83,11 @@ export default function AdministracaoGeral() {
             <Gauge className="w-6 h-6 text-orange-400" /> Dashboard Geral
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            PACE da empresa inteira — receita, adesões, contratos e alunos fechados, tudo contra a meta
-            do período escolhido no filtro abaixo.
+            PACE da empresa inteira — receita, alunos fechados (adesões) e contratos, tudo contra a
+            meta do período escolhido no filtro abaixo.
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
-            Receita, adesões, alunos fechados e VGV são automáticos: puxam direto do SGE
+            Receita, alunos fechados (adesões) e VGV são automáticos: puxam direto do SGE
             (pagamentos e adesões reais), sincronizado sozinho a cada 3-12h. Só "Contratos
             fechados" ainda depende da Data de Fechamento cadastrada em Turmas.
           </p>
@@ -105,7 +105,7 @@ export default function AdministracaoGeral() {
         periodoOverride={overrideDoFiltro('receita')}
       />
       <PaceBand
-        titulo="Meta de adesões"
+        titulo="Meta de alunos fechados (adesões)"
         metrica="adesoes"
         meta={null}
         pontos={pontosAdesoes}
@@ -117,13 +117,6 @@ export default function AdministracaoGeral() {
         meta={null}
         pontos={pontosContratos}
         periodoOverride={overrideDoFiltro('contratos')}
-      />
-      <PaceBand
-        titulo="Meta de alunos fechados"
-        metrica="alunos"
-        meta={null}
-        pontos={pontosAlunos}
-        periodoOverride={overrideDoFiltro('alunos')}
       />
 
       <div className="space-y-2">
@@ -179,7 +172,6 @@ export default function AdministracaoGeral() {
           { metrica: 'receita', pontos: pontosReceita },
           { metrica: 'adesoes', pontos: pontosAdesoes },
           { metrica: 'contratos', pontos: pontosContratos },
-          { metrica: 'alunos', pontos: pontosAlunos },
           { metrica: 'resultado_liquido', pontos: pontosResultado },
           { metrica: 'vgv', pontos: pontosVgv },
           { metrica: 'escolas_visitadas', pontos: pontosEscolas },
