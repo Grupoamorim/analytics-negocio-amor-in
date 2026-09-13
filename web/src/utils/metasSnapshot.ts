@@ -66,6 +66,22 @@ export function buildMetasSnapshot({
     }
   }
 
+  // Metas cujo período já encerrou sem bater e que ainda não tiveram uma decisão registrada —
+  // é o que o PaceBand mostra como "precisa de decisão". Ajuda a IA a saber disso sem perguntar.
+  const linhasMetasPendentes: string[] = []
+  for (const m of metas) {
+    if (m.decisao) continue
+    const { ini, fim } = intervaloDaMeta(m)
+    if (fim >= hoje) continue
+    const pontos = pontosPorMetrica[m.metrica] || []
+    const pace = calcularPace(m.valorMeta, ini, fim, pontos)
+    if (pace.status === 'batida') continue
+    const unidade = METRICA_UNIDADE[m.metrica]
+    linhasMetasPendentes.push(
+      `- ${METRICA_LABEL[m.metrica]} [${rotuloPeriodoMeta(m)}]: meta ${fmt(pace.meta, unidade)}, realizado ${fmt(pace.realizado, unidade)} — período encerrado, meta NÃO batida, decisão pendente.${m.explicacao ? ` Explicação já registrada: "${m.explicacao}"` : ' Ainda sem explicação registrada.'}`,
+    )
+  }
+
   const linhasRanking = ranking
     .filter((r) => r.chave !== 'Sem responsável')
     .sort((a, b) => b.ganhas - a.ganhas)
@@ -92,6 +108,9 @@ export function buildMetasSnapshot({
 
   return `## Metas e PACE (hoje: ${hoje})
 ${linhasMetas.join('\n') || 'Nenhuma meta cadastrada ainda.'}
+
+## Metas vencidas sem decisão (período encerrado, meta não batida, aguardando realocar/descartar/repensar)
+${linhasMetasPendentes.join('\n') || 'Nenhuma.'}
 
 ## Ranking de desempenho comercial (top 5 por turmas ganhas)
 ${linhasRanking.join('\n') || 'Sem dados de ranking.'}

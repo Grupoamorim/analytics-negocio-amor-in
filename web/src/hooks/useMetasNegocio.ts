@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import { calcularPace, type PontoDiario } from '@/utils/pace'
 
 export type MetricaMeta =
   | 'receita'
@@ -12,6 +13,8 @@ export type MetricaMeta =
   | 'caixa'
 export type EscopoMeta = 'mensal' | 'trimestral' | 'anual'
 
+export type MetaDecisao = 'realocado' | 'descartado' | 'repensado'
+
 export interface MetaNegocio {
   id: string
   metrica: MetricaMeta
@@ -20,6 +23,10 @@ export interface MetaNegocio {
   periodo: number // mensal 1-12 | trimestral 1-4 | anual 0
   valorMeta: number
   contexto: string
+  /** Preenchido quando o período encerra sem a meta ser batida — explica o que aconteceu. */
+  explicacao: string | null
+  /** Uma vez definida, a meta para de aparecer como "precisa de decisão" no PaceBand. */
+  decisao: MetaDecisao | null
   updatedAt: string
 }
 
@@ -54,6 +61,8 @@ function mapRow(r: any): MetaNegocio {
     periodo: r.periodo ?? 0,
     valorMeta: Number(r.valor_meta || 0),
     contexto: r.contexto || '',
+    explicacao: r.explicacao ?? null,
+    decisao: r.decisao ?? null,
     updatedAt: r.updated_at,
   }
 }
@@ -156,6 +165,28 @@ export function metaVigenteEm(metas: MetaNegocio[], metrica: MetricaMeta, ref: s
   return candidatas[0] || null
 }
 
+/** A meta "vigente" nunca pode estar com o período encerrado (por definição ela cobre hoje) — por
+ * isso o aviso de "período vencido sem bater" precisa de uma busca separada: a meta mais recente
+ * dessa métrica cujo período já acabou, ainda sem decisão registrada, e que não foi batida. */
+export function metaVencidaSemDecisao(
+  metas: MetaNegocio[],
+  metrica: MetricaMeta,
+  pontos: PontoDiario[],
+  hoje: string,
+): MetaNegocio | null {
+  const candidatas = metas
+    .filter((m) => m.metrica === metrica && !m.decisao)
+    .map((m) => ({ m, iv: intervaloDaMeta(m) }))
+    .filter(({ iv }) => iv.fim < hoje)
+    .sort((a, b) => (a.iv.fim < b.iv.fim ? 1 : -1))
+
+  for (const { m, iv } of candidatas) {
+    const pace = calcularPace(m.valorMeta, iv.ini, iv.fim, pontos)
+    if (pace.status !== 'batida') return m
+  }
+  return null
+}
+
 export function useMetasNegocio() {
   const [metas, setMetas] = useState<MetaNegocio[]>([])
   const [loading, setLoading] = useState(true)
@@ -177,7 +208,7 @@ export function useMetasNegocio() {
   }, [recarregar])
 
   const salvar = useCallback(
-    async (m: Omit<MetaNegocio, 'id' | 'updatedAt'> & { id?: string }) => {
+    async (m: Omit<MetaNegocio, 'id' | 'updatedAt' | 'explicacao' | 'decisao'> & { id?: string }) => {
       const payload = {
         metrica: m.metrica,
         escopo: m.escopo,
@@ -208,6 +239,34 @@ export function useMetasNegocio() {
     [recarregar],
   )
 
+  const registrarExplicacao = useCallback(
+    async (id: string, texto: string) => {
+      const { error } = await (supabase as any)
+        .from('metas_negocio')
+        .update({ explicacao: texto, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+      await recarregar()
+    },
+    [recarregar],
+  )
+
+  /** Registra a decisão sobre uma meta cujo período encerrou sem ser batida — a partir daqui ela
+   * para de pedir decisão no PaceBand. "Realocar" e "repensar como marco" não mexem no banco além
+   * disso: o próximo passo (cadastrar a meta do novo período em Administração, ou criar um marco)
+   * é uma ação manual separada, pra não duplicar a lógica de período que já existe em Admin. */
+  const aplicarDecisao = useCallback(
+    async (id: string, decisao: MetaDecisao) => {
+      const { error } = await (supabase as any)
+        .from('metas_negocio')
+        .update({ decisao, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+      await recarregar()
+    },
+    [recarregar],
+  )
+
   /**
    * Meta vigente para uma métrica numa data de referência — pega a mais
    * específica que cobre a data: mensal > trimestral > anual.
@@ -217,5 +276,5 @@ export function useMetasNegocio() {
     [metas],
   )
 
-  return { metas, loading, recarregar, salvar, remover, metaVigente }
+  return { metas, loading, recarregar, salvar, remover, metaVigente, registrarExplicacao, aplicarDecisao }
 }

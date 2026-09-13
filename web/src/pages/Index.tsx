@@ -28,7 +28,7 @@ import OportunidadesPanel from '@/components/dashboard/OportunidadesPanel'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import MetricasComerciaisPanel from '@/components/MetricasComerciaisPanel'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
-import { useMetasNegocio, metaSomaIntervalo, type MetricaMeta } from '@/hooks/useMetasNegocio'
+import { useMetasNegocio, metaSomaIntervalo, metaVencidaSemDecisao, type MetricaMeta } from '@/hooks/useMetasNegocio'
 import { getTurmaDisplayName, FUNNEL_STAGE_BY_ID, daysInCurrentStage } from '@/types/crm'
 import {
   funilAberto,
@@ -102,13 +102,21 @@ export default function Index() {
   const pontosAdesoesReais = useMemo(() => pontosDiarios('adesoes'), [pontosDiarios])
   const pontosVgv = useMemo(() => pontosDiarios('vgv'), [pontosDiarios])
 
-  const { metas, metaVigente } = useMetasNegocio()
+  const { metas, metaVigente, registrarExplicacao: registrarExplicacaoMeta, aplicarDecisao: aplicarDecisaoMeta } = useMetasNegocio()
   const hoje = new Date().toISOString().slice(0, 10)
   const metaContratos = metaVigente('contratos', hoje) || metaVigente('alunos', hoje)
   const metaMetrica: 'contratos' | 'alunos' = metaContratos?.metrica === 'alunos' ? 'alunos' : 'contratos'
   const pontosMeta = useMemo(
     () => (metaMetrica === 'alunos' ? pontosAdesoesReais : pontosComerciais(leads, 'contratos')),
     [metaMetrica, pontosAdesoesReais, leads],
+  )
+  const metaContratosPendenteDecisao = useMemo(
+    () => metaVencidaSemDecisao(metas, metaMetrica, pontosMeta, hoje),
+    [metas, metaMetrica, pontosMeta, hoje],
+  )
+  const metaVgvPendenteDecisao = useMemo(
+    () => metaVencidaSemDecisao(metas, 'vgv', pontosVgv, hoje),
+    [metas, pontosVgv, hoje],
   )
 
   // Pace/metas "pré-visualizando" o período escolhido no filtro (Mês/Trimestre/
@@ -215,6 +223,9 @@ export default function Index() {
         meta={metaContratos}
         pontos={pontosMeta}
         periodoOverride={overrideDoFiltro(metaMetrica)}
+        metaPendenteDecisao={metaContratosPendenteDecisao}
+        onRegistrarExplicacao={registrarExplicacaoMeta}
+        onAplicarDecisao={aplicarDecisaoMeta}
       />
       <PaceBand
         titulo="Meta de VGV de novas vendas"
@@ -222,6 +233,9 @@ export default function Index() {
         meta={null}
         pontos={pontosVgv}
         periodoOverride={overrideDoFiltro('vgv')}
+        metaPendenteDecisao={metaVgvPendenteDecisao}
+        onRegistrarExplicacao={registrarExplicacaoMeta}
+        onAplicarDecisao={aplicarDecisaoMeta}
       />
 
       {/* ============ VGV (análise) ============ */}

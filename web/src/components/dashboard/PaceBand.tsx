@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   ComposedChart,
   Area,
@@ -12,7 +12,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts'
-import { Target, Sparkles, Loader2, TrendingUp, Flag, History } from 'lucide-react'
+import { Target, Sparkles, Loader2, TrendingUp, Flag, History, AlertTriangle, MessageCircle } from 'lucide-react'
 import SectionTitle from './SectionTitle'
 import { calcularPace, addAnos } from '@/utils/pace'
 import type { PontoDiario } from '@/utils/pace'
@@ -23,7 +23,9 @@ import {
   METRICA_UNIDADE,
   type MetaNegocio,
   type MetricaMeta,
+  type MetaDecisao,
 } from '@/hooks/useMetasNegocio'
+import { useAcesso } from '@/context/AcessoContext'
 import { callGemini, getGeminiApiKey } from '@/utils/geminiApi'
 
 function fmt(v: number, unidade: 'R$' | 'un'): string {
@@ -44,6 +46,9 @@ export default function PaceBand({
   meta,
   pontos,
   periodoOverride,
+  metaPendenteDecisao,
+  onRegistrarExplicacao,
+  onAplicarDecisao,
 }: {
   titulo: string
   metrica: MetricaMeta
@@ -53,11 +58,23 @@ export default function PaceBand({
    * (usado pra "pré-visualizar" um trimestre/mês/ano escolhido no filtro). `meta` continua
    * opcional aqui — só serve de fonte do `contexto` pro prompt de IA, quando existir. */
   periodoOverride?: { ini: string; fim: string; rotulo: string; valorMeta: number; temMeta: boolean }
+  /** A meta "vigente" (`meta`) nunca pode estar com o período encerrado — por isso essa é uma
+   * busca separada (ver `metaVencidaSemDecisao`): a meta mais recente dessa métrica cujo período
+   * já acabou, não foi batida, e ainda não teve uma decisão registrada. Só ela habilita a caixa
+   * de "período encerrou sem bater" abaixo do gráfico — pode ser um período diferente do que está
+   * sendo exibido no gráfico agora. */
+  metaPendenteDecisao?: MetaNegocio | null
+  onRegistrarExplicacao?: (id: string, texto: string) => Promise<void>
+  onAplicarDecisao?: (id: string, decisao: MetaDecisao) => Promise<void>
 }) {
   const unidade = METRICA_UNIDADE[metrica]
   const [analise, setAnalise] = useState<string | null>(null)
   const [carregandoIA, setCarregandoIA] = useState(false)
   const [erroIA, setErroIA] = useState<string | null>(null)
+  const { isAdmin } = useAcesso()
+  const navigate = useNavigate()
+  const [rascunhoExplicacao, setRascunhoExplicacao] = useState('')
+  const [decidindo, setDecidindo] = useState(false)
 
   const temMeta = periodoOverride ? periodoOverride.temMeta : !!meta
   const rotulo = periodoOverride ? periodoOverride.rotulo : meta ? rotuloPeriodoMeta(meta) : ''
@@ -111,6 +128,38 @@ export default function PaceBand({
     realizadoAnoAnteriorMesmoPonto !== null && realizadoAnoAnteriorMesmoPonto > 0 && pace
       ? ((pace.realizado - realizadoAnoAnteriorMesmoPonto) / realizadoAnoAnteriorMesmoPonto) * 100
       : null
+
+  // Pace do período da meta VENCIDA sem decisão (pode ser um período diferente do que está sendo
+  // exibido no gráfico agora — ver comentário do prop `metaPendenteDecisao`).
+  const paceVencida = useMemo(() => {
+    if (!metaPendenteDecisao) return null
+    const { ini, fim } = intervaloDaMeta(metaPendenteDecisao)
+    return calcularPace(metaPendenteDecisao.valorMeta, ini, fim, pontos)
+  }, [metaPendenteDecisao, pontos])
+  const precisaDecisao = isAdmin && !!metaPendenteDecisao && !!paceVencida
+
+  async function irParaConsultor() {
+    if (!metaPendenteDecisao || !paceVencida) return
+    navigate('/consultor-metas', {
+      state: {
+        tipo: 'meta',
+        id: metaPendenteDecisao.id,
+        titulo: `${METRICA_LABEL[metrica]} — ${rotuloPeriodoMeta(metaPendenteDecisao)}`,
+        resumo: `meta ${fmt(paceVencida.meta, unidade)}, realizado ${fmt(paceVencida.realizado, unidade)} (${(paceVencida.indicePace * 100).toFixed(0)}% do ritmo)`,
+        explicacao: rascunhoExplicacao || metaPendenteDecisao.explicacao || '',
+      },
+    })
+  }
+
+  async function handleDecisaoMeta(decisao: MetaDecisao) {
+    if (!metaPendenteDecisao || !onAplicarDecisao) return
+    setDecidindo(true)
+    try {
+      await onAplicarDecisao(metaPendenteDecisao.id, decisao)
+    } finally {
+      setDecidindo(false)
+    }
+  }
 
   async function analisarComIA() {
     if (!pace) return
@@ -287,6 +336,67 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
           </div>
         )}
       </div>
+
+      {precisaDecisao && metaPendenteDecisao && (
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
+          <p className="text-xs text-amber-200 font-semibold flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" /> A meta de {rotuloPeriodoMeta(metaPendenteDecisao)} encerrou sem bater. O que aconteceu?
+          </p>
+          <textarea
+            value={rascunhoExplicacao || metaPendenteDecisao.explicacao || ''}
+            onChange={(e) => setRascunhoExplicacao(e.target.value)}
+            onBlur={(e) =>
+              onRegistrarExplicacao && e.target.value.trim() && onRegistrarExplicacao(metaPendenteDecisao.id, e.target.value.trim())
+            }
+            rows={2}
+            placeholder="Explique o que aconteceu..."
+            className="w-full bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-xs resize-y"
+          />
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={irParaConsultor}
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded-lg px-2.5 py-1.5 hover:bg-orange-500/20"
+            >
+              <MessageCircle className="w-3.5 h-3.5" /> Discutir com o Consultor de Metas
+            </button>
+            <span className="text-[10px] text-slate-500">ou decida direto:</span>
+            <button
+              type="button"
+              disabled={decidindo}
+              onClick={() => handleDecisaoMeta('realocado')}
+              className="text-[11px] font-semibold text-emerald-300 hover:underline disabled:opacity-50"
+              title="Marca como realocado — depois cadastre a meta do novo período em Administração → Metas"
+            >
+              Realocar
+            </button>
+            <button
+              type="button"
+              disabled={decidindo}
+              onClick={() => handleDecisaoMeta('descartado')}
+              className="text-[11px] font-semibold text-slate-400 hover:underline disabled:opacity-50"
+            >
+              Descartar
+            </button>
+            <button
+              type="button"
+              disabled={decidindo}
+              onClick={() => handleDecisaoMeta('repensado')}
+              className="text-[11px] font-semibold text-rose-300 hover:underline disabled:opacity-50"
+              title="Marca como repensado — crie o novo objetivo em Conquistas & Marcos"
+            >
+              Pensar em outro objetivo
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500">
+            Realocar: cadastre a meta do novo período em{' '}
+            <Link to="/admin" className="text-orange-400 hover:underline">
+              Administração → Metas
+            </Link>
+            . Pensar em outro objetivo: crie o novo marco no Painel de Conquistas, logo abaixo.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

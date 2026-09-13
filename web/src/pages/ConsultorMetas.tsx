@@ -98,21 +98,20 @@ function extrairPropostas(texto: string): { conhecimento: PropostaConhecimento[]
   }
 }
 
-interface MarcoEmDiscussao {
-  marcoId: string
-  titulo: string
-  prazo: string | null
-  explicacao: string
-}
+/** Marco (Painel de Conquistas) ou meta numérica (PaceBand) chegando com prazo vencido pra
+ * discussão guiada — mesma UI/mecânica pros dois, só a fonte e a ação de decisão mudam. */
+type ItemEmDiscussao =
+  | { tipo: 'marco'; id: string; titulo: string; prazo: string | null; explicacao: string }
+  | { tipo: 'meta'; id: string; titulo: string; resumo: string; explicacao: string }
 
 export default function ConsultorMetas() {
   const { toast } = useToast()
   const { leads = [], deals = [] } = useCRM()
   const { pontosDiarios } = useFinanceiroDashboard(HOJE, HOJE, [])
-  const { metas } = useMetasNegocio()
+  const { metas, aplicarDecisao: aplicarDecisaoMeta } = useMetasNegocio()
   const { visitas } = useEscolasVisitadas()
   const { registros: conhecimento, salvar: salvarConhecimento } = useConhecimentoEmpresa()
-  const { marcos, salvar: salvarMarco, aplicarDecisao } = useMetasMarcos()
+  const { marcos, salvar: salvarMarco, aplicarDecisao: aplicarDecisaoMarco } = useMetasMarcos()
   const { mensagens, loading: carregandoHistorico, enviar } = useMetasChat()
   const location = useLocation()
   const navigate = useNavigate()
@@ -125,9 +124,9 @@ export default function ConsultorMetas() {
   const [propostasMarcos, setPropostasMarcos] = useState<PropostaMarco[] | null>(null)
   const [salvandoIdx, setSalvandoIdx] = useState<number | null>(null)
   const [salvandoMarcoIdx, setSalvandoMarcoIdx] = useState<number | null>(null)
-  const [marcoEmDiscussao, setMarcoEmDiscussao] = useState<MarcoEmDiscussao | null>(null)
+  const [itemEmDiscussao, setItemEmDiscussao] = useState<ItemEmDiscussao | null>(null)
   const [novoPrazoDecisao, setNovoPrazoDecisao] = useState('')
-  const [decidindoMarco, setDecidindoMarco] = useState(false)
+  const [decidindoItem, setDecidindoItem] = useState(false)
   const fimRef = useRef<HTMLDivElement>(null)
   const tempoPensando = useTempoDecorrido(enviando)
   const iniciouAutoEnvioRef = useRef(false)
@@ -136,18 +135,24 @@ export default function ConsultorMetas() {
     fimRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensagens.length])
 
-  // Chegou aqui vindo do Painel de Conquistas com um marco atrasado (state da navegação) — manda
-  // automaticamente a primeira mensagem resumindo o caso, sem gastar chamada extra de Gemini (é a
-  // mesma conversa normal), e limpa o state da rota pra não reenviar num reload.
+  // Chegou aqui vindo do Painel de Conquistas (marco atrasado) ou do PaceBand (meta numérica
+  // vencida) com o state da navegação — manda automaticamente a primeira mensagem resumindo o
+  // caso, sem gastar chamada extra de Gemini (é a mesma conversa normal), e limpa o state da rota
+  // pra não reenviar num reload.
   useEffect(() => {
-    const state = location.state as MarcoEmDiscussao | null
-    if (!state?.marcoId || iniciouAutoEnvioRef.current || carregandoHistorico) return
+    const state = location.state as ItemEmDiscussao | null
+    if (!state?.tipo || iniciouAutoEnvioRef.current || carregandoHistorico) return
     iniciouAutoEnvioRef.current = true
-    setMarcoEmDiscussao(state)
+    setItemEmDiscussao(state)
     navigate(location.pathname, { replace: true, state: null })
-    const texto = `Marco atrasado: "${state.titulo}"${state.prazo ? ` (prazo era ${state.prazo})` : ''}. O que aconteceu: ${
-      state.explicacao || '(não descrito)'
-    }. Me ajude a decidir: realoco pra outro período, descarto por não ser mais interessante pro negócio, ou penso em outro objetivo porque esse não tem mais como bater?`
+    const texto =
+      state.tipo === 'marco'
+        ? `Marco atrasado: "${state.titulo}"${state.prazo ? ` (prazo era ${state.prazo})` : ''}. O que aconteceu: ${
+            state.explicacao || '(não descrito)'
+          }. Me ajude a decidir: realoco pra outro período, descarto por não ser mais interessante pro negócio, ou penso em outro objetivo porque esse não tem mais como bater?`
+        : `Meta vencida sem bater: "${state.titulo}" (${state.resumo}). O que aconteceu: ${
+            state.explicacao || '(não descrito)'
+          }. Me ajude a decidir: realoco o valor pra outro período, descarto por não ser mais interessante pro negócio, ou penso num objetivo diferente porque essa meta não tem mais como bater?`
     handleEnviar(texto)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, carregandoHistorico])
@@ -312,25 +317,41 @@ ${transcricao}`
     setPropostasMarcos((prev) => (prev ? prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)) : prev))
   }
 
-  async function handleAplicarDecisaoMarco(decisao: MarcoDecisao) {
-    if (!marcoEmDiscussao) return
-    if (decisao === 'realocado' && !novoPrazoDecisao) {
+  /** "outro" cobre o terceiro botão em ambos os casos — vira 'substituido' pra marco ou
+   * 'repensado' pra meta, já que o enum de decisão de cada tabela usa um nome diferente pra essa
+   * mesma ideia ("não tem mais como bater, penso em outra coisa"). */
+  async function handleAplicarDecisaoItem(acao: 'realocado' | 'descartado' | 'outro') {
+    if (!itemEmDiscussao) return
+    if (itemEmDiscussao.tipo === 'marco' && acao === 'realocado' && !novoPrazoDecisao) {
       toast({ title: 'Escolha o novo prazo antes de realocar', variant: 'destructive' })
       return
     }
-    setDecidindoMarco(true)
+    setDecidindoItem(true)
     try {
-      await aplicarDecisao(marcoEmDiscussao.marcoId, decisao, novoPrazoDecisao || undefined)
-      toast({
-        title:
-          decisao === 'realocado' ? 'Marco realocado' : decisao === 'descartado' ? 'Marco descartado' : 'Marco marcado como substituído',
-      })
-      setMarcoEmDiscussao(null)
+      if (itemEmDiscussao.tipo === 'marco') {
+        const decisao: MarcoDecisao = acao === 'outro' ? 'substituido' : acao
+        await aplicarDecisaoMarco(itemEmDiscussao.id, decisao, novoPrazoDecisao || undefined)
+        toast({
+          title: decisao === 'realocado' ? 'Marco realocado' : decisao === 'descartado' ? 'Marco descartado' : 'Marco marcado como substituído',
+        })
+      } else {
+        const decisao = acao === 'outro' ? 'repensado' : acao
+        await aplicarDecisaoMeta(itemEmDiscussao.id, decisao)
+        toast({
+          title:
+            decisao === 'realocado'
+              ? 'Meta marcada como realocada — cadastre o novo período em Administração → Metas'
+              : decisao === 'descartado'
+                ? 'Meta descartada'
+                : 'Meta marcada pra repensar — crie o novo objetivo em Conquistas & Marcos',
+        })
+      }
+      setItemEmDiscussao(null)
       setNovoPrazoDecisao('')
     } catch (err: any) {
       toast({ title: 'Erro ao aplicar decisão', description: err.message, variant: 'destructive' })
     } finally {
-      setDecidindoMarco(false)
+      setDecidindoItem(false)
     }
   }
 
@@ -444,46 +465,49 @@ ${transcricao}`
         </div>
       </div>
 
-      {marcoEmDiscussao && (
+      {itemEmDiscussao && (
         <div className="bg-[#111820] border border-amber-500/25 rounded-xl p-4 flex flex-wrap items-center gap-3">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
           <span className="text-xs text-slate-300 flex-1 min-w-[200px]">
-            Aplicar decisão ao marco atrasado <strong className="text-white">"{marcoEmDiscussao.titulo}"</strong> — só clique depois de
-            fechar isso com a IA no chat acima.
+            Aplicar decisão {itemEmDiscussao.tipo === 'marco' ? 'ao marco atrasado' : 'à meta vencida'}{' '}
+            <strong className="text-white">"{itemEmDiscussao.titulo}"</strong> — só clique depois de fechar isso com a IA no chat acima.
           </span>
-          <input
-            type="date"
-            value={novoPrazoDecisao}
-            onChange={(e) => setNovoPrazoDecisao(e.target.value)}
-            className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-xs"
-          />
+          {itemEmDiscussao.tipo === 'marco' && (
+            <input
+              type="date"
+              value={novoPrazoDecisao}
+              onChange={(e) => setNovoPrazoDecisao(e.target.value)}
+              className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-xs"
+            />
+          )}
           <button
             type="button"
-            disabled={decidindoMarco}
-            onClick={() => handleAplicarDecisaoMarco('realocado')}
+            disabled={decidindoItem}
+            onClick={() => handleAplicarDecisaoItem('realocado')}
             className="text-xs font-semibold text-emerald-300 hover:underline disabled:opacity-50"
+            title={itemEmDiscussao.tipo === 'meta' ? 'Marca como realocada — cadastre o novo período em Administração → Metas' : undefined}
           >
             Realocar
           </button>
           <button
             type="button"
-            disabled={decidindoMarco}
-            onClick={() => handleAplicarDecisaoMarco('descartado')}
+            disabled={decidindoItem}
+            onClick={() => handleAplicarDecisaoItem('descartado')}
             className="text-xs font-semibold text-slate-400 hover:underline disabled:opacity-50"
           >
             Descartar
           </button>
           <button
             type="button"
-            disabled={decidindoMarco}
-            onClick={() => handleAplicarDecisaoMarco('substituido')}
+            disabled={decidindoItem}
+            onClick={() => handleAplicarDecisaoItem('outro')}
             className="text-xs font-semibold text-rose-300 hover:underline disabled:opacity-50"
           >
             Pensar em outro objetivo
           </button>
           <button
             type="button"
-            onClick={() => setMarcoEmDiscussao(null)}
+            onClick={() => setItemEmDiscussao(null)}
             className="text-xs text-slate-500 hover:text-white"
           >
             <X className="w-3.5 h-3.5" />

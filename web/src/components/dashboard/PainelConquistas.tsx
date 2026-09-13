@@ -115,7 +115,7 @@ export default function PainelConquistas() {
   function irParaConsultor(m: MetaMarco) {
     const explicacao = rascunhoExplicacao[m.id] ?? m.explicacao ?? ''
     navigate('/consultor-metas', {
-      state: { marcoId: m.id, titulo: m.titulo, prazo: m.prazo, explicacao },
+      state: { tipo: 'marco', id: m.id, titulo: m.titulo, prazo: m.prazo, explicacao },
     })
   }
 
