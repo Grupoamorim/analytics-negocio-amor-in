@@ -11,6 +11,7 @@ import { calcularPace } from '@/utils/pace'
 import PaceBand from '@/components/dashboard/PaceBand'
 import RetrospectivaPace from '@/components/dashboard/RetrospectivaPace'
 import RankingGamificado from '@/components/dashboard/RankingGamificado'
+import OportunidadesPanel from '@/components/dashboard/OportunidadesPanel'
 import EscolasVisitadasLog from '@/components/dashboard/EscolasVisitadasLog'
 import CaixaFimPeriodoCard from '@/components/dashboard/CaixaFimPeriodoCard'
 import { pontosComerciais } from '@/utils/comercialMetrics'
@@ -169,6 +170,8 @@ export default function AdministracaoGeral() {
       <CaixaFimPeriodoCard meta={metaVigente('caixa', HOJE)} />
 
       <RankingGamificado leads={leadsFiltrados} deals={deals} />
+
+      <OportunidadesPanel leads={leadsFiltrados} />
 
       <RetrospectivaPace
         metas={metas}

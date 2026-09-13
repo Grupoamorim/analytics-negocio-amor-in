@@ -23,6 +23,7 @@ import InfoHint from '@/components/dashboard/InfoHint'
 import PaceBand from '@/components/dashboard/PaceBand'
 import RankingGamificado from '@/components/dashboard/RankingGamificado'
 import VgvComercialPanel from '@/components/dashboard/VgvComercialPanel'
+import OportunidadesPanel from '@/components/dashboard/OportunidadesPanel'
 import AIInsightsButton from '@/components/AIInsightsButton'
 import MetricasComerciaisPanel from '@/components/MetricasComerciaisPanel'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
@@ -409,6 +410,9 @@ export default function Index() {
         <RankingMini titulo="Por Curso" icon={BookOpen} linhas={rankCurso}
           ajuda="Quais cursos fecham mais contratos e trazem mais alunos. Cursos com muitas turmas ganhas e turmas grandes são os de maior retorno por esforço." />
       </div>
+
+      {/* ============ Oportunidades (cross-sell) ============ */}
+      <OportunidadesPanel leads={leads} />
 
       {/* ============ Distribuição por Curso / Marca ============ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

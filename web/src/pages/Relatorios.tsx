@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -10,12 +10,17 @@ import {
 import { useCRM } from '@/context/CRMContext'
 import { Lead, Deal } from '@/types/crm'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
+import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
 import type { PontoDiario } from '@/utils/pace'
 import { oportunidadesPorFaculdade, type OportunidadeFaculdade } from '@/utils/oportunidadesCurso'
 
 const ORANGE = '#f97316'
 const HOJE = new Date().toISOString().slice(0, 10)
+
+// Logo da marca (Admin → Marca) — em contexto pra não precisar passar como prop por todo
+// slide; cada slide decide sozinho (via useContext) como exibir de forma minimalista.
+const LogoContext = createContext<string | null>(null)
 
 /** Soma os pontos diários (ex.: VGV real de adesões) dentro de [ini,fim]. */
 function somaPontos(pontos: PontoDiario[], ini: string, fim: string): number {
@@ -76,6 +81,8 @@ const MESES_NOME = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set
 
 export default function Relatorios() {
   const { leads: allLeads = [], deals: allDeals = [] } = useCRM()
+  const { config } = useConfiguracoes()
+  const logoUrl = config.logoUrl || null
 
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
   const empresaOptions = useMemo(() => {
@@ -315,13 +322,27 @@ export default function Relatorios() {
     return keys
   }, [cidadesComFechamento, oportunidades])
 
-  const [slideIndex, setSlideIndex] = useState(0)
+  // Guarda o slide atual pela CHAVE (não pelo índice numérico) — atualizações em segundo
+  // plano (ex.: token do Supabase renovando, o que reexecuta o fetch de turmas e troca a
+  // referência do array) recalculam `slideKeys` com o mesmo conteúdo mas uma nova referência;
+  // se a navegação dependesse só do índice, um efeito de guarda achava "índice fora do range"
+  // por engano e jogava a apresentação de volta pro slide 1 no meio da leitura. Guardando a
+  // chave, o slide certo é encontrado de novo mesmo com o array recriado.
+  const [currentSlideKey, setCurrentSlideKey] = useState<string>(slideKeys[0])
   useEffect(() => {
-    setSlideIndex(0)
+    setCurrentSlideKey(slideKeys[0])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tri, ano, selectedEmpresas.length])
   useEffect(() => {
-    if (slideIndex >= slideKeys.length) setSlideIndex(0)
-  }, [slideKeys, slideIndex])
+    if (!slideKeys.includes(currentSlideKey)) setCurrentSlideKey(slideKeys[0])
+  }, [slideKeys, currentSlideKey])
+
+  const slideIndex = Math.max(0, slideKeys.indexOf(currentSlideKey))
+  const setSlideIndex = (updater: number | ((i: number) => number)) => {
+    const bruto = typeof updater === 'function' ? updater(slideIndex) : updater
+    const clamped = Math.max(0, Math.min(bruto, slideKeys.length - 1))
+    setCurrentSlideKey(slideKeys[clamped])
+  }
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -346,6 +367,7 @@ export default function Relatorios() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideKeys.length])
 
   function toggleFullscreen() {
@@ -363,6 +385,7 @@ export default function Relatorios() {
   const totalSlides = slideKeys.length
 
   return (
+    <LogoContext.Provider value={logoUrl}>
     <div className="space-y-4">
       <style>{`
         @media print {
@@ -500,6 +523,7 @@ export default function Relatorios() {
         )}
       </div>
     </div>
+    </LogoContext.Provider>
   )
 
   function renderSlide(key: string) {
@@ -580,6 +604,7 @@ function SlideChrome({
   children: React.ReactNode
   destaque?: React.ReactNode
 }) {
+  const logoUrl = useContext(LogoContext)
   return (
     <div className="w-full aspect-[16/9] max-h-[calc(100vh-140px)] mx-auto bg-[#0a0a0a] text-white flex flex-col p-8 sm:p-10 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-1" style={{ background: ORANGE }} />
@@ -588,8 +613,11 @@ function SlideChrome({
           <div className="text-[11px] tracking-[0.2em] text-slate-400 uppercase">{eyebrow}</div>
           <h2 className="text-2xl sm:text-3xl font-bold mt-1">{titulo}</h2>
         </div>
-        <div className="text-[11px] tracking-[0.15em] text-slate-500 uppercase font-semibold">
-          Grupo Lucas Amorim
+        <div className="flex items-center gap-2">
+          {logoUrl && <img src={logoUrl} alt="" className="h-5 w-auto opacity-80" />}
+          <div className="text-[11px] tracking-[0.15em] text-slate-500 uppercase font-semibold">
+            Grupo Lucas Amorim
+          </div>
         </div>
       </div>
       <div className="flex-1 min-h-0">{children}</div>
@@ -603,9 +631,11 @@ function SlideChrome({
 }
 
 function SlideCapa({ tri, ano, vgvTotal }: { tri: number; ano: number; vgvTotal: number }) {
+  const logoUrl = useContext(LogoContext)
   return (
     <div className="w-full aspect-[16/9] max-h-[calc(100vh-140px)] mx-auto bg-black text-white flex flex-col items-center justify-center text-center p-10 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: ORANGE }} />
+      {logoUrl && <img src={logoUrl} alt="" className="h-9 w-auto mb-4 opacity-90" />}
       <div className="text-[11px] tracking-[0.3em] text-slate-400 uppercase mb-4">Grupo Lucas Amorim</div>
       <h1 className="text-4xl sm:text-5xl font-bold">
         Relatório Comercial <span style={{ color: ORANGE }} className="italic">{tri}º TRI</span>
@@ -637,9 +667,11 @@ function SlideVgv({
   crescimentoValor: number
   ano: number
 }) {
+  const logoUrl = useContext(LogoContext)
   return (
     <div className="w-full aspect-[16/9] max-h-[calc(100vh-140px)] mx-auto bg-black text-white flex flex-col items-center justify-center text-center p-10 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: ORANGE }} />
+      {logoUrl && <img src={logoUrl} alt="" className="h-6 w-auto mb-3 opacity-80" />}
       <div className="text-xs tracking-[0.2em] text-slate-400 uppercase mb-3">{subtitulo}</div>
       <div className="text-4xl sm:text-5xl font-bold" style={{ color: ORANGE }}>
         {brl(vgv)}
