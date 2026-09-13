@@ -12,6 +12,7 @@ import {
   ChatMessage,
 } from '@/utils/geminiApi'
 import { buildBusinessDataSnapshot } from '@/utils/dataSnapshot'
+import { useTempoDecorrido, mensagemPensando } from '@/hooks/useTempoDecorrido'
 import { getTurmaDisplayName, Deal, Lead, Task, Transcript } from '@/types/crm'
 import { CaptacaoLead } from '@/types/captacao'
 
@@ -270,6 +271,7 @@ export default function AIInsightsButton({ context, data, className = '' }: AIIn
   const [snapshot, setSnapshot] = useState<string | null>(null)
   const [snapshotLoading, setSnapshotLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const tempoChat = useTempoDecorrido(chatLoading)
 
   // Estados para popover inline rápido
   const [inlineOpen, setInlineOpen] = useState(false)
@@ -278,6 +280,7 @@ export default function AIInsightsButton({ context, data, className = '' }: AIIn
   const [inlineAiError, setInlineAiError] = useState<'sem-chave' | string | null>(null)
   const inlineFetchedRef = useRef(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const tempoInline = useTempoDecorrido(inlineAiLoading)
 
   const runInlineAI = useCallback(async () => {
     if (inlineFetchedRef.current || inlineAiLoading) return
@@ -593,7 +596,7 @@ ${customPrompt ? `\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n${customPrompt}` : ''}
             {inlineAiLoading && (
               <div className="py-4 flex flex-col items-center justify-center gap-2 text-slate-400">
                 <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
-                <span className="text-[11px]">Consultando Gemini...</span>
+                <span className="text-[11px]">{mensagemPensando(tempoInline)}</span>
               </div>
             )}
 
@@ -748,7 +751,7 @@ ${customPrompt ? `\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n${customPrompt}` : ''}
               {chatLoading && (
                 <div className="flex items-center gap-2 text-slate-400">
                   <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
-                  <span>AMOR IN IA está consultando os dados...</span>
+                  <span>{mensagemPensando(tempoChat)}</span>
                 </div>
               )}
 

@@ -97,8 +97,10 @@ interface GeminiRequestBody {
   }
 }
 
-/** Tempo máximo (ms) que esperamos o Gemini responder antes de abortar a chamada. */
-const GEMINI_TIMEOUT_MS = 30000
+/** Tempo máximo (ms) que esperamos o Gemini responder antes de abortar a chamada. Generoso de
+ * propósito — 30s cortava respostas legítimas que só demoravam um pouco mais; a UI mostra um
+ * indicador de "pensando" com tempo decorrido enquanto espera, então vale mais deixar terminar. */
+const GEMINI_TIMEOUT_MS = 120000
 /** Quantas vezes tentar de novo em erro transitório (429/500/503/timeout/rede). */
 const GEMINI_MAX_RETRIES = 2
 

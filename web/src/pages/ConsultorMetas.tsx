@@ -8,6 +8,7 @@ import { useMetasNegocio, type MetricaMeta } from '@/hooks/useMetasNegocio'
 import { useMetasChat } from '@/hooks/useMetasChat'
 import { useConhecimentoEmpresa, type PeriodoTipoConhecimento } from '@/hooks/useConhecimentoEmpresa'
 import { useEscolasVisitadas } from '@/hooks/useEscolasVisitadas'
+import { useTempoDecorrido, mensagemPensando } from '@/hooks/useTempoDecorrido'
 import { pontosComerciais, rankingPorResponsavel } from '@/utils/comercialMetrics'
 import type { PontoDiario } from '@/utils/pace'
 import { buildMetasSnapshot } from '@/utils/metasSnapshot'
@@ -85,6 +86,7 @@ export default function ConsultorMetas() {
   const [propostas, setPropostas] = useState<PropostaConhecimento[] | null>(null)
   const [salvandoIdx, setSalvandoIdx] = useState<number | null>(null)
   const fimRef = useRef<HTMLDivElement>(null)
+  const tempoPensando = useTempoDecorrido(enviando)
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -260,7 +262,7 @@ ${transcricao}`
 
           {enviando && (
             <div className="flex items-center gap-2 text-slate-400 text-xs">
-              <Loader2 className="w-4 h-4 text-orange-400 animate-spin" /> Consultando o Gemini...
+              <Loader2 className="w-4 h-4 text-orange-400 animate-spin" /> {mensagemPensando(tempoPensando)}
             </div>
           )}
 
