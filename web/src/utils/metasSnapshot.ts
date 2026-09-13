@@ -17,6 +17,7 @@ import {
 } from '@/hooks/useMetasNegocio'
 import type { LinhaRanking } from './comercialMetrics'
 import type { ConhecimentoEmpresa } from '@/hooks/useConhecimentoEmpresa'
+import { marcoEstaAtrasado, type MetaMarco } from '@/hooks/useMetasMarcos'
 
 function fmt(v: number, unidade: 'R$' | 'un'): string {
   if (unidade === 'R$') return `R$ ${Math.round(v).toLocaleString('pt-BR')}`
@@ -28,11 +29,13 @@ export function buildMetasSnapshot({
   pontosPorMetrica,
   ranking,
   conhecimento,
+  marcos = [],
 }: {
   metas: MetaNegocio[]
   pontosPorMetrica: Partial<Record<MetricaMeta, PontoDiario[]>>
   ranking: LinhaRanking[]
   conhecimento: ConhecimentoEmpresa[]
+  marcos?: MetaMarco[]
 }): string {
   const hoje = new Date().toISOString().slice(0, 10)
   const ano = new Date().getFullYear()
@@ -79,11 +82,22 @@ export function buildMetasSnapshot({
         `- [${c.periodoTipo === 'geral' ? 'geral' : `${c.periodoTipo} ${c.periodoValor ?? ''}/${c.ano ?? ''}`}] ${c.titulo}: ${c.conteudo}`,
     )
 
+  const linhasMarcos = marcos
+    .filter((m) => m.status !== 'cancelado')
+    .map((m) => {
+      const atrasado = marcoEstaAtrasado(m)
+      const statusTxt = m.status === 'concluido' ? 'concluído' : atrasado ? 'ATRASADO (prazo vencido, ainda não concluído)' : 'pendente'
+      return `- "${m.titulo}" [${statusTxt}]${m.prazo ? ` — prazo ${m.prazo}` : ' — sem prazo'}: ${m.descricao}`
+    })
+
   return `## Metas e PACE (hoje: ${hoje})
 ${linhasMetas.join('\n') || 'Nenhuma meta cadastrada ainda.'}
 
 ## Ranking de desempenho comercial (top 5 por turmas ganhas)
 ${linhasRanking.join('\n') || 'Sem dados de ranking.'}
+
+## Marcos e conquistas já registrados no Painel de Conquistas (não proponha de novo o que já está aqui)
+${linhasMarcos.join('\n') || 'Nenhum marco cadastrado ainda.'}
 
 ## Conhecimento já registrado sobre a empresa (memória de longo prazo, mais recentes primeiro)
 ${linhasConhecimento.join('\n') || 'Nenhum registro salvo ainda na base de conhecimento.'}`

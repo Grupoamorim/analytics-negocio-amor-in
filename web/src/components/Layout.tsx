@@ -48,6 +48,7 @@ import { useConfiguracoes } from '@/hooks/useConfiguracoes'
 import GlobalAIFoatingButton from '@/components/AIInsightsButton'
 import ResponsavelFilterBar from '@/components/ResponsavelFilterBar'
 import { listarNotificacoes, marcarNotificacaoLida, type Notificacao } from '@/utils/notificacoes'
+import { useMetasMarcos, marcoEstaAtrasado } from '@/hooks/useMetasMarcos'
 
 type NavItem = { path: string; label: string; icon: typeof LayoutDashboard }
 
@@ -230,7 +231,19 @@ export default function Layout() {
     if (n.link) navigate(n.link)
   }
 
-  const totalNotifications = pendingTasksCount + stagnantReminders.length + naoLidas.length
+  // Marcos do Painel de Conquistas com prazo vencido e ainda pendentes.
+  const { marcos, recarregar: recarregarMarcos } = useMetasMarcos()
+  const marcosAtrasados = useMemo(() => marcos.filter(marcoEstaAtrasado), [marcos])
+
+  // Igual às notificações reais acima: sem isso, criar/resolver um marco em outra aba do app (ex:
+  // no Painel de Conquistas ou no Consultor de Metas) não atualiza a contagem do sino aqui, já que
+  // cada hook mantém seu próprio estado local.
+  useEffect(() => {
+    const intervalId = window.setInterval(recarregarMarcos, 60000)
+    return () => window.clearInterval(intervalId)
+  }, [recarregarMarcos])
+
+  const totalNotifications = pendingTasksCount + stagnantReminders.length + naoLidas.length + marcosAtrasados.length
 
   const goToPipelineCard = (dealId: string) => {
     ;(window as any).__pipelineHighlightDealId = dealId
@@ -557,6 +570,32 @@ export default function Layout() {
                         </p>
                         <p className="text-[10px] text-amber-300/90 leading-snug mt-0.5">
                           {stage?.suggestedAction}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+
+                  {/* Marcos do Painel de Conquistas com prazo vencido */}
+                  {marcosAtrasados.length > 0 && (
+                    <div className="text-[10px] text-rose-400 font-bold uppercase tracking-wider px-1 pt-1 flex items-center gap-1">
+                      <Target className="w-3 h-3" /> Marcos Atrasados ({marcosAtrasados.length})
+                    </div>
+                  )}
+                  {marcosAtrasados.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setNotificationsOpen(false)
+                        navigate('/')
+                      }}
+                      className="w-full p-2 rounded-lg bg-rose-500/[0.06] border border-rose-500/20 flex items-start gap-2 text-xs text-left hover:border-rose-500/40 transition-colors"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-200 font-medium leading-snug truncate">{m.titulo}</p>
+                        <p className="text-[10px] text-rose-300/90 leading-snug">
+                          Prazo era {m.prazo ? new Date(`${m.prazo}T00:00:00`).toLocaleDateString('pt-BR') : '—'} — precisa de uma decisão
                         </p>
                       </div>
                     </button>

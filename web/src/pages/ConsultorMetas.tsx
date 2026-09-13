@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Bot, Send, Loader2, User, Sparkles, Key, BookOpen, Check, X } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Bot, Send, Loader2, User, Sparkles, Key, BookOpen, Check, X, Target, AlertTriangle } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import { useToast } from '@/hooks/use-toast'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
-import { useMetasNegocio, type MetricaMeta } from '@/hooks/useMetasNegocio'
+import { useMetasNegocio, METRICA_LABEL, type MetricaMeta } from '@/hooks/useMetasNegocio'
 import { useMetasChat } from '@/hooks/useMetasChat'
 import { useConhecimentoEmpresa, type PeriodoTipoConhecimento } from '@/hooks/useConhecimentoEmpresa'
+import { useMetasMarcos, type MarcoDecisao } from '@/hooks/useMetasMarcos'
 import { useEscolasVisitadas } from '@/hooks/useEscolasVisitadas'
 import { useTempoDecorrido, mensagemPensando } from '@/hooks/useTempoDecorrido'
 import { pontosComerciais, rankingPorResponsavel } from '@/utils/comercialMetrics'
@@ -32,9 +33,12 @@ Seu jeito de trabalhar, sempre:
 1. Nunca responda só com uma recomendação seca. Faça pelo menos uma pergunta de volta pra entender o contexto completo antes de aconselhar às cegas.
 2. Questione decisões e trade-offs em vez de só concordar — se algo parecer arriscado, incompleto ou na contramão da melhor prática de mercado, diga isso claramente.
 3. Seja comunicativa: converse, não solte um relatório frio.
-4. Baseie-se SEMPRE nos dados reais fornecidos abaixo (metas, pace, ranking, conhecimento já registrado da empresa). Nunca invente número, nome, decisão ou fato que não esteja explicitamente ali — se faltar dado pra responder algo, diga que falta e pergunte pelo dado.
-5. Responda em português do Brasil.
-6. Convenção de trimestre do sistema: T1-T4. Se o usuário usar "Q1"-"Q4" (inglês), trate como sinônimo.`
+4. Baseie-se SEMPRE nos dados reais fornecidos abaixo (metas, pace, ranking, marcos do Painel de Conquistas, conhecimento já registrado da empresa). Nunca invente número, nome, decisão ou fato que não esteja explicitamente ali — se faltar dado pra responder algo, diga que falta e pergunte pelo dado.
+5. ANTES de perguntar qualquer coisa a Lucas, primeiro cheque se a resposta já está nos dados reais fornecidos abaixo. Só pergunte o que genuinamente não está disponível ali — nunca pergunte algo que já dá pra responder sozinho lendo o que já foi passado.
+6. Responda em português do Brasil.
+7. Convenção de trimestre do sistema: T1-T4. Se o usuário usar "Q1"-"Q4" (inglês), trate como sinônimo.
+
+Sobre propor novos marcos/compromissos (passos concretos rumo a uma meta, que entram no Painel de Conquistas): seja absurdamente crítica e realista antes de sugerir qualquer coisa nova. Nunca proponha um marco de forma otimista ou às cegas — primeiro pondere o que realisticamente pode dar errado ("se X acontecer, Y vai acontecer"), considere a capacidade real da equipe e o ritmo atual mostrado nos dados, e pergunte diretamente se Lucas quer mesmo se comprometer com aquilo antes de considerar a sugestão pronta. Só depois dessa ponderação — e só quando fizer sentido de verdade — é que vale sugerir que aquilo vire um marco registrado.`
 
 const PERIODOS_CONHECIMENTO: { value: PeriodoTipoConhecimento; label: string }[] = [
   { value: 'geral', label: 'Geral (sem período)' },
@@ -56,18 +60,49 @@ interface PropostaConhecimento {
   possivelDuplicataDe: string | null
 }
 
-function extrairJson(texto: string): PropostaConhecimento[] {
+interface PropostaMarco {
+  titulo: string
+  descricao: string
+  prazo: string | null
+  metrica: MetricaMeta | null
+  pontos: number
+  /** Ponderação crítica/realista que a IA é obrigada a escrever antes de propor — mostrada em
+   * destaque na revisão, junto da pergunta direta se Lucas quer mesmo se comprometer. */
+  riscoRealista: string
+}
+
+/** Extrai, de uma única chamada ao Gemini, tanto propostas de conhecimento quanto propostas de
+ * marco — evita gastar uma segunda chamada só pra marcos (tier grátis do Gemini é limitado). */
+function extrairPropostas(texto: string): { conhecimento: PropostaConhecimento[]; marcos: PropostaMarco[] } {
   const limpo = texto.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '')
-  const arr = JSON.parse(limpo)
-  if (!Array.isArray(arr)) throw new Error('Formato inesperado')
-  return arr.map((x: any) => ({
-    ano: x.ano ?? null,
-    periodoTipo: x.periodoTipo || 'geral',
-    periodoValor: x.periodoValor ?? null,
-    titulo: String(x.titulo || '').slice(0, 120),
-    conteudo: String(x.conteudo || ''),
-    possivelDuplicataDe: x.possivelDuplicataDe ? String(x.possivelDuplicataDe) : null,
-  }))
+  const obj = JSON.parse(limpo)
+  const conhecimentoArr = Array.isArray(obj?.conhecimento) ? obj.conhecimento : []
+  const marcosArr = Array.isArray(obj?.marcos) ? obj.marcos : []
+  return {
+    conhecimento: conhecimentoArr.map((x: any) => ({
+      ano: x.ano ?? null,
+      periodoTipo: x.periodoTipo || 'geral',
+      periodoValor: x.periodoValor ?? null,
+      titulo: String(x.titulo || '').slice(0, 120),
+      conteudo: String(x.conteudo || ''),
+      possivelDuplicataDe: x.possivelDuplicataDe ? String(x.possivelDuplicataDe) : null,
+    })),
+    marcos: marcosArr.map((x: any) => ({
+      titulo: String(x.titulo || '').slice(0, 120),
+      descricao: String(x.descricao || ''),
+      prazo: x.prazo || null,
+      metrica: x.metrica || null,
+      pontos: Number(x.pontos) > 0 ? Number(x.pontos) : 10,
+      riscoRealista: String(x.riscoRealista || ''),
+    })),
+  }
+}
+
+interface MarcoEmDiscussao {
+  marcoId: string
+  titulo: string
+  prazo: string | null
+  explicacao: string
 }
 
 export default function ConsultorMetas() {
@@ -77,20 +112,45 @@ export default function ConsultorMetas() {
   const { metas } = useMetasNegocio()
   const { visitas } = useEscolasVisitadas()
   const { registros: conhecimento, salvar: salvarConhecimento } = useConhecimentoEmpresa()
+  const { marcos, salvar: salvarMarco, aplicarDecisao } = useMetasMarcos()
   const { mensagens, loading: carregandoHistorico, enviar } = useMetasChat()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const [input, setInput] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [organizando, setOrganizando] = useState(false)
-  const [propostas, setPropostas] = useState<PropostaConhecimento[] | null>(null)
+  const [propostasConhecimento, setPropostasConhecimento] = useState<PropostaConhecimento[] | null>(null)
+  const [propostasMarcos, setPropostasMarcos] = useState<PropostaMarco[] | null>(null)
   const [salvandoIdx, setSalvandoIdx] = useState<number | null>(null)
+  const [salvandoMarcoIdx, setSalvandoMarcoIdx] = useState<number | null>(null)
+  const [marcoEmDiscussao, setMarcoEmDiscussao] = useState<MarcoEmDiscussao | null>(null)
+  const [novoPrazoDecisao, setNovoPrazoDecisao] = useState('')
+  const [decidindoMarco, setDecidindoMarco] = useState(false)
   const fimRef = useRef<HTMLDivElement>(null)
   const tempoPensando = useTempoDecorrido(enviando)
+  const iniciouAutoEnvioRef = useRef(false)
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensagens.length])
+
+  // Chegou aqui vindo do Painel de Conquistas com um marco atrasado (state da navegação) — manda
+  // automaticamente a primeira mensagem resumindo o caso, sem gastar chamada extra de Gemini (é a
+  // mesma conversa normal), e limpa o state da rota pra não reenviar num reload.
+  useEffect(() => {
+    const state = location.state as MarcoEmDiscussao | null
+    if (!state?.marcoId || iniciouAutoEnvioRef.current || carregandoHistorico) return
+    iniciouAutoEnvioRef.current = true
+    setMarcoEmDiscussao(state)
+    navigate(location.pathname, { replace: true, state: null })
+    const texto = `Marco atrasado: "${state.titulo}"${state.prazo ? ` (prazo era ${state.prazo})` : ''}. O que aconteceu: ${
+      state.explicacao || '(não descrito)'
+    }. Me ajude a decidir: realoco pra outro período, descarto por não ser mais interessante pro negócio, ou penso em outro objetivo porque esse não tem mais como bater?`
+    handleEnviar(texto)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, carregandoHistorico])
 
   const pontosPorMetrica = useMemo<Partial<Record<MetricaMeta, PontoDiario[]>>>(
     () => ({
@@ -121,7 +181,7 @@ export default function ConsultorMetas() {
     setInput('')
     try {
       const msgUsuario = await enviar('user', texto)
-      const snapshot = buildMetasSnapshot({ metas, pontosPorMetrica, ranking, conhecimento })
+      const snapshot = buildMetasSnapshot({ metas, pontosPorMetrica, ranking, conhecimento, marcos })
       const customPrompt = getCustomSystemPrompt()
       const systemInstruction = `${PERSONA}\n\nDADOS REAIS DA EMPRESA (atualizados agora):\n${snapshot}${
         customPrompt ? `\n\nINSTRUÇÕES ADICIONAIS DO ADMIN:\n${customPrompt}` : ''
@@ -154,26 +214,44 @@ export default function ConsultorMetas() {
         .slice(0, 20)
         .map((c) => `- [${c.periodoTipo} ${c.periodoValor ?? ''}/${c.ano ?? ''}] "${c.titulo}": ${c.conteudo}`)
         .join('\n')
-      const prompt = `Leia a conversa abaixo entre a gestão da Amor In Formaturas e um consultor de IA sobre metas e estratégia. Extraia fatos, decisões e status da empresa que valem a pena ficar registrados permanentemente na base de conhecimento da empresa, organizados por período.
+      const marcosAtuais = marcos
+        .filter((m) => m.status !== 'cancelado')
+        .slice(0, 30)
+        .map((m) => `- "${m.titulo}" [${m.status}]${m.prazo ? ` prazo ${m.prazo}` : ''}: ${m.descricao}`)
+        .join('\n')
+      const prompt = `Leia a conversa abaixo entre a gestão da Amor In Formaturas e um consultor de IA sobre metas e estratégia. Extraia duas coisas, num único JSON:
 
-Regras:
-- Cada item deve ter: ano (número ou null se não for de um período específico), periodoTipo ("mensal"|"trimestral"|"semestral"|"anual"|"geral"), periodoValor (mês 1-12, trimestre 1-4, semestre 1-2, ou null se anual/geral), titulo (curto, até 8 palavras), conteudo (um parágrafo objetivo), possivelDuplicataDe (string ou null).
+1. "conhecimento": fatos, decisões e status da empresa que valem a pena ficar registrados permanentemente na base de conhecimento, organizados por período.
+2. "marcos": passos/ações/compromissos concretos que a conversa deixou claro que a gestão decidiu perseguir rumo a alguma meta — só o que for uma AÇÃO real com começo e fim, não uma constatação (isso vai pra "conhecimento", não pra "marcos").
+
+Regras de "conhecimento" — cada item: ano (número ou null se não for de um período específico), periodoTipo ("mensal"|"trimestral"|"semestral"|"anual"|"geral"), periodoValor (mês 1-12, trimestre 1-4, semestre 1-2, ou null se anual/geral), titulo (curto, até 8 palavras), conteudo (um parágrafo objetivo), possivelDuplicataDe (string ou null).
 - Antes de criar um item novo, compare com os REGISTROS JÁ EXISTENTES abaixo (título + conteúdo). Se o assunto for sobre o MESMO tema de um registro existente — mesmo que com um título diferente, ou que pareça contradizer/atualizar o que já está lá — preencha "possivelDuplicataDe" com o título EXATO daquele registro existente, pra a gestão decidir manualmente qual versão prevalece (nunca decida isso sozinho). Se for assunto realmente novo, deixe "possivelDuplicataDe": null.
 - Quando marcar possivelDuplicataDe, ainda assim escreva o conteúdo como a versão atualizada e completa do tema (não só o incremento) — quem ler depois não vai ver esta conversa, só esse texto.
-- Não invente nada que não esteja na conversa.
-- Responda APENAS com um JSON válido (array de objetos com essas chaves), sem markdown, sem texto antes ou depois.
 
-REGISTROS JÁ EXISTENTES (compare o assunto, não só o título):
+Regras de "marcos" — cada item: titulo (curto, acionável), descricao (o que precisa ser feito, objetivo e completo — quem ler depois não vai ver esta conversa), prazo (YYYY-MM-DD ou null se não foi combinada uma data), metrica (uma destas ou null: receita|adesoes|contratos|alunos|resultado_liquido|vgv|escolas_visitadas|caixa), pontos (10 pra algo simples, até 50 pra algo grande/estratégico), riscoRealista (OBRIGATÓRIO — 1-2 frases bem críticas e realistas sobre o que pode dar errado ou o esforço real que isso exige, terminando com uma pergunta direta tipo "tem certeza que quer se comprometer com isso?").
+- NÃO proponha um marco que já existe na lista de MARCOS JÁ REGISTRADOS abaixo (mesmo assunto, título diferente) — se for sobre o mesmo, ignore.
+- Só inclua um marco se a conversa realmente indicou uma decisão/compromisso — se for só uma ideia solta sem decisão, não conte como marco.
+
+Comum às duas listas:
+- Não invente nada que não esteja na conversa.
+- Se não achar nada pra alguma das duas listas, devolva ela como array vazio.
+- Responda APENAS com um JSON válido no formato {"conhecimento": [...], "marcos": [...]}, sem markdown, sem texto antes ou depois.
+
+REGISTROS JÁ EXISTENTES NA BASE DE CONHECIMENTO (compare o assunto, não só o título):
 ${conhecimentoAtual || '(nenhum ainda)'}
+
+MARCOS JÁ REGISTRADOS NO PAINEL DE CONQUISTAS (não proponha de novo o que já está aqui):
+${marcosAtuais || '(nenhum ainda)'}
 
 CONVERSA:
 ${transcricao}`
       const res = await callGemini(prompt, key, getGeminiModel())
-      const extraidas = extrairJson(res)
-      if (extraidas.length === 0) {
-        toast({ title: 'Nada de novo pra registrar', description: 'A IA não encontrou fatos novos na conversa.' })
+      const extraidas = extrairPropostas(res)
+      if (extraidas.conhecimento.length === 0 && extraidas.marcos.length === 0) {
+        toast({ title: 'Nada de novo pra registrar', description: 'A IA não encontrou fatos ou marcos novos na conversa.' })
       }
-      setPropostas(extraidas)
+      setPropostasConhecimento(extraidas.conhecimento)
+      setPropostasMarcos(extraidas.marcos)
     } catch (err: any) {
       toast({ title: 'Erro ao organizar', description: err?.message || 'Não foi possível processar agora.', variant: 'destructive' })
     } finally {
@@ -182,8 +260,8 @@ ${transcricao}`
   }
 
   async function handleSalvarProposta(idx: number) {
-    if (!propostas) return
-    const p = propostas[idx]
+    if (!propostasConhecimento) return
+    const p = propostasConhecimento[idx]
     setSalvandoIdx(idx)
     try {
       await salvarConhecimento({
@@ -194,7 +272,7 @@ ${transcricao}`
         conteudo: p.conteudo,
         origem: 'ia',
       })
-      setPropostas((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev))
+      setPropostasConhecimento((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev))
       toast({ title: 'Registrado na base de conhecimento' })
     } catch (err: any) {
       toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' })
@@ -204,7 +282,56 @@ ${transcricao}`
   }
 
   function atualizarProposta(idx: number, patch: Partial<PropostaConhecimento>) {
-    setPropostas((prev) => (prev ? prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)) : prev))
+    setPropostasConhecimento((prev) => (prev ? prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)) : prev))
+  }
+
+  async function handleSalvarPropostaMarco(idx: number) {
+    if (!propostasMarcos) return
+    const p = propostasMarcos[idx]
+    setSalvandoMarcoIdx(idx)
+    try {
+      await salvarMarco({
+        titulo: p.titulo,
+        descricao: p.descricao,
+        prazo: p.prazo,
+        metrica: p.metrica,
+        pontos: p.pontos,
+        riscoRealista: p.riscoRealista,
+        origem: 'ia',
+      })
+      setPropostasMarcos((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev))
+      toast({ title: 'Marco adicionado ao Painel de Conquistas' })
+    } catch (err: any) {
+      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' })
+    } finally {
+      setSalvandoMarcoIdx(null)
+    }
+  }
+
+  function atualizarPropostaMarco(idx: number, patch: Partial<PropostaMarco>) {
+    setPropostasMarcos((prev) => (prev ? prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)) : prev))
+  }
+
+  async function handleAplicarDecisaoMarco(decisao: MarcoDecisao) {
+    if (!marcoEmDiscussao) return
+    if (decisao === 'realocado' && !novoPrazoDecisao) {
+      toast({ title: 'Escolha o novo prazo antes de realocar', variant: 'destructive' })
+      return
+    }
+    setDecidindoMarco(true)
+    try {
+      await aplicarDecisao(marcoEmDiscussao.marcoId, decisao, novoPrazoDecisao || undefined)
+      toast({
+        title:
+          decisao === 'realocado' ? 'Marco realocado' : decisao === 'descartado' ? 'Marco descartado' : 'Marco marcado como substituído',
+      })
+      setMarcoEmDiscussao(null)
+      setNovoPrazoDecisao('')
+    } catch (err: any) {
+      toast({ title: 'Erro ao aplicar decisão', description: err.message, variant: 'destructive' })
+    } finally {
+      setDecidindoMarco(false)
+    }
   }
 
   return (
@@ -317,7 +444,54 @@ ${transcricao}`
         </div>
       </div>
 
-      {propostas && propostas.length > 0 && (
+      {marcoEmDiscussao && (
+        <div className="bg-[#111820] border border-amber-500/25 rounded-xl p-4 flex flex-wrap items-center gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          <span className="text-xs text-slate-300 flex-1 min-w-[200px]">
+            Aplicar decisão ao marco atrasado <strong className="text-white">"{marcoEmDiscussao.titulo}"</strong> — só clique depois de
+            fechar isso com a IA no chat acima.
+          </span>
+          <input
+            type="date"
+            value={novoPrazoDecisao}
+            onChange={(e) => setNovoPrazoDecisao(e.target.value)}
+            className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-1.5 text-slate-200 text-xs"
+          />
+          <button
+            type="button"
+            disabled={decidindoMarco}
+            onClick={() => handleAplicarDecisaoMarco('realocado')}
+            className="text-xs font-semibold text-emerald-300 hover:underline disabled:opacity-50"
+          >
+            Realocar
+          </button>
+          <button
+            type="button"
+            disabled={decidindoMarco}
+            onClick={() => handleAplicarDecisaoMarco('descartado')}
+            className="text-xs font-semibold text-slate-400 hover:underline disabled:opacity-50"
+          >
+            Descartar
+          </button>
+          <button
+            type="button"
+            disabled={decidindoMarco}
+            onClick={() => handleAplicarDecisaoMarco('substituido')}
+            className="text-xs font-semibold text-rose-300 hover:underline disabled:opacity-50"
+          >
+            Pensar em outro objetivo
+          </button>
+          <button
+            type="button"
+            onClick={() => setMarcoEmDiscussao(null)}
+            className="text-xs text-slate-500 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {propostasConhecimento && propostasConhecimento.length > 0 && (
         <div className="bg-[#111820] border border-orange-500/20 rounded-xl p-5 space-y-4">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-orange-400" /> Revisar antes de salvar na base de conhecimento
@@ -326,7 +500,7 @@ ${transcricao}`
             A IA leu a conversa e propôs isso — revise, ajuste o que quiser, e salve cada item (se já
             existir um registro com o mesmo ano/período/título, ele é atualizado em vez de duplicado).
           </p>
-          {propostas.map((p, idx) => {
+          {propostasConhecimento.map((p, idx) => {
             const existente = p.possivelDuplicataDe
               ? conhecimento.find((c) => c.titulo.trim().toLowerCase() === p.possivelDuplicataDe!.trim().toLowerCase())
               : null
@@ -428,7 +602,7 @@ ${transcricao}`
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPropostas((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev))}
+                  onClick={() => setPropostasConhecimento((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev))}
                   className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-400"
                 >
                   <X className="w-3.5 h-3.5" /> Descartar
@@ -437,6 +611,75 @@ ${transcricao}`
             </div>
             )
           })}
+        </div>
+      )}
+
+      {propostasMarcos && propostasMarcos.length > 0 && (
+        <div className="bg-[#111820] border border-orange-500/20 rounded-xl p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Target className="w-4 h-4 text-orange-400" /> Marcos propostos pro Painel de Conquistas
+          </h3>
+          <p className="text-xs text-slate-400">
+            A IA identificou compromissos concretos na conversa. Leia a ponderação crítica antes de confirmar — nada entra no painel sem
+            sua aprovação.
+          </p>
+          {propostasMarcos.map((p, idx) => (
+            <div key={idx} className="border border-white/[0.08] rounded-lg p-4 space-y-3 bg-white/[0.02]">
+              {p.riscoRealista && (
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <p>{p.riscoRealista}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="text-xs text-slate-400 flex flex-col gap-1 sm:col-span-2">
+                  Título
+                  <input
+                    type="text"
+                    value={p.titulo}
+                    onChange={(e) => atualizarPropostaMarco(idx, { titulo: e.target.value })}
+                    className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-2 text-slate-200 text-xs"
+                  />
+                </label>
+                <label className="text-xs text-slate-400 flex flex-col gap-1">
+                  Prazo (opcional)
+                  <input
+                    type="date"
+                    value={p.prazo ?? ''}
+                    onChange={(e) => atualizarPropostaMarco(idx, { prazo: e.target.value || null })}
+                    className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-2 py-2 text-slate-200 text-xs"
+                  />
+                </label>
+              </div>
+              <label className="text-xs text-slate-400 flex flex-col gap-1">
+                Descrição — o que precisa ser feito
+                <textarea
+                  value={p.descricao}
+                  onChange={(e) => atualizarPropostaMarco(idx, { descricao: e.target.value })}
+                  rows={2}
+                  className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-3 py-2 text-slate-200 text-xs resize-y"
+                />
+              </label>
+              {p.metrica && <p className="text-[11px] text-slate-500">Métrica relacionada: {METRICA_LABEL[p.metrica]}</p>}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSalvarPropostaMarco(idx)}
+                  disabled={salvandoMarcoIdx === idx}
+                  className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-semibold rounded-lg px-3 py-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" /> {salvandoMarcoIdx === idx ? 'Salvando...' : 'Confirmar — quero me comprometer'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPropostasMarcos((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev))}
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-400"
+                >
+                  <X className="w-3.5 h-3.5" /> Descartar
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
