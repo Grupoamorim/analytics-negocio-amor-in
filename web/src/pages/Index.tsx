@@ -22,6 +22,7 @@ import SectionTitle from '@/components/dashboard/SectionTitle'
 import InfoHint from '@/components/dashboard/InfoHint'
 import PaceBand from '@/components/dashboard/PaceBand'
 import RankingGamificado from '@/components/dashboard/RankingGamificado'
+import PainelConquistas from '@/components/dashboard/PainelConquistas'
 import VgvComercialPanel from '@/components/dashboard/VgvComercialPanel'
 import OportunidadesPanel from '@/components/dashboard/OportunidadesPanel'
 import AIInsightsButton from '@/components/AIInsightsButton'
@@ -333,6 +334,9 @@ export default function Index() {
 
       {/* ============ Ranking gamificado (pódio) ============ */}
       <RankingGamificado leads={leads} deals={deals} />
+
+      {/* ============ Conquistas & Marcos ============ */}
+      <PainelConquistas />
 
       {/* ============ Ranking de Vendedores ============ */}
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">

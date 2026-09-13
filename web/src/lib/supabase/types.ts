@@ -1549,6 +1549,71 @@ export type Database = {
           },
         ]
       }
+      metas_marcos: {
+        Row: {
+          concluido_em: string | null
+          created_at: string
+          decisao: string | null
+          descricao: string
+          explicacao: string | null
+          id: string
+          meta_negocio_id: string | null
+          metrica: string | null
+          ordem: number | null
+          origem: string
+          pontos: number
+          prazo: string | null
+          risco_realista: string | null
+          status: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          concluido_em?: string | null
+          created_at?: string
+          decisao?: string | null
+          descricao: string
+          explicacao?: string | null
+          id?: string
+          meta_negocio_id?: string | null
+          metrica?: string | null
+          ordem?: number | null
+          origem?: string
+          pontos?: number
+          prazo?: string | null
+          risco_realista?: string | null
+          status?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          concluido_em?: string | null
+          created_at?: string
+          decisao?: string | null
+          descricao?: string
+          explicacao?: string | null
+          id?: string
+          meta_negocio_id?: string | null
+          metrica?: string | null
+          ordem?: number | null
+          origem?: string
+          pontos?: number
+          prazo?: string | null
+          risco_realista?: string | null
+          status?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metas_marcos_meta_negocio_id_fkey"
+            columns: ["meta_negocio_id"]
+            isOneToOne: false
+            referencedRelation: "metas_negocio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metas_negocio: {
         Row: {
           ano: number
