@@ -27,7 +27,7 @@ const HOJE = new Date().toISOString().slice(0, 10)
 export default function AdministracaoGeral() {
   const { leads = [], deals = [] } = useCRM()
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
-  const f = usePeriodoFiltro('trimestre')
+  const f = usePeriodoFiltro('ate_hoje')
 
   const empresaOptions = useMemo(() => {
     const s = new Set<string>()
