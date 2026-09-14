@@ -298,10 +298,15 @@ def coletar_contas_receber():
     registros = []
     vistos = set()
     for p in items:
-        cod = str(p.get("Codigo", p.get("Id", p.get("codigo",
+        # IdLancamento é o identificador único de parcela que o SGE realmente devolve (presente
+        # em ~100% dos registros) — antes ele nao era usado e a gente caia sempre no hash de
+        # conteudo (gerar_chave), que gera um codigo DIFERENTE do usado pela importacao manual
+        # da planilha pra essa mesma parcela real, causando duplicata quando as duas fontes se
+        # cruzam (achado em 2026-09-14, ver reconciliacao com export "Contas a Receber" do SGE).
+        cod = str(p.get("IdLancamento", p.get("Codigo", p.get("Id", p.get("codigo",
             gerar_chave(p.get("NomeCliente",""), p.get("Vencimento",""),
                         p.get("Valor",""), p.get("Parcela",""))
-        ))))
+        )))))
         if cod in vistos:
             continue
         vistos.add(cod)
@@ -313,7 +318,10 @@ def coletar_contas_receber():
             "valor":           float(p.get("Valor", p.get("ValorParcela", 0)) or 0),
             "valor_pago":      float(p.get("ValorPago", p.get("ValorRecebido", 0)) or 0),
             "data_vencimento": data_ou_none(p.get("Vencimento", p.get("DataVencimento", ""))),
-            "data_pagamento":  data_ou_none(p.get("Pagamento", p.get("DataPagamento", ""))),
+            # Data de Crédito é a data de reconhecimento de caixa usada em todo o resto do site
+            # (DRE/Financeiro/Projeções) — antes essa coleta usava só Data de Pagamento, que pode
+            # ficar alguns dias defasada da Data de Crédito real (cartao/boleto compensando depois).
+            "data_pagamento":  data_ou_none(p.get("DataCredito") or p.get("Pagamento", p.get("DataPagamento", ""))),
             "status":          str(p.get("Status", p.get("Situacao", "pendente"))).lower(),
             "forma_pagamento": p.get("FormaPagamento", p.get("Forma", "")),
             "num_parcela":     int(p.get("Parcela", p.get("NumeroParcela", 1)) or 1),
