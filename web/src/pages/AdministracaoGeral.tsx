@@ -65,8 +65,16 @@ export default function AdministracaoGeral() {
   const { metas, metaVigente } = useMetasNegocio()
   const rotuloFiltro = rotuloDoFiltro(f)
   const overrideDoFiltro = (metrica: MetricaMeta) => {
-    const { valor, mesesComMeta } = metaSomaIntervalo(metas, metrica, f.dtIni, f.dtFim)
-    return { ini: f.dtIni, fim: f.dtFim, rotulo: rotuloFiltro, valorMeta: valor, temMeta: mesesComMeta > 0 }
+    const { valor, valorPessimista, valorOtimista, mesesComMeta } = metaSomaIntervalo(metas, metrica, f.dtIni, f.dtFim)
+    return {
+      ini: f.dtIni,
+      fim: f.dtFim,
+      rotulo: rotuloFiltro,
+      valorMeta: valor,
+      valorMetaPessimista: valorPessimista,
+      valorMetaOtimista: valorOtimista,
+      temMeta: mesesComMeta > 0,
+    }
   }
 
   // Margem líquida do período filtrado = resultado líquido ÷ receita, só informativo (não é uma

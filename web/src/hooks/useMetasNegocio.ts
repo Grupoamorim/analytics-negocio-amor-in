@@ -25,6 +25,10 @@ export interface MetaNegocio {
   ano: number
   periodo: number // mensal 1-12 | trimestral 1-4 | anual 0
   valorMeta: number
+  /** Cenário conservador — opcional, fica sem linha no gráfico enquanto não for cadastrado. */
+  valorMetaPessimista: number | null
+  /** Cenário de alta performance — opcional, mesma regra do pessimista. */
+  valorMetaOtimista: number | null
   contexto: string
   /** Preenchido quando o período encerra sem a meta ser batida — explica o que aconteceu. */
   explicacao: string | null
@@ -61,6 +65,8 @@ function mapRow(r: any): MetaNegocio {
     ano: r.ano,
     periodo: r.periodo ?? 0,
     valorMeta: Number(r.valor_meta || 0),
+    valorMetaPessimista: r.valor_meta_pessimista == null ? null : Number(r.valor_meta_pessimista),
+    valorMetaOtimista: r.valor_meta_otimista == null ? null : Number(r.valor_meta_otimista),
     contexto: r.contexto || '',
     explicacao: r.explicacao ?? null,
     decisao: r.decisao ?? null,
@@ -105,18 +111,37 @@ export function metaSomaIntervalo(
   metrica: MetricaMeta,
   ini: string,
   fim: string,
-): { valor: number; mesesComMeta: number; mesesTotal: number } {
+): {
+  valor: number
+  valorPessimista: number | null
+  valorOtimista: number | null
+  mesesComMeta: number
+  mesesTotal: number
+} {
   const dentro = metas.filter((m) => {
     if (m.metrica !== metrica || m.escopo !== 'mensal') return false
     const iv = intervaloDaMeta(m)
     return iv.ini >= ini && iv.fim <= fim
   })
   const valor = dentro.reduce((acc, m) => acc + m.valorMeta, 0)
+  // Só soma o cenário se pelo menos um mês do intervalo tiver ele cadastrado — não inventa
+  // pessimista/otimista pra mês que só tem a meta padrão preenchida.
+  const somaCenario = (pick: (m: MetaNegocio) => number | null): number | null => {
+    const comCenario = dentro.filter((m) => pick(m) != null)
+    if (comCenario.length === 0) return null
+    return comCenario.reduce((acc, m) => acc + (pick(m) || 0), 0)
+  }
   const mesesTotal =
     (new Date(`${fim}T00:00:00`).getFullYear() - new Date(`${ini}T00:00:00`).getFullYear()) * 12 +
     (new Date(`${fim}T00:00:00`).getMonth() - new Date(`${ini}T00:00:00`).getMonth()) +
     1
-  return { valor, mesesComMeta: dentro.length, mesesTotal }
+  return {
+    valor,
+    valorPessimista: somaCenario((m) => m.valorMetaPessimista),
+    valorOtimista: somaCenario((m) => m.valorMetaOtimista),
+    mesesComMeta: dentro.length,
+    mesesTotal,
+  }
 }
 
 /** Soma as metas mensais cadastradas de uma métrica que caem dentro dos meses informados
@@ -216,6 +241,8 @@ export function useMetasNegocio() {
         ano: m.ano,
         periodo: m.escopo === 'anual' ? 0 : m.periodo,
         valor_meta: m.valorMeta,
+        valor_meta_pessimista: m.valorMetaPessimista,
+        valor_meta_otimista: m.valorMetaOtimista,
         contexto: m.contexto || null,
         updated_at: new Date().toISOString(),
       }

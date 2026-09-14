@@ -1619,34 +1619,46 @@ export type Database = {
           ano: number
           contexto: string | null
           created_at: string
+          decisao: string | null
           escopo: string
+          explicacao: string | null
           id: string
           metrica: string
           periodo: number
           updated_at: string
           valor_meta: number
+          valor_meta_otimista: number | null
+          valor_meta_pessimista: number | null
         }
         Insert: {
           ano: number
           contexto?: string | null
           created_at?: string
+          decisao?: string | null
           escopo: string
+          explicacao?: string | null
           id?: string
           metrica: string
           periodo?: number
           updated_at?: string
           valor_meta: number
+          valor_meta_otimista?: number | null
+          valor_meta_pessimista?: number | null
         }
         Update: {
           ano?: number
           contexto?: string | null
           created_at?: string
+          decisao?: string | null
           escopo?: string
+          explicacao?: string | null
           id?: string
           metrica?: string
           periodo?: number
           updated_at?: string
           valor_meta?: number
+          valor_meta_otimista?: number | null
+          valor_meta_pessimista?: number | null
         }
         Relationships: []
       }

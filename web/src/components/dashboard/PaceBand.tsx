@@ -57,7 +57,15 @@ export default function PaceBand({
   /** Quando presente, mostra o pace desse período em vez do vigente-hoje derivado de `meta`
    * (usado pra "pré-visualizar" um trimestre/mês/ano escolhido no filtro). `meta` continua
    * opcional aqui — só serve de fonte do `contexto` pro prompt de IA, quando existir. */
-  periodoOverride?: { ini: string; fim: string; rotulo: string; valorMeta: number; temMeta: boolean }
+  periodoOverride?: {
+    ini: string
+    fim: string
+    rotulo: string
+    valorMeta: number
+    valorMetaPessimista?: number | null
+    valorMetaOtimista?: number | null
+    temMeta: boolean
+  }
   /** A meta "vigente" (`meta`) nunca pode estar com o período encerrado — por isso essa é uma
    * busca separada (ver `metaVencidaSemDecisao`): a meta mais recente dessa métrica cujo período
    * já acabou, não foi batida, e ainda não teve uma decisão registrada. Só ela habilita a caixa
@@ -86,6 +94,26 @@ export default function PaceBand({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, pontos, periodoOverride, temMeta])
 
+  // Cenários pessimista/otimista — mesmo período da meta padrão, só a linha (não tem "realizado"
+  // nem status próprios). Ficam de fora do gráfico enquanto não forem cadastrados (não inventamos
+  // valor pra eles).
+  const valorPessimista = periodoOverride ? periodoOverride.valorMetaPessimista ?? null : meta?.valorMetaPessimista ?? null
+  const valorOtimista = periodoOverride ? periodoOverride.valorMetaOtimista ?? null : meta?.valorMetaOtimista ?? null
+
+  const pacePessimista = useMemo(() => {
+    if (!temMeta || valorPessimista == null) return null
+    const { ini, fim } = periodoOverride ? periodoOverride : intervaloDaMeta(meta!)
+    return calcularPace(valorPessimista, ini, fim, pontos)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [temMeta, valorPessimista, meta, pontos, periodoOverride])
+
+  const paceOtimista = useMemo(() => {
+    if (!temMeta || valorOtimista == null) return null
+    const { ini, fim } = periodoOverride ? periodoOverride : intervaloDaMeta(meta!)
+    return calcularPace(valorOtimista, ini, fim, pontos)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [temMeta, valorOtimista, meta, pontos, periodoOverride])
+
   // Mesmo período, um ano atrás — pra comparar meta x resultado atual x resultado do
   // ano passado ao mesmo tempo. hojeISO = fim do período deslocado pra não cortar
   // nenhum dia como "ainda não realizado" (o ano passado já acabou inteiro).
@@ -107,8 +135,10 @@ export default function PaceBand({
     return pace.serie.map((p, i) => ({
       ...p,
       'Ano Anterior': paceAnoAnterior?.serie[i]?.Realizado ?? null,
+      'Meta Pessimista': pacePessimista?.serie[i]?.Meta ?? null,
+      'Meta Otimista': paceOtimista?.serie[i]?.Meta ?? null,
     }))
-  }, [pace, paceAnoAnterior])
+  }, [pace, paceAnoAnterior, pacePessimista, paceOtimista])
 
   // Comparação "ao mesmo tempo": realizado até agora vs. o que já tínhamos feito
   // no mesmo trecho do período, um ano atrás (mesma fração decorrida).
@@ -199,7 +229,7 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
   return (
     <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg space-y-4">
       <SectionTitle
-        ajuda="A linha laranja tracejada é a meta distribuída igual ao longo do período. A área verde é o realizado acumulado. A linha roxa é o realizado no mesmo período do ano passado (dia a dia, alinhado pela posição no período, não pela data). Se a área está abaixo da linha da meta na marca de hoje, estamos atrás do ritmo."
+        ajuda="A linha laranja tracejada é a meta padrão distribuída igual ao longo do período (as linhas mais claras/escuras da mesma cor, quando aparecem, são os cenários pessimista e otimista). A área verde é o realizado acumulado. A linha roxa é o realizado no mesmo período do ano passado (dia a dia, alinhado pela posição no período, não pela data). Se a área está abaixo da linha da meta na marca de hoje, estamos atrás do ritmo."
         right={
           <span className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${st.cls}`}>
             {st.txt}
@@ -275,7 +305,27 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
               contentStyle={{ background: '#0a0f14', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line dataKey="Meta" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="5 4" />
+            {pacePessimista && (
+              <Line
+                dataKey="Meta Pessimista"
+                stroke="#FDE68A"
+                strokeWidth={1.5}
+                dot={false}
+                strokeDasharray="5 4"
+                connectNulls
+              />
+            )}
+            <Line dataKey="Meta" name="Meta padrão" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="5 4" />
+            {paceOtimista && (
+              <Line
+                dataKey="Meta Otimista"
+                stroke="#B45309"
+                strokeWidth={1.5}
+                dot={false}
+                strokeDasharray="5 4"
+                connectNulls
+              />
+            )}
             <Line
               dataKey="Ano Anterior"
               stroke="#8B5CF6"

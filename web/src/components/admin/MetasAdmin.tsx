@@ -24,6 +24,8 @@ export default function MetasAdmin() {
   const [ano, setAno] = useState(anoAtual)
   const [periodo, setPeriodo] = useState(new Date().getMonth() + 1)
   const [valor, setValor] = useState('')
+  const [valorPessimista, setValorPessimista] = useState('')
+  const [valorOtimista, setValorOtimista] = useState('')
   const [contexto, setContexto] = useState('')
   const [salvando, setSalvando] = useState(false)
 
@@ -36,6 +38,8 @@ export default function MetasAdmin() {
     setAno(anoAtual)
     setPeriodo(new Date().getMonth() + 1)
     setValor('')
+    setValorPessimista('')
+    setValorOtimista('')
     setContexto('')
   }
 
@@ -46,7 +50,16 @@ export default function MetasAdmin() {
     setAno(m.ano)
     setPeriodo(m.periodo || 1)
     setValor(String(m.valorMeta))
+    setValorPessimista(m.valorMetaPessimista == null ? '' : String(m.valorMetaPessimista))
+    setValorOtimista(m.valorMetaOtimista == null ? '' : String(m.valorMetaOtimista))
     setContexto(m.contexto)
+  }
+
+  /** Converte o texto do campo (aceita "1.500,50" ou "1500.5") pra número, ou null se vazio. */
+  function paraNumero(texto: string): number | null {
+    if (!texto.trim()) return null
+    const n = Number(texto.replace(/\./g, '').replace(',', '.'))
+    return Number.isFinite(n) ? n : null
   }
 
   async function handleSalvar(e: React.FormEvent) {
@@ -54,6 +67,12 @@ export default function MetasAdmin() {
     const v = Number(String(valor).replace(/\./g, '').replace(',', '.'))
     if (!Number.isFinite(v) || v < 0) {
       toast({ title: 'Valor inválido', variant: 'destructive' })
+      return
+    }
+    const vPessimista = paraNumero(valorPessimista)
+    const vOtimista = paraNumero(valorOtimista)
+    if ((valorPessimista.trim() && vPessimista === null) || (valorOtimista.trim() && vOtimista === null)) {
+      toast({ title: 'Meta pessimista/otimista inválida', variant: 'destructive' })
       return
     }
     setSalvando(true)
@@ -65,6 +84,8 @@ export default function MetasAdmin() {
         ano,
         periodo: escopo === 'anual' ? 0 : periodo,
         valorMeta: v,
+        valorMetaPessimista: vPessimista,
+        valorMetaOtimista: vOtimista,
         contexto,
       })
       toast({ title: editId ? 'Meta atualizada' : 'Meta cadastrada' })
@@ -167,16 +188,42 @@ export default function MetasAdmin() {
             )}
           </div>
 
-          <label className="text-xs text-slate-400 flex flex-col gap-1">
-            Valor da meta {metrica === 'receita' ? '(R$)' : '(quantidade)'}
-            <input
-              type="text"
-              value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              placeholder={metrica === 'receita' ? 'Ex: 150000' : 'Ex: 40'}
-              className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-3 py-2 text-slate-200 text-xs"
-            />
-          </label>
+          <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="text-xs text-slate-400 flex flex-col gap-1">
+              Meta pessimista (opcional) {metrica === 'receita' ? '(R$)' : '(quantidade)'}
+              <input
+                type="text"
+                value={valorPessimista}
+                onChange={(e) => setValorPessimista(e.target.value)}
+                placeholder="Ex: 120000"
+                className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-3 py-2 text-slate-200 text-xs"
+              />
+            </label>
+            <label className="text-xs text-slate-400 flex flex-col gap-1">
+              Meta padrão {metrica === 'receita' ? '(R$)' : '(quantidade)'}
+              <input
+                type="text"
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                placeholder={metrica === 'receita' ? 'Ex: 150000' : 'Ex: 40'}
+                className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-3 py-2 text-slate-200 text-xs"
+              />
+            </label>
+            <label className="text-xs text-slate-400 flex flex-col gap-1">
+              Meta otimista (opcional) {metrica === 'receita' ? '(R$)' : '(quantidade)'}
+              <input
+                type="text"
+                value={valorOtimista}
+                onChange={(e) => setValorOtimista(e.target.value)}
+                placeholder="Ex: 180000"
+                className="bg-[#0a0f14] border border-white/[0.1] rounded-lg px-3 py-2 text-slate-200 text-xs"
+              />
+            </label>
+          </div>
+          <p className="text-[11px] text-slate-500 sm:col-span-2 lg:col-span-3 -mt-2">
+            Pessimista e otimista são opcionais — só aparecem como linha extra no gráfico de pace
+            quando cadastrados. Deixe em branco se ainda não tiver esses números definidos.
+          </p>
 
           <label className="text-xs text-slate-400 flex flex-col gap-1 sm:col-span-2 lg:col-span-3">
             Contexto / estratégia (a IA usa isso pra orientar as ações)
@@ -232,6 +279,13 @@ export default function MetasAdmin() {
                     {m.metrica === 'receita'
                       ? `R$ ${m.valorMeta.toLocaleString('pt-BR')}`
                       : m.valorMeta.toLocaleString('pt-BR')}
+                    {(m.valorMetaPessimista != null || m.valorMetaOtimista != null) && (
+                      <div className="text-[10px] font-normal text-slate-500">
+                        {m.valorMetaPessimista != null && `pess. ${m.valorMetaPessimista.toLocaleString('pt-BR')}`}
+                        {m.valorMetaPessimista != null && m.valorMetaOtimista != null && ' · '}
+                        {m.valorMetaOtimista != null && `otim. ${m.valorMetaOtimista.toLocaleString('pt-BR')}`}
+                      </div>
+                    )}
                   </td>
                   <td className="py-2.5 px-2 text-slate-500 max-w-[280px] truncate" title={m.contexto}>
                     {m.contexto || '—'}
