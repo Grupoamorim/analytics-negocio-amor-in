@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import TurmasFechadasPlanilha from '@/components/TurmasFechadasPlanilha'
 import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
 import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 
 function normalizar(s?: string | null): string {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
@@ -423,6 +424,18 @@ export default function Adesoes() {
               icon={Percent}
             />
           </div>
+
+          <BotaoAnaliseIA
+            label="Analisar adesões com IA"
+            promptBuilder={() => `Você é um analista comercial sênior de uma empresa de fotografia de formaturas.
+Analise os números de adesões (vendas fechadas, competência) do período abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) o ritmo está acelerando ou desacelerando; 2) a variação anual é normal pra sazonalidade do setor (picos em certas épocas do calendário acadêmico) ou é preocupante; 3) 2 ações práticas pra aumentar adesões no próximo período.
+
+Adesões no período: ${analise.totalAdesoes} (${analise.totalAnoAnterior} no mesmo período do ano passado)
+Variação: ${analise.deltaQuantidade === null ? 'sem comparativo' : `${analise.deltaQuantidade >= 0 ? '+' : ''}${analise.deltaQuantidade.toFixed(1)}%`}
+Valor total: ${brl(analise.totalValor)}${analise.deltaValor !== null ? ` (${analise.deltaValor >= 0 ? '+' : ''}${analise.deltaValor.toFixed(1)}% vs ano passado)` : ''}
+Ticket médio: ${brl(analise.ticketMedio)}
+Top turmas do período: ${porTurmaOrdenado.slice(0, 8).map((t) => `${t.turma}: ${t.quantidade} adesão(ões), ${brl(t.valor)}`).join('; ') || 'sem dados'}`}
+          />
 
           <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
             <h2 className="text-sm font-semibold text-white mb-4">

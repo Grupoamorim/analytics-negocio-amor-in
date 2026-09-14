@@ -30,6 +30,7 @@ import KpiCard from '@/components/dashboard/KpiCard'
 import SectionTitle from '@/components/dashboard/SectionTitle'
 import PaceBand from '@/components/dashboard/PaceBand'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 
 const brl = (v: number) => `R$ ${Math.round(v).toLocaleString('pt-BR')}`
 const brlK = (v: number) => `R$ ${(v / 1000).toFixed(0)}k`
@@ -170,6 +171,20 @@ export default function PainelFinanceiro() {
               ajuda="Novos contratos de aluno no SGE, pela data de adesão. Ticket médio = valor total ÷ quantidade. A variação compara com o mesmo período do ano anterior (a sazonalidade do calendário acadêmico é forte)."
             />
           </div>
+
+          <BotaoAnaliseIA
+            label="Analisar caixa do período com IA"
+            promptBuilder={() => `Você é um analista financeiro sênior de uma empresa de fotografia de formaturas.
+Analise o caixa do período abaixo (base caixa, comparado ao mesmo período do ano anterior) e responda em português, direto e prático, em no máximo 6 linhas: 1) o resultado do período e a inadimplência estão saudáveis; 2) o "a receber em aberto" vs "contas a pagar nos próximos 30 dias" indica aperto de caixa à vista; 3) 2-3 ações práticas.
+
+Recebido no período: ${brl(a.recebido)} (variação vs ano passado: ${variacao(a.recebido, a.recebidoAnterior) === null ? 'sem comparativo' : `${variacao(a.recebido, a.recebidoAnterior)!.toFixed(1)}%`})
+Resultado do período: ${brl(a.resultado)} (recebido ${brlK(a.recebido)} − contas pagas ${brlK(a.contasPagas)})
+Inadimplência: ${brl(a.inadimplencia)} (${inadimplenciaPct.toFixed(1)}% do a receber em aberto)
+A receber em aberto: ${brl(a.aReceberEmAberto)}
+Contas a pagar nos próximos 30 dias: ${brl(a.aPagarProx30)}
+Adesões no período: ${a.adesoesQtd} (${brl(a.adesoesValor)}, ticket ${brl(a.adesoesTicket)})
+Receita recebida por marca: ${a.receitaPorMarca.map((r) => `${r.marca}: ${brl(r.recebido)}`).join(', ') || 'sem dados'}`}
+          />
 
           {/* Fluxo de caixa */}
           <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">

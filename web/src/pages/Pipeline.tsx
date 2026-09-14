@@ -61,6 +61,7 @@ import {
 } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import LastEditedBy from '@/components/LastEditedBy'
 import { getSGELinkForLead } from '@/utils/sgeIntegration'
@@ -2054,6 +2055,22 @@ function DealDetailModal({
               value={proximaAcao?.label || 'Todas as etapas concluídas'}
             />
           </div>
+
+          <BotaoAnaliseIA
+            label="Analisar negociação com IA"
+            promptBuilder={() => `Você é um SDR/closer sênior de uma empresa de fotografia de formaturas.
+Analise a negociação abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) leitura rápida da situação (está bem encaminhada, travada, em risco?); 2) 2-3 ações concretas e priorizadas pra avançar ou destravar.
+
+Turma: ${turmaName}
+Faculdade: ${lead?.faculdade || '—'} • Curso: ${lead?.curso || '—'} • Cidade: ${lead?.cidade || '—'}
+Etapa atual: ${stage?.name || '—'} (há ${days} dia(s) nessa etapa)
+Probabilidade do motor: ${deal.probability ?? 0}%
+Valor estimado: R$ ${deal.value.toLocaleString('pt-BR')}
+Responsável: ${owner?.name || 'sem responsável'}
+Próxima ação do checklist: ${proximaAcao?.label || 'todas as etapas concluídas'}
+Sem resposta: ${deal.semResposta ? `sim, desde ${deal.semRespostaDesde || 'data não registrada'}` : 'não'}
+${deal.notes ? `Notas registradas: """${deal.notes}"""` : ''}`}
+          />
 
           {/* Informações da Turma — clica em cada campo e já edita, sem passo de "Editar" */}
           {lead && (
