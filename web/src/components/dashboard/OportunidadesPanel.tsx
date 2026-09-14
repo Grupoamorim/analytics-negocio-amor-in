@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
 import SectionTitle from './SectionTitle'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 import { oportunidadesPorFaculdade } from '@/utils/oportunidadesCurso'
 import type { Lead } from '@/types/crm'
 
@@ -59,6 +60,19 @@ export default function OportunidadesPanel({ leads, limite = 6 }: { leads: Lead[
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {top.length > 0 && (
+        <div className="mt-4 border-t border-white/[0.06] pt-3">
+          <BotaoAnaliseIA
+            label="Analisar oportunidades com IA"
+            promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise as oportunidades de cross-sell abaixo (faculdades onde já fechamos turma, mas faltam cursos que já vendemos em outra faculdade) e responda em português, direto e prático, em no máximo 6 linhas: 1) qual oportunidade priorizar primeiro e por quê; 2) 2-3 ações concretas para atacar essas faculdades.
+
+Oportunidades (faculdade — turmas já fechadas — cursos faltantes):
+${top.map((o) => `${o.faculdade}${o.cidade ? ` (${o.cidade})` : ''}: ${o.turmasConvertidas} turma(s) fechada(s); faltam ${o.cursosFaltantes.slice(0, 6).map((c) => `${c.curso}${c.ancora ? ' [âncora]' : ''}`).join(', ')}`).join('\n')}`}
+          />
         </div>
       )}
     </div>

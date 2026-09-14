@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Gauge, Clock, TrendingUp, MessageSquareOff } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import { supabase } from '@/lib/supabase/client'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 import {
   calcularMetricasComerciais,
   type EpisodioSemResposta,
@@ -120,6 +121,20 @@ export default function MetricasComerciaisPanel({ compact = false }: { compact?:
             que chegaram naquela fase, quantas avançaram.
           </p>
         </div>
+      )}
+
+      {!compact && (
+        <BotaoAnaliseIA
+          label="Analisar métricas comerciais com IA"
+          promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise as métricas comerciais abaixo (prazo até fechar, conversão, turmas sem resposta, tempo por fase) e responda em português, direto e prático, em no máximo 6 linhas: 1) onde está o maior gargalo do funil; 2) 2-3 ações concretas para melhorar o ritmo comercial.
+
+Prazo médio até fechar: ${dias(m.prazoMedioFechamentoDias)} (${m.ganhos} turmas ganhas)
+Taxa de conversão: ${pct(m.winRate)} (${m.ganhos} ganhas / ${m.perdidos} perdidas)
+Turmas sem resposta agora: ${m.semResposta.agora}${m.semResposta.taxaAgora != null ? ` (${pct(m.semResposta.taxaAgora)} das ativas)` : ''}
+Turmas ativas no funil: ${m.totalAtivas}
+Por fase: ${m.fases.map((f) => `${f.nome} (${f.turmasAgora} agora, ${dias(f.tempoMedioDias)} médio, ${pct(f.conversaoParaProxima)} avançam)`).join('; ')}`}
+        />
       )}
     </div>
   )

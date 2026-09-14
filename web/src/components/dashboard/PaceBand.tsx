@@ -26,7 +26,7 @@ import {
   type MetaDecisao,
 } from '@/hooks/useMetasNegocio'
 import { useAcesso } from '@/context/AcessoContext'
-import { callGemini, getGeminiApiKey } from '@/utils/geminiApi'
+import { useAnaliseItemIA } from '@/hooks/useAnaliseItemIA'
 
 function fmt(v: number, unidade: 'R$' | 'un'): string {
   if (unidade === 'R$') return `R$ ${Math.round(v).toLocaleString('pt-BR')}`
@@ -68,9 +68,6 @@ export default function PaceBand({
   onAplicarDecisao?: (id: string, decisao: MetaDecisao) => Promise<void>
 }) {
   const unidade = METRICA_UNIDADE[metrica]
-  const [analise, setAnalise] = useState<string | null>(null)
-  const [carregandoIA, setCarregandoIA] = useState(false)
-  const [erroIA, setErroIA] = useState<string | null>(null)
   const { isAdmin } = useAcesso()
   const navigate = useNavigate()
   const [rascunhoExplicacao, setRascunhoExplicacao] = useState('')
@@ -161,16 +158,9 @@ export default function PaceBand({
     }
   }
 
-  async function analisarComIA() {
-    if (!pace) return
-    if (!getGeminiApiKey()) {
-      setErroIA('Configure a chave do Gemini em Administração → IA.')
-      return
-    }
-    setCarregandoIA(true)
-    setErroIA(null)
-    try {
-      const prompt = `Você é um diretor comercial/financeiro sênior de uma empresa de fotografia de formaturas.
+  const { analise, carregando: carregandoIA, erro: erroIA, analisar: analisarComIA, mensagemPensando } = useAnaliseItemIA(() => {
+    const p = pace!
+    return `Você é um diretor comercial/financeiro sênior de uma empresa de fotografia de formaturas.
 Analise o andamento da meta abaixo e responda em português, direto e prático, em no máximo 6 linhas:
 1) uma frase dizendo se vamos bater e o tamanho do gap;
 2) 3 a 4 ações concretas e priorizadas pra fechar o gap no tempo que resta.
@@ -178,21 +168,14 @@ Analise o andamento da meta abaixo e responda em português, direto e prático, 
 Convenção de trimestre: o sistema usa T1-T4. Se o contexto abaixo mencionar "Q1"-"Q4" (nomenclatura em inglês, comum em documentos de planejamento), trate como sinônimo do mesmo trimestre (ex: Q3 = T3, terceiro trimestre).
 
 META: ${METRICA_LABEL[metrica]} — período ${rotulo}
-Valor da meta: ${fmt(pace.meta, unidade)}
-Realizado até hoje: ${fmt(pace.realizado, unidade)} (${(pace.indicePace * 100).toFixed(0)}% do que deveria estar a esta altura)
-Onde deveríamos estar hoje (meta linear): ${fmt(pace.metaProRata, unidade)}
-Projeção de fechamento no ritmo atual: ${fmt(pace.projecao, unidade)}
-Falta: ${fmt(pace.faltam, unidade)} em ${pace.diasRestantes} dias
-Ritmo atual: ${fmt(pace.ritmoDiarioAtual, unidade)}/dia • Ritmo necessário: ${fmt(pace.ritmoDiarioNecessario, unidade)}/dia (${fmt(pace.ritmoSemanalNecessario, unidade)}/semana)
+Valor da meta: ${fmt(p.meta, unidade)}
+Realizado até hoje: ${fmt(p.realizado, unidade)} (${(p.indicePace * 100).toFixed(0)}% do que deveria estar a esta altura)
+Onde deveríamos estar hoje (meta linear): ${fmt(p.metaProRata, unidade)}
+Projeção de fechamento no ritmo atual: ${fmt(p.projecao, unidade)}
+Falta: ${fmt(p.faltam, unidade)} em ${p.diasRestantes} dias
+Ritmo atual: ${fmt(p.ritmoDiarioAtual, unidade)}/dia • Ritmo necessário: ${fmt(p.ritmoDiarioNecessario, unidade)}/dia (${fmt(p.ritmoSemanalNecessario, unidade)}/semana)
 ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.contexto}"""` : ''}`
-      const res = await callGemini(prompt)
-      setAnalise(res)
-    } catch (e: any) {
-      setErroIA(e?.message || 'Não foi possível analisar agora.')
-    } finally {
-      setCarregandoIA(false)
-    }
-  }
+  })
 
   if (!temMeta || !pace) {
     return (
@@ -327,7 +310,7 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded-lg px-3 py-1.5 hover:bg-orange-500/20 disabled:opacity-50"
         >
           {carregandoIA ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-          {carregandoIA ? 'Analisando…' : 'Analisar meta com IA'}
+          {carregandoIA ? mensagemPensando : 'Analisar meta com IA'}
         </button>
         {erroIA && <p className="text-[11px] text-rose-400 mt-2">{erroIA}</p>}
         {analise && (

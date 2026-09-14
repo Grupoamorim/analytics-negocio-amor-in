@@ -3,6 +3,7 @@ import { DollarSign, Receipt, UserPlus } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import SectionTitle from './SectionTitle'
 import KpiCard from './KpiCard'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 import type { FinanceiroDashboardAgregado } from '@/hooks/useFinanceiroDashboard'
 
 const brl = (v: number) => `R$ ${Math.round(v).toLocaleString('pt-BR')}`
@@ -103,6 +104,20 @@ export default function VgvComercialPanel({
         {grafico.length === 0 && !loading && (
           <p className="text-center text-xs text-slate-500 py-4">Nenhuma adesão registrada nos últimos 12 meses.</p>
         )}
+      </div>
+
+      <div className="mt-4 border-t border-white/[0.06] pt-3">
+        <BotaoAnaliseIA
+          label="Analisar VGV com IA"
+          promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise o VGV (Valor Geral de Vendas — valor de contrato das adesões, venda em competência, não caixa) do período abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) leitura do momento (acelerando/estável/desacelerando, comparado ao ano anterior); 2) 2-3 ações concretas para melhorar VGV e ticket médio no próximo período.
+
+Período: ${rotuloPeriodo}
+VGV no período: ${brl(agregado.adesoesValor)}${deltaValor !== null ? ` (${deltaValor >= 0 ? '+' : ''}${deltaValor.toFixed(0)}% vs. mesmo período ano passado)` : ' (sem comparativo do ano passado)'}
+Adesões no período: ${agregado.adesoesQtd}${deltaQtd !== null ? ` (${deltaQtd >= 0 ? '+' : ''}${deltaQtd.toFixed(0)}% vs. ano passado)` : ''}
+Ticket médio por adesão: ${brl(agregado.adesoesTicket)}
+VGV mensal (últimos 12 meses): ${grafico.map((m) => `${m.mes}: ${brl(m.valor)}`).join(', ') || 'sem dados'}`}
+        />
       </div>
     </div>
   )
