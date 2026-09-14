@@ -14,6 +14,7 @@ import {
 import { useCRM } from '@/context/CRMContext'
 import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import {
   FUNNEL_STAGES,
@@ -286,6 +287,18 @@ function VisaoGeral({
           <span className="font-semibold text-white">Motor</span>.
         </p>
       </div>
+
+      <BotaoAnaliseIA
+        label="Analisar calibragem do funil com IA"
+        promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise a calibragem da probabilidade de conversão do funil abaixo (motor baseado na média das reuniões analisadas, ajustado por portão de fase vencido e velocidade) e responda em português, direto e prático, em no máximo 6 linhas: 1) o funil está com viés otimista ou pessimista, considerando ganhos vs perdidos históricos; 2) 2-3 ações pra elevar o score real das turmas em negociação (não é sobre "enganar" o motor, é sobre o que fazer nas reuniões/negociações).
+
+Média de probabilidade do funil: ${media}%
+Turmas com probabilidade calculada: ${total}${totalFunil > 0 ? ` (mais ${totalFunil} sem probabilidade ainda)` : ''}
+Reuniões analisadas: ${reunioes}
+Histórico: ${ganhos} turmas ganhas, ${perdidos} perdidas
+Distribuição: 0-25% (${histogram.low}), 26-50% (${histogram.medLow}), 51-75% (${histogram.medHigh}), 76-100% (${histogram.high})`}
+      />
     </div>
   )
 }
