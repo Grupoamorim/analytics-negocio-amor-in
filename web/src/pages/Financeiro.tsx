@@ -7,6 +7,7 @@ import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
 import { fetchAllRows } from '@/utils/fetchAllRows'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 
 interface TotaisNegocio {
   total_faturado: number
@@ -266,6 +267,19 @@ export default function Financeiro() {
         <KpiCard label="Inadimplência" value={brl(totais?.total_inadimplente)} icon={AlertTriangle} tone="red" />
         <KpiCard label="Contas a Pagar" value={brl(totais?.total_custos)} icon={FileWarning} tone="yellow" />
       </div>
+
+      <BotaoAnaliseIA
+        label="Analisar Financeiro com IA"
+        promptBuilder={() => `Você é um analista financeiro sênior de uma empresa de fotografia de formaturas.
+Analise os indicadores financeiros do período abaixo (base caixa: Recebido pela data em que o dinheiro entrou; os demais pelo vencimento) e responda em português, direto e prático, em no máximo 6 linhas: 1) a inadimplência está dentro do saudável pro setor (referência 5-10%)? 2) o fluxo de caixa (recebido vs contas a pagar) está equilibrado? 3) 2-3 ações práticas pra melhorar o caixa este período. Lembre de confirmar qualquer decisão fiscal com o contador.
+
+Total Faturado no período: ${brl(totais.total_faturado)}
+Recebido (caixa real): ${brl(totais.total_recebido)}
+A Receber: ${brl(totais.total_a_receber)}
+Inadimplência: ${brl(totais.total_inadimplente)}${totais.total_faturado > 0 ? ` (${((totais.total_inadimplente / totais.total_faturado) * 100).toFixed(1)}% do faturado)` : ''}
+Contas a Pagar: ${brl(totais.total_custos)}
+Fluxo de caixa (últimos meses, recebido vs previsto): ${fluxoCaixa.map((m) => `${m.mes}: recebido ${brl(m.recebido)}, previsto ${brl(m.previsto)}`).join('; ') || 'sem dados'}`}
+      />
 
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl overflow-hidden">
         <div className="flex border-b border-white/[0.06]">

@@ -18,6 +18,7 @@ import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
 import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
 import { fetchAllRows } from '@/utils/fetchAllRows'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 
 interface TurmaResumo {
   nome: string
@@ -435,6 +436,19 @@ export default function DRE() {
               <span className="text-xs font-medium text-slate-400">Margem Operacional</span>
               <div className="text-2xl font-bold text-white mt-1">{margens.operacional.toFixed(1)}%</div>
             </div>
+          </div>
+
+          <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
+            <BotaoAnaliseIA
+              label="Analisar DRE com IA"
+              promptBuilder={() => `Você é um analista financeiro sênior de uma empresa de fotografia de formaturas.
+Analise o DRE (base caixa) abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) as margens bruta e operacional estão saudáveis pro setor? 2) onde está o maior ralo de despesa no período; 3) 2-3 ações práticas pra melhorar o resultado.
+
+${linhas.map((l) => `${l.label}: ${brl(l.valor)}`).join('\n')}
+Margem Bruta: ${margens.bruta.toFixed(1)}%
+Margem Operacional: ${margens.operacional.toFixed(1)}%
+Maiores turmas/custos: ${custoPorTurma.slice(0, 6).map((t) => `${t.turma} (receita ${brl(t.receita)}, custo ${brl(t.custo)}, resultado ${brl(t.resultado)})`).join('; ') || 'sem dados por turma'}`}
+            />
           </div>
 
           {receitaPrestacaoServicos > 0 && (

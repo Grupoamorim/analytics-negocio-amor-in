@@ -14,6 +14,7 @@ import { Rocket, PiggyBank, Pencil, Save, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import { fetchAllRows } from '@/utils/fetchAllRows'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 
 interface FaturamentoMensal {
   mes: string
@@ -350,6 +351,18 @@ export default function Projecoes() {
             </ResponsiveContainer>
           </div>
         )}
+        {chartData.length >= 3 && (
+          <div className="mt-4 pt-3 border-t border-white/[0.06]">
+            <BotaoAnaliseIA
+              label="Analisar projeção com IA"
+              promptBuilder={() => `Você é um analista financeiro sênior de uma empresa de fotografia de formaturas.
+Analise a projeção de faturamento (tendência linear sobre o histórico real) abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) a tendência é de crescimento, estagnação ou queda; 2) considerando a sazonalidade típica do mercado de formaturas (picos em certas épocas do calendário acadêmico), isso é normal ou preocupante; 3) uma ação prática pros próximos meses.
+
+Histórico e projeção (mês: real / já contratado / projeção):
+${chartData.map((c) => `${c.mes}: real ${c.real !== undefined ? brl(c.real) : '—'} / já contratado ${c.jaContratado !== undefined ? brl(c.jaContratado) : '—'} / projeção ${c.projecao !== undefined ? brl(c.projecao) : '—'}`).join('\n')}`}
+            />
+          </div>
+        )}
       </div>
 
       {/* Provisão Financeira: custo direto que ainda falta honrar com as
@@ -424,6 +437,16 @@ export default function Projecoes() {
                 fora por falta de parâmetro de custo cadastrado pro ano/tamanho delas.
               </p>
             )}
+            <div className="mt-4 pt-3 border-t border-white/[0.06]">
+              <BotaoAnaliseIA
+                label="Analisar provisão com IA"
+                promptBuilder={() => `Você é um analista financeiro sênior de uma empresa de fotografia de formaturas.
+Analise a provisão financeira abaixo (custo direto ainda a reservar em caixa pras turmas já fechadas, por ano de formatura) e responda em português, direto e prático, em no máximo 6 linhas: 1) o caixa atual parece suficiente considerando esses compromissos futuros; 2) 2-3 ações práticas de planejamento de caixa.
+
+${provisao.linhas.map((l) => `${l.ano}${l.temEstimativa ? ' (parcialmente estimado)' : ''}: ${l.turmas} turma(s), ${l.alunos} aluno(s), custo a provisionar ${brl2(l.custo)}, receita prevista ${brl2(l.venda)}`).join('\n')}
+Total: ${provisao.totalTurmas} turmas, custo ${brl2(provisao.totalCusto)}, receita prevista ${brl2(provisao.totalVenda)}`}
+              />
+            </div>
           </>
         )}
       </div>
