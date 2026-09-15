@@ -19,6 +19,11 @@ import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
 import { usePeriodoFiltro } from '@/hooks/usePeriodoFiltro'
 import { fetchAllRows } from '@/utils/fetchAllRows'
 import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
+import { useDreFechamento } from '@/hooks/useDreFechamento'
+import { useAcesso } from '@/context/AcessoContext'
+import { useToast } from '@/hooks/use-toast'
+import { Lock, LockOpen, FileDown } from 'lucide-react'
+import { exportarElementoParaPdf } from '@/utils/exportarPdf'
 
 interface TurmaResumo {
   nome: string
@@ -318,8 +323,52 @@ export default function DRE() {
     }
   }, [pagamentos, contasPagar, dtIni, dtFim, selectedEmpresas])
 
+  const { isAdmin, email } = useAcesso()
+  const { toast } = useToast()
+  const { fechamento, fechar, reabrir } = useDreFechamento(dtIni, dtFim, selectedEmpresas)
+  const [processando, setProcessando] = useState(false)
+  const [exportando, setExportando] = useState(false)
+
+  const linhasExibidas = fechamento ? fechamento.linhas : linhas
+  const margensExibidas = fechamento ? { bruta: fechamento.margemBruta, operacional: fechamento.margemOperacional } : margens
+
+  const handleFechar = async () => {
+    setProcessando(true)
+    try {
+      await fechar(linhas, margens, email)
+      toast({ title: 'Período fechado', description: 'Os valores deste período ficam congelados até reabrir.' })
+    } catch (e: any) {
+      toast({ title: 'Erro ao fechar período', description: e.message, variant: 'destructive' })
+    } finally {
+      setProcessando(false)
+    }
+  }
+
+  const handleReabrir = async () => {
+    setProcessando(true)
+    try {
+      await reabrir(email)
+      toast({ title: 'Período reaberto', description: 'O DRE volta a recalcular ao vivo.' })
+    } catch (e: any) {
+      toast({ title: 'Erro ao reabrir período', description: e.message, variant: 'destructive' })
+    } finally {
+      setProcessando(false)
+    }
+  }
+
+  const handleExportar = async () => {
+    setExportando(true)
+    try {
+      await exportarElementoParaPdf('dre-conteudo', `DRE_${dtIni}_a_${dtFim}`)
+    } catch (e: any) {
+      toast({ title: 'Erro ao exportar PDF', description: e.message, variant: 'destructive' })
+    } finally {
+      setExportando(false)
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" id="dre-conteudo">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
@@ -331,9 +380,9 @@ export default function DRE() {
                 promptBuilder={() => `Você é um analista financeiro sênior de uma empresa de fotografia de formaturas.
 Analise o DRE (base caixa) abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) as margens bruta e operacional estão saudáveis pro setor? 2) onde está o maior ralo de despesa no período; 3) 2-3 ações práticas pra melhorar o resultado.
 
-${linhas.map((l) => `${l.label}: ${brl(l.valor)}`).join('\n')}
-Margem Bruta: ${margens.bruta.toFixed(1)}%
-Margem Operacional: ${margens.operacional.toFixed(1)}%
+${linhasExibidas.map((l) => `${l.label}: ${brl(l.valor)}`).join('\n')}
+Margem Bruta: ${margensExibidas.bruta.toFixed(1)}%
+Margem Operacional: ${margensExibidas.operacional.toFixed(1)}%
 Maiores turmas/custos: ${custoPorTurma.slice(0, 6).map((t) => `${t.turma} (receita ${brl(t.receita)}, custo ${brl(t.custo)}, resultado ${brl(t.resultado)})`).join('; ') || 'sem dados por turma'}`}
               />
             )}
@@ -342,12 +391,52 @@ Maiores turmas/custos: ${custoPorTurma.slice(0, 6).map((t) => `${t.turma} (recei
             Demonstrativo de Resultado — classificação automática das despesas
           </p>
         </div>
-        <EmpresaFilterBar
-          options={empresaOptions}
-          selected={selectedEmpresas}
-          onChange={setSelectedEmpresas}
-        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <EmpresaFilterBar
+            options={empresaOptions}
+            selected={selectedEmpresas}
+            onChange={setSelectedEmpresas}
+          />
+          <button
+            type="button"
+            onClick={handleExportar}
+            disabled={exportando || loading}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-1.5 hover:bg-white/[0.08] disabled:opacity-50"
+          >
+            <FileDown className="w-3.5 h-3.5" /> {exportando ? 'Gerando PDF...' : 'Exportar PDF'}
+          </button>
+          {isAdmin && !loading && (
+            fechamento ? (
+              <button
+                type="button"
+                onClick={handleReabrir}
+                disabled={processando}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-1.5 hover:bg-amber-500/20 disabled:opacity-50"
+              >
+                <LockOpen className="w-3.5 h-3.5" /> Reabrir período
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleFechar}
+                disabled={processando}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-3 py-1.5 hover:bg-emerald-500/20 disabled:opacity-50"
+              >
+                <Lock className="w-3.5 h-3.5" /> Fechar período
+              </button>
+            )
+          )}
+        </div>
       </div>
+      {fechamento && (
+        <p className="text-[11px] text-emerald-400/90 bg-emerald-500/[0.06] border border-emerald-500/20 rounded-lg px-3 py-2 flex items-center gap-1.5">
+          <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+          Período fechado em {new Date(fechamento.fechadoEm).toLocaleString('pt-BR')}
+          {fechamento.fechadoPorEmail ? ` por ${fechamento.fechadoPorEmail}` : ''} — os valores abaixo
+          estão congelados e não mudam mesmo que dados financeiros sejam corrigidos depois.
+          {isAdmin ? ' Use "Reabrir período" para voltar a calcular ao vivo.' : ''}
+        </p>
+      )}
       {selectedEmpresas.length > 0 && (
         <p className="text-[11px] text-amber-400/80 bg-amber-500/[0.06] border border-amber-500/20 rounded-lg px-3 py-2">
           A maioria das contas a pagar ainda não tem turma vinculada no SGE, então as despesas
@@ -364,10 +453,12 @@ Maiores turmas/custos: ${custoPorTurma.slice(0, 6).map((t) => `${t.turma} (recei
         <>
           <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
             <p className="text-[11px] text-slate-500 mb-2">
-              Clique na seta de uma linha para ver o detalhamento por turma e por fornecedor.
+              {fechamento
+                ? 'Período fechado — valores congelados, sem detalhamento por turma/fornecedor (só disponível ao vivo).'
+                : 'Clique na seta de uma linha para ver o detalhamento por turma e por fornecedor.'}
             </p>
-            {linhas.map((l, i) => {
-              const detalhe = l.key ? detalhesPorLinha[l.key] : undefined
+            {linhasExibidas.map((l, i) => {
+              const detalhe = !fechamento && l.key ? detalhesPorLinha[l.key] : undefined
               const aberta = !!l.key && linhaAberta === l.key
               const temDetalhe = !!detalhe && (detalhe.porTurma.length > 0 || detalhe.porFornecedor.length > 0)
               return (
@@ -445,11 +536,11 @@ Maiores turmas/custos: ${custoPorTurma.slice(0, 6).map((t) => `${t.turma} (recei
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
               <span className="text-xs font-medium text-slate-400">Margem Bruta</span>
-              <div className="text-2xl font-bold text-white mt-1">{margens.bruta.toFixed(1)}%</div>
+              <div className="text-2xl font-bold text-white mt-1">{margensExibidas.bruta.toFixed(1)}%</div>
             </div>
             <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
               <span className="text-xs font-medium text-slate-400">Margem Operacional</span>
-              <div className="text-2xl font-bold text-white mt-1">{margens.operacional.toFixed(1)}%</div>
+              <div className="text-2xl font-bold text-white mt-1">{margensExibidas.operacional.toFixed(1)}%</div>
             </div>
           </div>
 

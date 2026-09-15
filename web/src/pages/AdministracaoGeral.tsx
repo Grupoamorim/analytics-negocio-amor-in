@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Gauge } from 'lucide-react'
+import { Gauge, FileDown } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { exportarElementoParaPdf } from '@/utils/exportarPdf'
 import { useCRM } from '@/context/CRMContext'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
@@ -26,6 +28,7 @@ const HOJE = new Date().toISOString().slice(0, 10)
 // qualquer mês/trimestre/semestre/ano, não só o vigente hoje.
 export default function AdministracaoGeral() {
   const { leads = [], deals = [] } = useCRM()
+  const { toast } = useToast()
   const [selectedEmpresas, setSelectedEmpresas] = useState<string[]>([])
   const f = usePeriodoFiltro('ate_hoje')
 
@@ -83,8 +86,20 @@ export default function AdministracaoGeral() {
   const realizadoResultadoFiltro = calcularPace(0, f.dtIni, f.dtFim, pontosResultado).realizado
   const margemFiltro = realizadoReceitaFiltro > 0 ? (realizadoResultadoFiltro / realizadoReceitaFiltro) * 100 : null
 
+  const [exportando, setExportando] = useState(false)
+  const handleExportar = async () => {
+    setExportando(true)
+    try {
+      await exportarElementoParaPdf('dashboard-geral-conteudo', `Dashboard_Geral_${f.dtIni}_a_${f.dtFim}`)
+    } catch (e: any) {
+      toast({ title: 'Erro ao exportar PDF', description: e.message, variant: 'destructive' })
+    } finally {
+      setExportando(false)
+    }
+  }
+
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in" id="dashboard-geral-conteudo">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight flex items-center gap-2">
@@ -100,7 +115,17 @@ export default function AdministracaoGeral() {
             fechados" ainda depende da Data de Fechamento cadastrada em Turmas.
           </p>
         </div>
-        <EmpresaFilterBar options={empresaOptions} selected={selectedEmpresas} onChange={setSelectedEmpresas} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <EmpresaFilterBar options={empresaOptions} selected={selectedEmpresas} onChange={setSelectedEmpresas} />
+          <button
+            type="button"
+            onClick={handleExportar}
+            disabled={exportando}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-1.5 hover:bg-white/[0.08] disabled:opacity-50"
+          >
+            <FileDown className="w-3.5 h-3.5" /> {exportando ? 'Gerando PDF...' : 'Exportar PDF'}
+          </button>
+        </div>
       </div>
 
       <PeriodoFiltroBar {...f} />

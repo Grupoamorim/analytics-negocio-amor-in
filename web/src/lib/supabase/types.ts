@@ -635,6 +635,57 @@ export type Database = {
           },
         ]
       }
+      contas_pagar_backup_20260914: {
+        Row: {
+          categoria: string | null
+          codigo_sge: string | null
+          created_at: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          descricao: string | null
+          fornecedor: string | null
+          grupo_dre: string | null
+          grupo_dre_classificado_em: string | null
+          id: string | null
+          status: string | null
+          turma_id: string | null
+          updated_at: string | null
+          valor: number | null
+        }
+        Insert: {
+          categoria?: string | null
+          codigo_sge?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          descricao?: string | null
+          fornecedor?: string | null
+          grupo_dre?: string | null
+          grupo_dre_classificado_em?: string | null
+          id?: string | null
+          status?: string | null
+          turma_id?: string | null
+          updated_at?: string | null
+          valor?: number | null
+        }
+        Update: {
+          categoria?: string | null
+          codigo_sge?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          descricao?: string | null
+          fornecedor?: string | null
+          grupo_dre?: string | null
+          grupo_dre_classificado_em?: string | null
+          id?: string | null
+          status?: string | null
+          turma_id?: string | null
+          updated_at?: string | null
+          valor?: number | null
+        }
+        Relationships: []
+      }
       contatos: {
         Row: {
           created_at: string
@@ -1119,6 +1170,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dre_fechamentos: {
+        Row: {
+          data_fim: string
+          data_ini: string
+          empresas: string[]
+          fechado_em: string
+          fechado_por: string | null
+          fechado_por_email: string | null
+          id: string
+          linhas: Json
+          margem_bruta: number
+          margem_operacional: number
+          reaberto_em: string | null
+          reaberto_por_email: string | null
+        }
+        Insert: {
+          data_fim: string
+          data_ini: string
+          empresas?: string[]
+          fechado_em?: string
+          fechado_por?: string | null
+          fechado_por_email?: string | null
+          id?: string
+          linhas: Json
+          margem_bruta: number
+          margem_operacional: number
+          reaberto_em?: string | null
+          reaberto_por_email?: string | null
+        }
+        Update: {
+          data_fim?: string
+          data_ini?: string
+          empresas?: string[]
+          fechado_em?: string
+          fechado_por?: string | null
+          fechado_por_email?: string | null
+          id?: string
+          linhas?: Json
+          margem_bruta?: number
+          margem_operacional?: number
+          reaberto_em?: string | null
+          reaberto_por_email?: string | null
+        }
+        Relationships: []
       }
       duracao_cursos: {
         Row: {
@@ -2309,6 +2405,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pagamentos_backup_20260914: {
+        Row: {
+          cliente_id: string | null
+          codigo_sge: string | null
+          created_at: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          forma_pagamento: string | null
+          id: string | null
+          num_parcela: number | null
+          origem: string | null
+          pagador_nome: string | null
+          status: string | null
+          turma_id: string | null
+          updated_at: string | null
+          valor: number | null
+          valor_pago: number | null
+          venda_id: string | null
+        }
+        Insert: {
+          cliente_id?: string | null
+          codigo_sge?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          forma_pagamento?: string | null
+          id?: string | null
+          num_parcela?: number | null
+          origem?: string | null
+          pagador_nome?: string | null
+          status?: string | null
+          turma_id?: string | null
+          updated_at?: string | null
+          valor?: number | null
+          valor_pago?: number | null
+          venda_id?: string | null
+        }
+        Update: {
+          cliente_id?: string | null
+          codigo_sge?: string | null
+          created_at?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          forma_pagamento?: string | null
+          id?: string | null
+          num_parcela?: number | null
+          origem?: string | null
+          pagador_nome?: string | null
+          status?: string | null
+          turma_id?: string | null
+          updated_at?: string | null
+          valor?: number | null
+          valor_pago?: number | null
+          venda_id?: string | null
+        }
+        Relationships: []
       }
       parametros_custo_turma: {
         Row: {
@@ -3599,9 +3752,11 @@ export type Database = {
       }
     }
     Functions: {
+      auditoria_saude_diaria: { Args: never; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
       pode_gerenciar_turmas: { Args: never; Returns: boolean }
       sync_normalized_from_sge: { Args: never; Returns: undefined }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
