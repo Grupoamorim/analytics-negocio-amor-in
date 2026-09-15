@@ -258,8 +258,15 @@ def coletar_adesoes():
         # reconhecia que era a mesma adesao, inserindo uma linha nova por
         # execucao. Usamos so os campos que identificam a adesao em si e
         # nao mudam depois de criada.
+        # BUG corrigido em 2026-09-15: a chave nao incluia CPF/nome do
+        # cliente, entao 2+ alunos da mesma turma que assinam no mesmo dia
+        # com o mesmo plano (comum em fechamento em grupo) colapsavam numa
+        # unica linha - contagem de adesoes ficava menor que a real. CPF e
+        # nome sao estaveis (nao mudam depois de criada a adesao), entao
+        # entram na chave sem reintroduzir o problema do paragrafo acima.
         cod = str(a.get("Codigo") or a.get("Id") or gerar_chave(
-            c.get("DataAdesao"), c.get("Curso"), c.get("Instituicao"), c.get("Plano")
+            c.get("DataAdesao"), c.get("Curso"), c.get("Instituicao"), c.get("Plano"),
+            c.get("Cpf"), c.get("Nome")
         ))
         if cod in vistos:
             continue
