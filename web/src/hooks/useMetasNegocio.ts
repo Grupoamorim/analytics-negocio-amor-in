@@ -256,11 +256,20 @@ export function metaVencidaSemDecisao(
   return null
 }
 
-/** Meta mais recente dessa métrica cujo período já encerrou, foi batida (realizado >= meta
- * normal) e ainda não passou pelo reajuste automático — dispara o "ratchet" que faz a otimista
- * virar a normal do próximo período, a normal virar a pessimista, e cria uma nova otimista com a
- * mesma base (ver `aplicarReajusteAutomatico`). Só olha a mais recente, mesmo padrão de
- * `metaVencidaSemDecisao`, pra não reprocessar um histórico inteiro de uma vez. */
+/** Data a partir da qual o reajuste automático passou a existir — nunca processa um período que
+ * já tinha encerrado ANTES disso. Sem esse corte, na primeira vez que essa função roda ela acha
+ * "o período fechado mais recente" de cada métrica em todo o histórico (todas as linhas antigas
+ * nascem com reajuste_aplicado=false pela migration) e cria a meta do período seguinte a partir
+ * daquele resultado antigo — que pode ser justamente o período vigente hoje, pisando na meta que
+ * o Lucas cadastrou na mão pra agora. Com o corte, só entra período que fechar dali pra frente. */
+export const REAJUSTE_AUTOMATICO_DESDE = '2026-09-15'
+
+/** Meta mais recente dessa métrica cujo período já encerrou (depois de `REAJUSTE_AUTOMATICO_DESDE`),
+ * foi batida (realizado >= meta normal) e ainda não passou pelo reajuste automático — dispara o
+ * "ratchet" que faz a otimista virar a normal do próximo período, a normal virar a pessimista, e
+ * cria uma nova otimista com a mesma base (ver `aplicarReajusteAutomatico`). Só olha a mais
+ * recente, mesmo padrão de `metaVencidaSemDecisao`, pra não reprocessar um histórico inteiro de
+ * uma vez. */
 export function metaBatidaSemReajuste(
   metas: MetaNegocio[],
   metrica: MetricaMeta,
@@ -270,7 +279,7 @@ export function metaBatidaSemReajuste(
   const candidatas = metas
     .filter((m) => m.metrica === metrica && !m.reajusteAplicado)
     .map((m) => ({ m, iv: intervaloDaMeta(m) }))
-    .filter(({ iv }) => iv.fim < hoje)
+    .filter(({ iv }) => iv.fim < hoje && iv.fim >= REAJUSTE_AUTOMATICO_DESDE)
     .sort((a, b) => (a.iv.fim < b.iv.fim ? 1 : -1))
 
   for (const { m, iv } of candidatas) {

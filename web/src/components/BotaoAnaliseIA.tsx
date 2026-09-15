@@ -1,4 +1,5 @@
-import { Sparkles, Loader2 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Sparkles, Loader2, X } from 'lucide-react'
 import { useAnaliseItemIA } from '@/hooks/useAnaliseItemIA'
 
 /**
@@ -23,10 +24,25 @@ export default function BotaoAnaliseIA({
   compact?: boolean
   className?: string
 }) {
-  const { analise, carregando, erro, analisar, mensagemPensando } = useAnaliseItemIA(promptBuilder)
+  const { analise, carregando, erro, analisar, limpar, mensagemPensando } = useAnaliseItemIA(promptBuilder)
+  const containerRef = useRef<HTMLSpanElement>(null)
+  const aberto = !!(erro || analise)
+
+  // Fecha ao clicar fora do card flutuante — sem isso ele ficava aberto pra sempre até analisar
+  // de novo, sem jeito nenhum de dispensar.
+  useEffect(() => {
+    if (!aberto) return
+    function handleClickFora(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        limpar()
+      }
+    }
+    document.addEventListener('mousedown', handleClickFora)
+    return () => document.removeEventListener('mousedown', handleClickFora)
+  }, [aberto, limpar])
 
   return (
-    <span className={`relative inline-block align-middle ${className}`}>
+    <span ref={containerRef} className={`relative inline-block align-middle ${className}`}>
       <button
         type="button"
         onClick={analisar}
@@ -41,8 +57,16 @@ export default function BotaoAnaliseIA({
         {carregando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
         {!compact && (carregando ? mensagemPensando : label)}
       </button>
-      {(erro || analise) && (
+      {aberto && (
         <div className="absolute z-20 top-full mt-2 left-1/2 -translate-x-1/2 w-80 max-w-[90vw]">
+          <button
+            type="button"
+            onClick={limpar}
+            title="Fechar"
+            className="absolute -top-2 -right-2 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-[#1e2732] border border-white/15 text-slate-400 hover:text-white hover:bg-[#2a3441]"
+          >
+            <X className="w-3 h-3" />
+          </button>
           {erro && (
             <p className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-300">
               {erro}
