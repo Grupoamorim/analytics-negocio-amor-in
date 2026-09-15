@@ -1713,6 +1713,7 @@ export type Database = {
       metas_negocio: {
         Row: {
           ano: number
+          cenarios_gerados_por_ia: boolean
           contexto: string | null
           created_at: string
           decisao: string | null
@@ -1721,6 +1722,7 @@ export type Database = {
           id: string
           metrica: string
           periodo: number
+          reajuste_aplicado: boolean
           updated_at: string
           valor_meta: number
           valor_meta_otimista: number | null
@@ -1728,6 +1730,7 @@ export type Database = {
         }
         Insert: {
           ano: number
+          cenarios_gerados_por_ia?: boolean
           contexto?: string | null
           created_at?: string
           decisao?: string | null
@@ -1736,6 +1739,7 @@ export type Database = {
           id?: string
           metrica: string
           periodo?: number
+          reajuste_aplicado?: boolean
           updated_at?: string
           valor_meta: number
           valor_meta_otimista?: number | null
@@ -1743,6 +1747,7 @@ export type Database = {
         }
         Update: {
           ano?: number
+          cenarios_gerados_por_ia?: boolean
           contexto?: string | null
           created_at?: string
           decisao?: string | null
@@ -1751,6 +1756,7 @@ export type Database = {
           id?: string
           metrica?: string
           periodo?: number
+          reajuste_aplicado?: boolean
           updated_at?: string
           valor_meta?: number
           valor_meta_otimista?: number | null

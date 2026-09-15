@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Wallet, Plus } from 'lucide-react'
 import SectionTitle from './SectionTitle'
 import { useToast } from '@/hooks/use-toast'
 import { useCaixaSnapshots } from '@/hooks/useCaixaSnapshots'
-import { rotuloPeriodoMeta, type MetaNegocio } from '@/hooks/useMetasNegocio'
+import { intervaloDaMeta, rotuloPeriodoMeta, type MetaNegocio } from '@/hooks/useMetasNegocio'
 
 const HOJE = new Date().toISOString().slice(0, 10)
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString('pt-BR')}`
@@ -13,9 +13,45 @@ const fmtData = (d: string) => d.split('-').reverse().join('/')
 /** Caixa é um saldo (foto de um momento), não um fluxo somável dia a dia como receita/despesa —
  * por isso não usa PaceBand/calcularPace: mostra só o último saldo lançado vs. a meta do período,
  * sem gráfico de acumulado, mais o formulário pra lançar um novo saldo. */
-export default function CaixaFimPeriodoCard({ meta }: { meta: MetaNegocio | null }) {
+export default function CaixaFimPeriodoCard({
+  meta,
+  metas = [],
+  aplicarReajusteAutomatico,
+}: {
+  meta: MetaNegocio | null
+  /** Todas as metas de caixa (não só a vigente) — usado só pro reajuste automático abaixo. */
+  metas?: MetaNegocio[]
+  aplicarReajusteAutomatico?: (id: string) => Promise<void>
+}) {
   const { toast } = useToast()
   const { snapshots, adicionar, ultimoAte } = useCaixaSnapshots()
+
+  // Reajuste automático de caixa: baseado no último saldo lançado até o fim do período (não numa
+  // série diária, já que caixa é uma foto, não um fluxo) — mesmo "ratchet" das outras métricas
+  // (ver `aplicarReajusteAutomatico`), só dispara pra período já encerrado e batido.
+  const processandoReajusteRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!aplicarReajusteAutomatico) return
+    const candidata = metas
+      .filter((m) => m.metrica === 'caixa' && !m.reajusteAplicado)
+      .map((m) => ({ m, iv: intervaloDaMeta(m) }))
+      .filter(({ iv }) => iv.fim < HOJE)
+      .sort((a, b) => (a.iv.fim < b.iv.fim ? 1 : -1))[0]
+    if (!candidata) return
+    const { m, iv } = candidata
+    const saldoFinal = ultimoAte(iv.fim)
+    if (!saldoFinal || saldoFinal.valor < m.valorMeta) return
+    if (processandoReajusteRef.current.has(m.id)) return
+    processandoReajusteRef.current.add(m.id)
+    aplicarReajusteAutomatico(m.id)
+      .then(() =>
+        toast({
+          title: 'Meta de caixa reajustada',
+          description: `${rotuloPeriodoMeta(m)} bateu e passou a meta normal — cenários do próximo período foram reajustados automaticamente.`,
+        }),
+      )
+      .catch(() => processandoReajusteRef.current.delete(m.id))
+  }, [metas, aplicarReajusteAutomatico, ultimoAte, toast])
 
   const [data, setData] = useState(HOJE)
   const [valor, setValor] = useState('')

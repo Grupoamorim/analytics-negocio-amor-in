@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Gauge, FileDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { exportarElementoParaPdf } from '@/utils/exportarPdf'
@@ -7,7 +7,15 @@ import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
 import { usePeriodoFiltro, rotuloDoFiltro } from '@/hooks/usePeriodoFiltro'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
-import { useMetasNegocio, metaSomaIntervalo, type MetricaMeta } from '@/hooks/useMetasNegocio'
+import {
+  useMetasNegocio,
+  metaSomaIntervalo,
+  metaBatidaSemReajuste,
+  METRICA_LABEL,
+  rotuloPeriodoMeta,
+  type MetricaMeta,
+} from '@/hooks/useMetasNegocio'
+import type { PontoDiario } from '@/utils/pace'
 import { useEscolasVisitadas } from '@/hooks/useEscolasVisitadas'
 import { calcularPace } from '@/utils/pace'
 import PaceBand from '@/components/dashboard/PaceBand'
@@ -65,8 +73,41 @@ export default function AdministracaoGeral() {
     [escolasVisitadas.visitas],
   )
 
-  const { metas, metaVigente } = useMetasNegocio()
+  const { metas, metaVigente, aplicarReajusteAutomatico } = useMetasNegocio()
   const rotuloFiltro = rotuloDoFiltro(f)
+
+  // Reajuste automático: quando o período de uma meta fecha batido (realizado passou da meta
+  // normal), a otimista vira a nova normal, a normal antiga vira a nova pessimista, e uma nova
+  // otimista é criada com a mesma base — ver `aplicarReajusteAutomatico`. Só dispara pra período
+  // já encerrado, nunca no meio dele. Roda aqui porque essa é a única tela que já tem o pace de
+  // todas as métricas carregado ao mesmo tempo (caixa fica de fora — é saldo, não série diária,
+  // tratado dentro do CaixaFimPeriodoCard).
+  const processandoReajusteRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const pares: { metrica: MetricaMeta; pontos: PontoDiario[] }[] = [
+      { metrica: 'receita', pontos: pontosReceita },
+      { metrica: 'adesoes', pontos: pontosAdesoes },
+      { metrica: 'contratos', pontos: pontosContratos },
+      { metrica: 'resultado_liquido', pontos: pontosResultado },
+      { metrica: 'vgv', pontos: pontosVgv },
+      { metrica: 'escolas_visitadas', pontos: pontosEscolas },
+    ]
+    for (const { metrica, pontos } of pares) {
+      const batida = metaBatidaSemReajuste(metas, metrica, pontos, HOJE)
+      if (batida && !processandoReajusteRef.current.has(batida.id)) {
+        processandoReajusteRef.current.add(batida.id)
+        aplicarReajusteAutomatico(batida.id)
+          .then(() =>
+            toast({
+              title: `Meta de ${METRICA_LABEL[metrica]} reajustada`,
+              description: `${rotuloPeriodoMeta(batida)} bateu e passou a meta normal — cenários do próximo período foram reajustados automaticamente.`,
+            }),
+          )
+          .catch(() => processandoReajusteRef.current.delete(batida.id))
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metas, pontosReceita, pontosAdesoes, pontosContratos, pontosResultado, pontosVgv, pontosEscolas])
   const overrideDoFiltro = (metrica: MetricaMeta) => {
     const { valor, valorPessimista, valorOtimista, mesesComMeta } = metaSomaIntervalo(metas, metrica, f.dtIni, f.dtFim)
     return {
@@ -193,7 +234,11 @@ export default function AdministracaoGeral() {
         remover={escolasVisitadas.remover}
       />
 
-      <CaixaFimPeriodoCard meta={metaVigente('caixa', HOJE)} />
+      <CaixaFimPeriodoCard
+        meta={metaVigente('caixa', HOJE)}
+        metas={metas}
+        aplicarReajusteAutomatico={aplicarReajusteAutomatico}
+      />
 
       <RankingGamificado leads={leadsFiltrados} deals={deals} />
 

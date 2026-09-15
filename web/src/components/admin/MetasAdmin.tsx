@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { Target, Trash2, Pencil } from 'lucide-react'
+import { Target, Trash2, Pencil, Sparkles } from 'lucide-react'
 import {
   useMetasNegocio,
   METRICA_LABEL,
@@ -10,6 +10,50 @@ import {
   type EscopoMeta,
   type MetaNegocio,
 } from '@/hooks/useMetasNegocio'
+import { callGemini, getGeminiApiKey } from '@/utils/geminiApi'
+
+/** Quando o Lucas deixa pessimista e otimista em branco, a IA sugere os dois com base no
+ * histórico real de metas batidas/perdidas dessa métrica (não um percentual fixo) — só entra em
+ * ação se a chave do Gemini estiver configurada; sem chave, fica em branco igual sempre foi. */
+async function sugerirCenariosComIA(
+  metrica: MetricaMeta,
+  valorMeta: number,
+  historico: MetaNegocio[],
+): Promise<{ pessimista: number; otimista: number } | null> {
+  const linhas = historico
+    .filter((h) => h.metrica === metrica)
+    .slice(0, 12)
+    .map((h) => {
+      const desfecho = h.reajusteAplicado
+        ? 'bateu e passou da meta'
+        : h.decisao
+          ? `não bateu (${h.decisao})`
+          : 'ainda sem desfecho registrado'
+      return `- ${rotuloPeriodoMeta(h)}: normal ${h.valorMeta}${h.valorMetaPessimista != null ? `, pessimista ${h.valorMetaPessimista}` : ''}${h.valorMetaOtimista != null ? `, otimista ${h.valorMetaOtimista}` : ''} — ${desfecho}`
+    })
+
+  const prompt = `Você é um diretor comercial/financeiro sênior de uma empresa de fotografia de formaturas.
+Com base no histórico de metas de "${METRICA_LABEL[metrica]}" abaixo, sugira valores realistas de cenário PESSIMISTA (conservador) e OTIMISTA (alta performance) para uma meta normal de ${valorMeta}.
+
+HISTÓRICO:
+${linhas.join('\n') || 'Sem histórico registrado ainda para essa métrica — use bom senso (pessimista ~15% abaixo da normal, otimista ~15% acima).'}
+
+Responda SOMENTE em JSON válido, sem markdown, sem texto extra, no formato exato:
+{"pessimista": <número>, "otimista": <número>}`
+
+  const res = await callGemini(prompt)
+  const match = res.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  try {
+    const parsed = JSON.parse(match[0])
+    const pessimista = Number(parsed.pessimista)
+    const otimista = Number(parsed.otimista)
+    if (!Number.isFinite(pessimista) || !Number.isFinite(otimista)) return null
+    return { pessimista, otimista }
+  } catch {
+    return null
+  }
+}
 
 const NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -28,6 +72,7 @@ export default function MetasAdmin() {
   const [valorOtimista, setValorOtimista] = useState('')
   const [contexto, setContexto] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [gerandoCenariosIA, setGerandoCenariosIA] = useState(false)
 
   const anos = useMemo(() => [anoAtual - 1, anoAtual, anoAtual + 1, anoAtual + 2], [anoAtual])
 
@@ -69,14 +114,30 @@ export default function MetasAdmin() {
       toast({ title: 'Valor inválido', variant: 'destructive' })
       return
     }
-    const vPessimista = paraNumero(valorPessimista)
-    const vOtimista = paraNumero(valorOtimista)
+    let vPessimista = paraNumero(valorPessimista)
+    let vOtimista = paraNumero(valorOtimista)
     if ((valorPessimista.trim() && vPessimista === null) || (valorOtimista.trim() && vOtimista === null)) {
       toast({ title: 'Meta pessimista/otimista inválida', variant: 'destructive' })
       return
     }
+    let cenariosGeradosPorIA = false
     setSalvando(true)
     try {
+      if (vPessimista === null && vOtimista === null && getGeminiApiKey()) {
+        setGerandoCenariosIA(true)
+        try {
+          const sugestao = await sugerirCenariosComIA(metrica, v, metas)
+          if (sugestao) {
+            vPessimista = sugestao.pessimista
+            vOtimista = sugestao.otimista
+            cenariosGeradosPorIA = true
+          }
+        } catch {
+          // sem sugestão da IA, segue com os cenários em branco igual sempre foi
+        } finally {
+          setGerandoCenariosIA(false)
+        }
+      }
       await salvar({
         id: editId || undefined,
         metrica,
@@ -87,8 +148,14 @@ export default function MetasAdmin() {
         valorMetaPessimista: vPessimista,
         valorMetaOtimista: vOtimista,
         contexto,
+        cenariosGeradosPorIA,
       })
-      toast({ title: editId ? 'Meta atualizada' : 'Meta cadastrada' })
+      toast({
+        title: editId ? 'Meta atualizada' : 'Meta cadastrada',
+        description: cenariosGeradosPorIA
+          ? `Pessimista/otimista sugeridos pela IA: ${vPessimista!.toLocaleString('pt-BR')} / ${vOtimista!.toLocaleString('pt-BR')}`
+          : undefined,
+      })
       resetForm()
     } catch (err: any) {
       toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' })
@@ -200,7 +267,7 @@ export default function MetasAdmin() {
               />
             </label>
             <label className="text-xs text-slate-400 flex flex-col gap-1">
-              Meta padrão {metrica === 'receita' ? '(R$)' : '(quantidade)'}
+              Meta normal {metrica === 'receita' ? '(R$)' : '(quantidade)'}
               <input
                 type="text"
                 value={valor}
@@ -221,8 +288,11 @@ export default function MetasAdmin() {
             </label>
           </div>
           <p className="text-[11px] text-slate-500 sm:col-span-2 lg:col-span-3 -mt-2">
-            Pessimista e otimista são opcionais — só aparecem como linha extra no gráfico de pace
-            quando cadastrados. Deixe em branco se ainda não tiver esses números definidos.
+            Pessimista e otimista são opcionais. Deixe os dois em branco e a IA sugere automaticamente
+            com base no histórico dessa métrica (precisa da chave do Gemini em Administração → IA) —
+            preencha na mão se quiser definir você mesmo. Quando a meta normal é batida e o período
+            fecha, os cenários são reajustados sozinhos pro próximo período (otimista vira normal,
+            normal vira pessimista, nova otimista é criada).
           </p>
 
           <label className="text-xs text-slate-400 flex flex-col gap-1 sm:col-span-2 lg:col-span-3">
@@ -242,7 +312,13 @@ export default function MetasAdmin() {
               disabled={salvando || !valor}
               className="bg-orange-500 hover:bg-orange-600 text-white text-xs"
             >
-              {salvando ? 'Salvando…' : editId ? 'Atualizar meta' : 'Cadastrar meta'}
+              {gerandoCenariosIA
+                ? 'Gerando cenários com IA…'
+                : salvando
+                  ? 'Salvando…'
+                  : editId
+                    ? 'Atualizar meta'
+                    : 'Cadastrar meta'}
             </Button>
             {editId && (
               <button type="button" onClick={resetForm} className="text-xs text-slate-400 hover:text-white">
@@ -280,11 +356,22 @@ export default function MetasAdmin() {
                       ? `R$ ${m.valorMeta.toLocaleString('pt-BR')}`
                       : m.valorMeta.toLocaleString('pt-BR')}
                     {(m.valorMetaPessimista != null || m.valorMetaOtimista != null) && (
-                      <div className="text-[10px] font-normal text-slate-500">
+                      <div className="text-[10px] font-normal text-slate-500 flex items-center justify-end gap-1">
                         {m.valorMetaPessimista != null && `pess. ${m.valorMetaPessimista.toLocaleString('pt-BR')}`}
                         {m.valorMetaPessimista != null && m.valorMetaOtimista != null && ' · '}
                         {m.valorMetaOtimista != null && `otim. ${m.valorMetaOtimista.toLocaleString('pt-BR')}`}
+                        {m.cenariosGeradosPorIA && (
+                          <span
+                            title="Pessimista/otimista sugeridos pela IA"
+                            className="inline-flex items-center gap-0.5 text-orange-400"
+                          >
+                            <Sparkles className="w-2.5 h-2.5" />
+                          </span>
+                        )}
                       </div>
+                    )}
+                    {m.reajusteAplicado && (
+                      <div className="text-[10px] font-normal text-emerald-400">reajustada automaticamente</div>
                     )}
                   </td>
                   <td className="py-2.5 px-2 text-slate-500 max-w-[280px] truncate" title={m.contexto}>

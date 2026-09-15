@@ -34,6 +34,11 @@ export interface MetaNegocio {
   explicacao: string | null
   /** Uma vez definida, a meta para de aparecer como "precisa de decisão" no PaceBand. */
   decisao: MetaDecisao | null
+  /** true quando pessimista/otimista foram sugeridos pela IA (campo deixado em branco no cadastro). */
+  cenariosGeradosPorIA: boolean
+  /** true quando o reajuste automático (bateu a meta -> otimista vira normal, normal vira
+   * pessimista, nova otimista criada) já foi processado pro período seguinte desta meta. */
+  reajusteAplicado: boolean
   updatedAt: string
 }
 
@@ -70,8 +75,23 @@ function mapRow(r: any): MetaNegocio {
     contexto: r.contexto || '',
     explicacao: r.explicacao ?? null,
     decisao: r.decisao ?? null,
+    cenariosGeradosPorIA: !!r.cenarios_gerados_por_ia,
+    reajusteAplicado: !!r.reajuste_aplicado,
     updatedAt: r.updated_at,
   }
+}
+
+/** Período seguinte ao informado, dentro do mesmo escopo — usado pelo reajuste automático pra
+ * saber onde criar a próxima meta (mensal -> mês seguinte, trimestral -> trimestre seguinte,
+ * anual -> ano seguinte, virando o ano quando necessário). */
+export function proximoPeriodo(
+  escopo: EscopoMeta,
+  ano: number,
+  periodo: number,
+): { ano: number; periodo: number } {
+  if (escopo === 'anual') return { ano: ano + 1, periodo: 0 }
+  const max = escopo === 'mensal' ? 12 : 4
+  return periodo >= max ? { ano: ano + 1, periodo: 1 } : { ano, periodo: periodo + 1 }
 }
 
 /** Intervalo [ini,fim] (YYYY-MM-DD) coberto por uma meta. */
@@ -236,6 +256,30 @@ export function metaVencidaSemDecisao(
   return null
 }
 
+/** Meta mais recente dessa métrica cujo período já encerrou, foi batida (realizado >= meta
+ * normal) e ainda não passou pelo reajuste automático — dispara o "ratchet" que faz a otimista
+ * virar a normal do próximo período, a normal virar a pessimista, e cria uma nova otimista com a
+ * mesma base (ver `aplicarReajusteAutomatico`). Só olha a mais recente, mesmo padrão de
+ * `metaVencidaSemDecisao`, pra não reprocessar um histórico inteiro de uma vez. */
+export function metaBatidaSemReajuste(
+  metas: MetaNegocio[],
+  metrica: MetricaMeta,
+  pontos: PontoDiario[],
+  hoje: string,
+): MetaNegocio | null {
+  const candidatas = metas
+    .filter((m) => m.metrica === metrica && !m.reajusteAplicado)
+    .map((m) => ({ m, iv: intervaloDaMeta(m) }))
+    .filter(({ iv }) => iv.fim < hoje)
+    .sort((a, b) => (a.iv.fim < b.iv.fim ? 1 : -1))
+
+  for (const { m, iv } of candidatas) {
+    const pace = calcularPace(m.valorMeta, iv.ini, iv.fim, pontos)
+    if (pace.status === 'batida') return m
+  }
+  return null
+}
+
 export function useMetasNegocio() {
   const [metas, setMetas] = useState<MetaNegocio[]>([])
   const [loading, setLoading] = useState(true)
@@ -257,7 +301,13 @@ export function useMetasNegocio() {
   }, [recarregar])
 
   const salvar = useCallback(
-    async (m: Omit<MetaNegocio, 'id' | 'updatedAt' | 'explicacao' | 'decisao'> & { id?: string }) => {
+    async (
+      m: Omit<MetaNegocio, 'id' | 'updatedAt' | 'explicacao' | 'decisao' | 'reajusteAplicado' | 'cenariosGeradosPorIA'> & {
+        id?: string
+        /** true quando pessimista/otimista foram sugeridos pela IA por terem ficado em branco. */
+        cenariosGeradosPorIA?: boolean
+      },
+    ) => {
       const payload = {
         metrica: m.metrica,
         escopo: m.escopo,
@@ -267,6 +317,7 @@ export function useMetasNegocio() {
         valor_meta_pessimista: m.valorMetaPessimista,
         valor_meta_otimista: m.valorMetaOtimista,
         contexto: m.contexto || null,
+        cenarios_gerados_por_ia: !!m.cenariosGeradosPorIA,
         updated_at: new Date().toISOString(),
       }
       const q = m.id
@@ -327,5 +378,62 @@ export function useMetasNegocio() {
     [metas],
   )
 
-  return { metas, loading, recarregar, salvar, remover, metaVigente, registrarExplicacao, aplicarDecisao }
+  /**
+   * Reajuste automático: quando uma meta é batida (realizado passa da normal), a otimista dela
+   * vira a nova meta normal do período seguinte, a normal antiga vira a nova pessimista, e uma
+   * nova otimista é criada mantendo a mesma distância (proporcional) que a otimista tinha da
+   * normal antes. Só dispara quando o período já fechou (`metaBatidaSemReajuste`), nunca no meio
+   * do período. Não sobrescreve uma meta que o Lucas já tenha cadastrado manualmente pro próximo
+   * período — só marca a atual como reajustada e para por aí, pra não pisar em dado real. Sem
+   * meta otimista cadastrada não tem "mesma base" pra herdar, então também só marca e não inventa
+   * valor.
+   */
+  const aplicarReajusteAutomatico = useCallback(
+    async (id: string) => {
+      const m = metas.find((x) => x.id === id)
+      if (!m) return
+
+      if (m.valorMetaOtimista != null) {
+        const { ano: novoAno, periodo: novoPeriodo } = proximoPeriodo(m.escopo, m.ano, m.periodo)
+        const jaExiste = metas.some(
+          (x) => x.metrica === m.metrica && x.escopo === m.escopo && x.ano === novoAno && x.periodo === novoPeriodo,
+        )
+        if (!jaExiste) {
+          const gap = m.valorMetaOtimista - m.valorMeta
+          const { error: errorInsert } = await (supabase as any).from('metas_negocio').insert({
+            metrica: m.metrica,
+            escopo: m.escopo,
+            ano: novoAno,
+            periodo: m.escopo === 'anual' ? 0 : novoPeriodo,
+            valor_meta: m.valorMetaOtimista,
+            valor_meta_pessimista: m.valorMeta,
+            valor_meta_otimista: m.valorMetaOtimista + gap,
+            contexto: `Reajustada automaticamente: a meta de ${rotuloPeriodoMeta(m)} foi batida e passou da meta normal.`,
+            updated_at: new Date().toISOString(),
+          })
+          if (errorInsert) throw errorInsert
+        }
+      }
+
+      const { error } = await (supabase as any)
+        .from('metas_negocio')
+        .update({ reajuste_aplicado: true, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+      await recarregar()
+    },
+    [metas, recarregar],
+  )
+
+  return {
+    metas,
+    loading,
+    recarregar,
+    salvar,
+    remover,
+    metaVigente,
+    registrarExplicacao,
+    aplicarDecisao,
+    aplicarReajusteAutomatico,
+  }
 }

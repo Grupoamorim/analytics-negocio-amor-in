@@ -229,7 +229,7 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
   return (
     <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg space-y-4">
       <SectionTitle
-        ajuda="A linha laranja tracejada é a meta padrão distribuída igual ao longo do período (as linhas mais claras/escuras da mesma cor, quando aparecem, são os cenários pessimista e otimista). A área verde é o realizado acumulado. A linha roxa é o realizado no mesmo período do ano passado (dia a dia, alinhado pela posição no período, não pela data). Se a área está abaixo da linha da meta na marca de hoje, estamos atrás do ritmo."
+        ajuda="A linha laranja tracejada é a meta normal distribuída igual ao longo do período (quando aparecem, a linha vermelha clarinha é o cenário pessimista e a azul clarinha é o otimista). A área verde é o realizado acumulado. A linha roxa é o realizado no mesmo período do ano passado (dia a dia, alinhado pela posição no período, não pela data). Se a área está abaixo da linha da meta na marca de hoje, estamos atrás do ritmo. Quando o realizado passa da meta normal e o período fecha, os cenários são reajustados automaticamente para o próximo período (a otimista vira a nova normal, a normal vira a nova pessimista, e uma nova otimista é criada)."
         right={
           <div className="flex items-center gap-2">
             <BotaoAnaliseIA compact label="Analisar meta com IA" promptBuilder={promptMetaIA} />
@@ -311,18 +311,18 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
             {pacePessimista && (
               <Line
                 dataKey="Meta Pessimista"
-                stroke="#FDE68A"
+                stroke="#FCA5A5"
                 strokeWidth={1.5}
                 dot={false}
                 strokeDasharray="5 4"
                 connectNulls
               />
             )}
-            <Line dataKey="Meta" name="Meta padrão" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="5 4" />
+            <Line dataKey="Meta" name="Meta normal" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="5 4" />
             {paceOtimista && (
               <Line
                 dataKey="Meta Otimista"
-                stroke="#B45309"
+                stroke="#93C5FD"
                 strokeWidth={1.5}
                 dot={false}
                 strokeDasharray="5 4"
