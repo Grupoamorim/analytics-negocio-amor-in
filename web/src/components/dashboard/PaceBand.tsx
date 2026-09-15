@@ -12,7 +12,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts'
-import { Target, Sparkles, Loader2, TrendingUp, Flag, History, AlertTriangle, MessageCircle } from 'lucide-react'
+import { Target, TrendingUp, Flag, History, AlertTriangle, MessageCircle } from 'lucide-react'
 import SectionTitle from './SectionTitle'
 import { calcularPace, addAnos } from '@/utils/pace'
 import type { PontoDiario } from '@/utils/pace'
@@ -26,7 +26,7 @@ import {
   type MetaDecisao,
 } from '@/hooks/useMetasNegocio'
 import { useAcesso } from '@/context/AcessoContext'
-import { useAnaliseItemIA } from '@/hooks/useAnaliseItemIA'
+import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 
 function fmt(v: number, unidade: 'R$' | 'un'): string {
   if (unidade === 'R$') return `R$ ${Math.round(v).toLocaleString('pt-BR')}`
@@ -188,7 +188,7 @@ export default function PaceBand({
     }
   }
 
-  const { analise, carregando: carregandoIA, erro: erroIA, analisar: analisarComIA, mensagemPensando } = useAnaliseItemIA(() => {
+  const promptMetaIA = () => {
     const p = pace!
     return `Você é um diretor comercial/financeiro sênior de uma empresa de fotografia de formaturas.
 Analise o andamento da meta abaixo e responda em português, direto e prático, em no máximo 6 linhas:
@@ -205,7 +205,7 @@ Projeção de fechamento no ritmo atual: ${fmt(p.projecao, unidade)}
 Falta: ${fmt(p.faltam, unidade)} em ${p.diasRestantes} dias
 Ritmo atual: ${fmt(p.ritmoDiarioAtual, unidade)}/dia • Ritmo necessário: ${fmt(p.ritmoDiarioNecessario, unidade)}/dia (${fmt(p.ritmoSemanalNecessario, unidade)}/semana)
 ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.contexto}"""` : ''}`
-  })
+  }
 
   if (!temMeta || !pace) {
     return (
@@ -231,9 +231,12 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
       <SectionTitle
         ajuda="A linha laranja tracejada é a meta padrão distribuída igual ao longo do período (as linhas mais claras/escuras da mesma cor, quando aparecem, são os cenários pessimista e otimista). A área verde é o realizado acumulado. A linha roxa é o realizado no mesmo período do ano passado (dia a dia, alinhado pela posição no período, não pela data). Se a área está abaixo da linha da meta na marca de hoje, estamos atrás do ritmo."
         right={
-          <span className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${st.cls}`}>
-            {st.txt}
-          </span>
+          <div className="flex items-center gap-2">
+            <BotaoAnaliseIA compact label="Analisar meta com IA" promptBuilder={promptMetaIA} />
+            <span className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${st.cls}`}>
+              {st.txt}
+            </span>
+          </div>
         }
       >
         {titulo} — {rotulo}
@@ -349,25 +352,6 @@ ${meta?.contexto ? `\nCONTEXTO E ESTRATÉGIA DEFINIDOS PELA GESTÃO:\n"""${meta.
             />
           </ComposedChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* IA */}
-      <div className="border-t border-white/[0.06] pt-3">
-        <button
-          type="button"
-          onClick={analisarComIA}
-          disabled={carregandoIA}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded-lg px-3 py-1.5 hover:bg-orange-500/20 disabled:opacity-50"
-        >
-          {carregandoIA ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-          {carregandoIA ? mensagemPensando : 'Analisar meta com IA'}
-        </button>
-        {erroIA && <p className="text-[11px] text-rose-400 mt-2">{erroIA}</p>}
-        {analise && (
-          <div className="mt-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.06] text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
-            {analise}
-          </div>
-        )}
       </div>
 
       {precisaDecisao && metaPendenteDecisao && (

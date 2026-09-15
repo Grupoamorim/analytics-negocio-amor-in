@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import type { Lead, LeadStatus, LeadSource } from '@/types/crm'
 import type { Database } from '@/lib/supabase/types'
 import { reportSupabaseError } from '@/utils/reportError'
+import { fetchAllRows } from '@/utils/fetchAllRows'
 
 type TurmaRow = Database['public']['Tables']['turmas']['Row']
 type TurmaInsert = Database['public']['Tables']['turmas']['Insert']
@@ -130,12 +131,12 @@ export function useTurmas() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase
-        .from('turmas')
-        .select('*, updated_by_profile:profiles!turmas_updated_by_fkey(email)')
-        .order('created_at', { ascending: false })
-
-      if (err) throw err
+      const data = await fetchAllRows<TurmaRow & { updated_by_profile?: { email: string | null } | null }>(() =>
+        supabase
+          .from('turmas')
+          .select('*, updated_by_profile:profiles!turmas_updated_by_fkey(email)')
+          .order('created_at', { ascending: false }) as any,
+      )
 
       const mapped = (data || []).map(mapRowToLead)
       setTurmas(mapped)

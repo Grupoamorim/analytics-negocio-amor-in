@@ -43,11 +43,21 @@ async function buildFinanceiroSnapshot(): Promise<string> {
   const db = supabase as any
   // PostgREST corta cada resposta em 1000 linhas — essas tabelas passam disso,
   // então precisa paginar pra IA não receber totais truncados.
+  // Exclui sempre 'cancelado' — lançamento estornado não é dívida nem receita real, e sem
+  // esse filtro os totais abaixo (e o que a IA usa como base) ficam inflados por ele.
   const [pagamentos, contasPagar, vendas, adesoes] = await Promise.all([
-    fetchAllRows<any>(() => db.from('pagamentos').select('valor, valor_pago, status, data_vencimento').order('id')),
-    fetchAllRows<any>(() => db.from('contas_pagar').select('valor, categoria, fornecedor, status, data_vencimento').order('id')),
-    fetchAllRows<any>(() => db.from('vendas').select('valor_total, status, data_venda').order('id')),
-    fetchAllRows<any>(() => db.from('sge_adesoes').select('valor, status, data_adesao').order('id')),
+    fetchAllRows<any>(() =>
+      db.from('pagamentos').select('valor, valor_pago, status, data_vencimento').neq('status', 'cancelado').order('id'),
+    ),
+    fetchAllRows<any>(() =>
+      db
+        .from('contas_pagar')
+        .select('valor, categoria, fornecedor, status, data_vencimento')
+        .neq('status', 'cancelado')
+        .order('id'),
+    ),
+    fetchAllRows<any>(() => db.from('vendas').select('valor_total, status, data_venda').neq('status', 'cancelado').order('id')),
+    fetchAllRows<any>(() => db.from('sge_adesoes').select('valor, status, data_adesao').neq('status', 'cancelado').order('id')),
   ])
 
   const totalReceber = sumBy(pagamentos, (p) => p.valor)

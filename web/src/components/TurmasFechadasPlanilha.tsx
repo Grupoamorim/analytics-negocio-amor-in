@@ -76,7 +76,11 @@ export default function TurmasFechadasPlanilha() {
             .eq('funil_status', 'Convertido'),
         ),
         fetchAllRows<any>(() =>
-          supabase.from('pagamentos').select('turma_id, data_pagamento').not('data_pagamento', 'is', null),
+          supabase
+            .from('pagamentos')
+            .select('turma_id, data_pagamento')
+            .not('data_pagamento', 'is', null)
+            .neq('status', 'cancelado'),
         ),
       ])
 

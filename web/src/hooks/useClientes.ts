@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import type { Database } from '@/lib/supabase/types'
 import { reportSupabaseError } from '@/utils/reportError'
+import { fetchAllRows } from '@/utils/fetchAllRows'
 
 type ClienteRow = Database['public']['Tables']['clientes']['Row']
 
@@ -48,11 +49,9 @@ export function useClientes() {
     }
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('*')
-        .order('nome', { ascending: true })
-      if (error) throw error
+      const data = await fetchAllRows<ClienteRow>(() =>
+        supabase.from('clientes').select('*').order('nome', { ascending: true }) as any,
+      )
       setClientes((data || []).map(mapRow))
     } catch (e) {
       console.warn('Erro ao carregar clientes:', e)
