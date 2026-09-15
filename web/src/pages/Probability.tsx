@@ -170,8 +170,7 @@ export default function Probability() {
       {tab === 'geral' && (
         <div className="space-y-5">
           <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
-            <h3 className="font-semibold text-white text-sm mb-3">Métricas comerciais</h3>
-            <MetricasComerciaisPanel />
+            <MetricasComerciaisPanel titulo="Métricas comerciais" />
           </div>
           <VisaoGeral
             media={mediaGeral}
@@ -256,8 +255,20 @@ function VisaoGeral({
         </div>
 
         <div className="mt-8 pt-6 border-t border-white/[0.06] space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
             <span className="font-semibold text-slate-300">Distribuição das probabilidades do funil</span>
+            <BotaoAnaliseIA
+              compact
+              label="Analisar calibragem do funil com IA"
+              promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise a calibragem da probabilidade de conversão do funil abaixo (motor baseado na média das reuniões analisadas, ajustado por portão de fase vencido e velocidade) e responda em português, direto e prático, em no máximo 6 linhas: 1) o funil está com viés otimista ou pessimista, considerando ganhos vs perdidos históricos; 2) 2-3 ações pra elevar o score real das turmas em negociação (não é sobre "enganar" o motor, é sobre o que fazer nas reuniões/negociações).
+
+Média de probabilidade do funil: ${media}%
+Turmas com probabilidade calculada: ${total}${totalFunil > 0 ? ` (mais ${totalFunil} sem probabilidade ainda)` : ''}
+Reuniões analisadas: ${reunioes}
+Histórico: ${ganhos} turmas ganhas, ${perdidos} perdidas
+Distribuição: 0-25% (${histogram.low}), 26-50% (${histogram.medLow}), 51-75% (${histogram.medHigh}), 76-100% (${histogram.high})`}
+            />
             <span>
               {total} turmas{totalFunil > 0 ? ` · ${totalFunil} sem probabilidade ainda` : ''}
             </span>
@@ -287,18 +298,6 @@ function VisaoGeral({
           <span className="font-semibold text-white">Motor</span>.
         </p>
       </div>
-
-      <BotaoAnaliseIA
-        label="Analisar calibragem do funil com IA"
-        promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
-Analise a calibragem da probabilidade de conversão do funil abaixo (motor baseado na média das reuniões analisadas, ajustado por portão de fase vencido e velocidade) e responda em português, direto e prático, em no máximo 6 linhas: 1) o funil está com viés otimista ou pessimista, considerando ganhos vs perdidos históricos; 2) 2-3 ações pra elevar o score real das turmas em negociação (não é sobre "enganar" o motor, é sobre o que fazer nas reuniões/negociações).
-
-Média de probabilidade do funil: ${media}%
-Turmas com probabilidade calculada: ${total}${totalFunil > 0 ? ` (mais ${totalFunil} sem probabilidade ainda)` : ''}
-Reuniões analisadas: ${reunioes}
-Histórico: ${ganhos} turmas ganhas, ${perdidos} perdidas
-Distribuição: 0-25% (${histogram.low}), 26-50% (${histogram.medLow}), 51-75% (${histogram.medHigh}), 76-100% (${histogram.high})`}
-      />
     </div>
   )
 }

@@ -350,7 +350,23 @@ export default function Adesoes() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Adesões</h1>
+        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          Adesões
+          {!loading && (
+            <BotaoAnaliseIA
+              compact
+              label="Analisar adesões com IA"
+              promptBuilder={() => `Você é um analista comercial sênior de uma empresa de fotografia de formaturas.
+Analise os números de adesões (vendas fechadas, competência) do período abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) o ritmo está acelerando ou desacelerando; 2) a variação anual é normal pra sazonalidade do setor (picos em certas épocas do calendário acadêmico) ou é preocupante; 3) 2 ações práticas pra aumentar adesões no próximo período.
+
+Adesões no período: ${analise.totalAdesoes} (${analise.totalAnoAnterior} no mesmo período do ano passado)
+Variação: ${analise.deltaQuantidade === null ? 'sem comparativo' : `${analise.deltaQuantidade >= 0 ? '+' : ''}${analise.deltaQuantidade.toFixed(1)}%`}
+Valor total: ${brl(analise.totalValor)}${analise.deltaValor !== null ? ` (${analise.deltaValor >= 0 ? '+' : ''}${analise.deltaValor.toFixed(1)}% vs ano passado)` : ''}
+Ticket médio: ${brl(analise.ticketMedio)}
+Top turmas do período: ${porTurmaOrdenado.slice(0, 8).map((t) => `${t.turma}: ${t.quantidade} adesão(ões), ${brl(t.valor)}`).join('; ') || 'sem dados'}`}
+            />
+          )}
+        </h1>
         <p className="text-sm text-slate-400 mt-1">
           Análise financeira das adesões (SGE) e acompanhamento individual de alunos das turmas já
           fechadas.
@@ -424,18 +440,6 @@ export default function Adesoes() {
               icon={Percent}
             />
           </div>
-
-          <BotaoAnaliseIA
-            label="Analisar adesões com IA"
-            promptBuilder={() => `Você é um analista comercial sênior de uma empresa de fotografia de formaturas.
-Analise os números de adesões (vendas fechadas, competência) do período abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) o ritmo está acelerando ou desacelerando; 2) a variação anual é normal pra sazonalidade do setor (picos em certas épocas do calendário acadêmico) ou é preocupante; 3) 2 ações práticas pra aumentar adesões no próximo período.
-
-Adesões no período: ${analise.totalAdesoes} (${analise.totalAnoAnterior} no mesmo período do ano passado)
-Variação: ${analise.deltaQuantidade === null ? 'sem comparativo' : `${analise.deltaQuantidade >= 0 ? '+' : ''}${analise.deltaQuantidade.toFixed(1)}%`}
-Valor total: ${brl(analise.totalValor)}${analise.deltaValor !== null ? ` (${analise.deltaValor >= 0 ? '+' : ''}${analise.deltaValor.toFixed(1)}% vs ano passado)` : ''}
-Ticket médio: ${brl(analise.ticketMedio)}
-Top turmas do período: ${porTurmaOrdenado.slice(0, 8).map((t) => `${t.turma}: ${t.quantidade} adesão(ões), ${brl(t.valor)}`).join('; ') || 'sem dados'}`}
-          />
 
           <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5">
             <h2 className="text-sm font-semibold text-white mb-4">

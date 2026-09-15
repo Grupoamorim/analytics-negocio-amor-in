@@ -321,11 +321,11 @@ export default function Index() {
 
       {/* ============ Métricas comerciais (automáticas) ============ */}
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">
-        <SectionTitle ajuda="Prazo médio da turma no funil até fechar, tempo em cada fase, conversão por fase e turmas sem resposta. Tudo calculado sozinho a partir do histórico das turmas.">
-          Métricas comerciais
-        </SectionTitle>
-        <div className="mt-4">
-          <MetricasComerciaisPanel />
+        <div className="mt-1">
+          <MetricasComerciaisPanel
+            titulo="Métricas comerciais"
+            ajuda="Prazo médio da turma no funil até fechar, tempo em cada fase, conversão por fase e turmas sem resposta. Tudo calculado sozinho a partir do histórico das turmas."
+          />
         </div>
       </div>
 
@@ -334,9 +334,19 @@ export default function Index() {
         <SectionTitle
           ajuda="Quantas turmas em atendimento estão em cada etapa, da Prospecção à Decisão. Um funil saudável afunila de forma suave; muitos casos presos numa etapa = gargalo ali."
           right={
-            <Link to="/pipeline" className="text-xs text-orange-400 hover:underline flex items-center gap-1">
-              Abrir Funil <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
+            <div className="flex items-center gap-3">
+              <BotaoAnaliseIA
+                compact
+                label="Analisar funil com IA"
+                promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise o funil de vendas aberto abaixo (turmas em atendimento por etapa) e responda em português, direto e prático, em no máximo 6 linhas: 1) onde está o gargalo do funil; 2) 2-3 ações concretas pra destravar.
+
+${funil.map((s) => `${s.nome}: ${s.turmas} turma(s), ${s.alunos} aluno(s), probabilidade média ${s.probMedia}%`).join('\n')}`}
+              />
+              <Link to="/pipeline" className="text-xs text-orange-400 hover:underline flex items-center gap-1">
+                Abrir Funil <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           }
         >
           Funil aberto por etapa
@@ -366,15 +376,6 @@ export default function Index() {
             </div>
           ))}
         </div>
-        <div className="mt-4 pt-3 border-t border-white/[0.06]">
-          <BotaoAnaliseIA
-            label="Analisar funil com IA"
-            promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
-Analise o funil de vendas aberto abaixo (turmas em atendimento por etapa) e responda em português, direto e prático, em no máximo 6 linhas: 1) onde está o gargalo do funil; 2) 2-3 ações concretas pra destravar.
-
-${funil.map((s) => `${s.nome}: ${s.turmas} turma(s), ${s.alunos} aluno(s), probabilidade média ${s.probMedia}%`).join('\n')}`}
-          />
-        </div>
       </div>
 
       {/* ============ Ranking gamificado (pódio) ============ */}
@@ -399,6 +400,14 @@ ${funil.map((s) => `${s.nome}: ${s.turmas} turma(s), ${s.alunos} aluno(s), proba
           }
         >
           Ranking de Vendedores
+          <BotaoAnaliseIA
+            compact
+            label="Analisar ranking de vendedores com IA"
+            promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise o ranking de vendedores/closers abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) quem está performando melhor e pior, e por quê (win rate, probabilidade média da carteira); 2) 2-3 ações concretas de coaching/redistribuição de carteira.
+
+${rankVendOrd.map((r: LinhaRanking) => `${r.chave}: ${r.emAtendimento} em atend., ${r.ganhas} ganhas, ${r.perdidas} perdidas, win rate ${r.ganhas + r.perdidas > 0 ? pct(r.winRate) : 'N/A'}, prob. média ${r.emAtendimento > 0 ? `${r.probMedia}%` : 'N/A'}, ${r.alunosFechados} alunos fechados`).join('\n') || 'Nenhuma turma com responsável cadastrado.'}`}
+          />
         </SectionTitle>
         {pctSemResponsavel(leads) > 20 && (
           <p className="mt-2 text-[11px] text-amber-400/90 flex items-center gap-1.5">
@@ -449,15 +458,6 @@ ${funil.map((s) => `${s.nome}: ${s.turmas} turma(s), ${s.alunos} aluno(s), proba
               )}
             </tbody>
           </table>
-        </div>
-        <div className="mt-4 pt-3 border-t border-white/[0.06]">
-          <BotaoAnaliseIA
-            label="Analisar ranking de vendedores com IA"
-            promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
-Analise o ranking de vendedores/closers abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) quem está performando melhor e pior, e por quê (win rate, probabilidade média da carteira); 2) 2-3 ações concretas de coaching/redistribuição de carteira.
-
-${rankVendOrd.map((r: LinhaRanking) => `${r.chave}: ${r.emAtendimento} em atend., ${r.ganhas} ganhas, ${r.perdidas} perdidas, win rate ${r.ganhas + r.perdidas > 0 ? pct(r.winRate) : 'N/A'}, prob. média ${r.emAtendimento > 0 ? `${r.probMedia}%` : 'N/A'}, ${r.alunosFechados} alunos fechados`).join('\n') || 'Nenhuma turma com responsável cadastrado.'}`}
-          />
         </div>
       </div>
 
@@ -541,6 +541,16 @@ ${rankVendOrd.map((r: LinhaRanking) => `${r.chave}: ${r.emAtendimento} em atend.
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-6 shadow-lg">
         <SectionTitle ajuda="Por que perdemos contratos, do mais frequente ao menos. É o mapa do que atacar: se 'preço' lidera, revise proposta/ancoragem; se 'sem resposta', reforce cadência de follow-up.">
           Motivos de perda
+          {motivos.length > 0 && (
+            <BotaoAnaliseIA
+              compact
+              label="Analisar motivos de perda com IA"
+              promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise os motivos de perda de contrato abaixo (do mais frequente ao menos) e responda em português, direto e prático, em no máximo 6 linhas: 1) qual motivo atacar primeiro e por quê; 2) 2-3 ações concretas pra reduzir esse motivo específico.
+
+${motivos.map((m) => `${m.motivo}: ${m.n} ocorrência(s)`).join('\n')}`}
+            />
+          )}
         </SectionTitle>
         <div className="mt-4 space-y-2">
           {motivos.map((m) => (
@@ -558,17 +568,6 @@ ${rankVendOrd.map((r: LinhaRanking) => `${r.chave}: ${r.emAtendimento} em atend.
             </div>
           )}
         </div>
-        {motivos.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-white/[0.06]">
-            <BotaoAnaliseIA
-              label="Analisar motivos de perda com IA"
-              promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
-Analise os motivos de perda de contrato abaixo (do mais frequente ao menos) e responda em português, direto e prático, em no máximo 6 linhas: 1) qual motivo atacar primeiro e por quê; 2) 2-3 ações concretas pra reduzir esse motivo específico.
-
-${motivos.map((m) => `${m.motivo}: ${m.n} ocorrência(s)`).join('\n')}`}
-            />
-          </div>
-        )}
       </div>
 
       {loading && allLeads.length === 0 && (
@@ -592,6 +591,14 @@ function DistribuicaoCard({
       <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
         {titulo}
         <InfoHint title={titulo}>{ajuda}</InfoHint>
+        <BotaoAnaliseIA
+          compact
+          label={`Analisar ${titulo.toLowerCase()} com IA`}
+          promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise a distribuição "${titulo}" abaixo (turmas ganhas, alunos e % do total, por ${titulo.toLowerCase().includes('curso') ? 'curso' : 'marca'}) e responda em português, direto e prático, em no máximo 6 linhas: 1) onde está concentrada a base hoje; 2) 2-3 ações concretas para diversificar/expandir a carteira.
+
+${dados.linhas.slice(0, 12).map((l) => `${l.chave}: ${l.turmas} turma(s), ${l.ganhas} ganha(s), ${l.alunos} aluno(s), ${l.pctTurmas.toFixed(0)}% do total`).join('\n')}`}
+        />
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-xs min-w-[400px]">
@@ -617,15 +624,6 @@ function DistribuicaoCard({
           </tbody>
         </table>
       </div>
-      <div className="mt-3 pt-3 border-t border-white/[0.06]">
-        <BotaoAnaliseIA
-          label={`Analisar ${titulo.toLowerCase()} com IA`}
-          promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
-Analise a distribuição "${titulo}" abaixo (turmas ganhas, alunos e % do total, por ${titulo.toLowerCase().includes('curso') ? 'curso' : 'marca'}) e responda em português, direto e prático, em no máximo 6 linhas: 1) onde está concentrada a base hoje; 2) 2-3 ações concretas para diversificar/expandir a carteira.
-
-${dados.linhas.slice(0, 12).map((l) => `${l.chave}: ${l.turmas} turma(s), ${l.ganhas} ganha(s), ${l.alunos} aluno(s), ${l.pctTurmas.toFixed(0)}% do total`).join('\n')}`}
-        />
-      </div>
     </div>
   )
 }
@@ -648,6 +646,14 @@ function RankingMini({
         <Icon className="w-4 h-4 text-orange-400" />
         {titulo}
         <InfoHint title={titulo}>{ajuda}</InfoHint>
+        <BotaoAnaliseIA
+          compact
+          label={`Analisar ${titulo.toLowerCase()} com IA`}
+          promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
+Analise o ranking "${titulo}" abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) onde está a maior tração hoje; 2) 2-3 ações concretas de priorização comercial pra essa dimensão.
+
+${top.map((r) => `${r.chave}: ${r.emAtendimento} em atendimento, ${r.ganhas} ganhas, ${r.perdidas} perdidas, win rate ${r.ganhas + r.perdidas > 0 ? `${r.winRate.toFixed(0)}%` : 'N/A'}, ${r.alunosFechados} alunos fechados`).join('\n')}`}
+        />
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-xs min-w-[420px]">
@@ -674,15 +680,6 @@ function RankingMini({
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="mt-3 pt-3 border-t border-white/[0.06]">
-        <BotaoAnaliseIA
-          label={`Analisar ${titulo.toLowerCase()} com IA`}
-          promptBuilder={() => `Você é um diretor comercial sênior de uma empresa de fotografia de formaturas.
-Analise o ranking "${titulo}" abaixo e responda em português, direto e prático, em no máximo 6 linhas: 1) onde está a maior tração hoje; 2) 2-3 ações concretas de priorização comercial pra essa dimensão.
-
-${top.map((r) => `${r.chave}: ${r.emAtendimento} em atendimento, ${r.ganhas} ganhas, ${r.perdidas} perdidas, win rate ${r.ganhas + r.perdidas > 0 ? `${r.winRate.toFixed(0)}%` : 'N/A'}, ${r.alunosFechados} alunos fechados`).join('\n')}`}
-        />
       </div>
     </div>
   )

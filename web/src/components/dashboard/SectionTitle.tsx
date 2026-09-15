@@ -11,7 +11,7 @@ export default function SectionTitle({
   right?: React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
         {children}
         <InfoHint title={typeof children === 'string' ? children : undefined}>{ajuda}</InfoHint>
