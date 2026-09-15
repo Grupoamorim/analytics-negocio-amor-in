@@ -124,12 +124,35 @@ export function metaSomaIntervalo(
     return iv.ini >= ini && iv.fim <= fim
   })
   const valor = dentro.reduce((acc, m) => acc + m.valorMeta, 0)
+
+  // Cenário anual, pra quando o Lucas cadastra pessimista/otimista só como total do ano (ex: vindo
+  // do planner de metas), sem quebrar mês a mês igual faz com a meta padrão. Só existe um "ini"/"fim"
+  // dentro de um único ano civil (filtros de período do site nunca cruzam ano) — se cruzar, não tem
+  // como aplicar essa distribuição de forma confiável, então fica de fora.
+  const anoIni = new Date(`${ini}T00:00:00`).getFullYear()
+  const anoFim = new Date(`${fim}T00:00:00`).getFullYear()
+  const anualDoAno =
+    anoIni === anoFim ? metas.find((m) => m.metrica === metrica && m.escopo === 'anual' && m.ano === anoIni) : undefined
+  const somaPadraoDoAno =
+    anoIni === anoFim
+      ? metas
+          .filter((m) => m.metrica === metrica && m.escopo === 'mensal' && m.ano === anoIni)
+          .reduce((acc, m) => acc + m.valorMeta, 0)
+      : 0
+
   // Só soma o cenário se pelo menos um mês do intervalo tiver ele cadastrado — não inventa
-  // pessimista/otimista pra mês que só tem a meta padrão preenchida.
+  // pessimista/otimista pra mês que só tem a meta padrão preenchida. Quando nenhum mês do
+  // intervalo tem o cenário mas existe um total anual cadastrado, distribui esse total
+  // proporcionalmente ao peso real de cada mês na meta padrão (não inventa a forma da curva,
+  // só escala o total real do cenário pela sazonalidade real já cadastrada).
   const somaCenario = (pick: (m: MetaNegocio) => number | null): number | null => {
     const comCenario = dentro.filter((m) => pick(m) != null)
-    if (comCenario.length === 0) return null
-    return comCenario.reduce((acc, m) => acc + (pick(m) || 0), 0)
+    if (comCenario.length > 0) return comCenario.reduce((acc, m) => acc + (pick(m) || 0), 0)
+    const anualValor = anualDoAno ? pick(anualDoAno) : null
+    if (anualValor == null || somaPadraoDoAno <= 0) return null
+    const pesoIntervalo = dentro.reduce((acc, m) => acc + m.valorMeta, 0)
+    if (pesoIntervalo <= 0) return null
+    return anualValor * (pesoIntervalo / somaPadraoDoAno)
   }
   const mesesTotal =
     (new Date(`${fim}T00:00:00`).getFullYear() - new Date(`${ini}T00:00:00`).getFullYear()) * 12 +
