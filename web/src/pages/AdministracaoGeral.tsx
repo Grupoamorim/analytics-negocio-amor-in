@@ -11,6 +11,7 @@ import {
   useMetasNegocio,
   metaSomaIntervalo,
   metaBatidaSemReajuste,
+  intervaloDaMeta,
   METRICA_LABEL,
   rotuloPeriodoMeta,
   type MetricaMeta,
@@ -108,16 +109,45 @@ export default function AdministracaoGeral() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metas, pontosReceita, pontosAdesoes, pontosContratos, pontosResultado, pontosVgv, pontosEscolas])
+  // Corrigido em 2026-09-15: quando o período do filtro não tem meta mensal cadastrada em TODOS
+  // os meses (ex: só até agosto, porque a meta de setembro em diante virou um cenário anual
+  // "Plano Mestre"), a soma dos meses cadastrados ficava incompleta e nunca refletia o cenário
+  // anual — o Financeiro mostrava certo (mês > trimestre > ano) e o Dashboard Geral não. Agora só
+  // usa a soma mês a mês quando o período do filtro está 100% coberto por metas mensais; do
+  // contrário cai pra mesma meta vigente do Financeiro (mês > trimestre > ano), com o próprio
+  // período dela — não o do filtro, pra não distorcer o pace com uma meta anual dividida num
+  // recorte parcial do ano.
   const overrideDoFiltro = (metrica: MetricaMeta) => {
-    const { valor, valorPessimista, valorOtimista, mesesComMeta } = metaSomaIntervalo(metas, metrica, f.dtIni, f.dtFim)
+    const { valor, valorPessimista, valorOtimista, mesesComMeta, mesesTotal } = metaSomaIntervalo(
+      metas,
+      metrica,
+      f.dtIni,
+      f.dtFim,
+    )
+    if (mesesComMeta > 0 && mesesComMeta === mesesTotal) {
+      return {
+        ini: f.dtIni,
+        fim: f.dtFim,
+        rotulo: rotuloFiltro,
+        valorMeta: valor,
+        valorMetaPessimista: valorPessimista,
+        valorMetaOtimista: valorOtimista,
+        temMeta: true,
+      }
+    }
+    const vigente = metaVigente(metrica, HOJE)
+    if (!vigente) {
+      return { ini: f.dtIni, fim: f.dtFim, rotulo: rotuloFiltro, valorMeta: 0, temMeta: false }
+    }
+    const iv = intervaloDaMeta(vigente)
     return {
-      ini: f.dtIni,
-      fim: f.dtFim,
-      rotulo: rotuloFiltro,
-      valorMeta: valor,
-      valorMetaPessimista: valorPessimista,
-      valorMetaOtimista: valorOtimista,
-      temMeta: mesesComMeta > 0,
+      ini: iv.ini,
+      fim: iv.fim,
+      rotulo: rotuloPeriodoMeta(vigente),
+      valorMeta: vigente.valorMeta,
+      valorMetaPessimista: vigente.valorMetaPessimista,
+      valorMetaOtimista: vigente.valorMetaOtimista,
+      temMeta: true,
     }
   }
 
