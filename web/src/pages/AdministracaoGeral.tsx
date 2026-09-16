@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Gauge, FileDown } from 'lucide-react'
+import { Gauge, FileDown, AlertTriangle, ShieldCheck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { exportarElementoParaPdf } from '@/utils/exportarPdf'
 import { useCRM } from '@/context/CRMContext'
@@ -7,6 +7,8 @@ import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import PeriodoFiltroBar from '@/components/PeriodoFiltroBar'
 import { usePeriodoFiltro, rotuloDoFiltro } from '@/hooks/usePeriodoFiltro'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
+import { useCaixaSnapshots } from '@/hooks/useCaixaSnapshots'
+import KpiCard from '@/components/dashboard/KpiCard'
 import {
   useMetasNegocio,
   metaSomaIntervalo,
@@ -57,7 +59,8 @@ export default function AdministracaoGeral() {
   // usados aqui só pra satisfazer a assinatura do hook, igual ao restante do app. O
   // recorte pro período escolhido no filtro acontece depois, dentro do calcularPace
   // de cada PaceBand (via periodoOverride).
-  const { pontosDiarios } = useFinanceiroDashboard(HOJE, HOJE, selectedEmpresas)
+  const { agregado, pontosDiarios } = useFinanceiroDashboard(HOJE, HOJE, selectedEmpresas)
+  const { ultimoAte } = useCaixaSnapshots()
   const pontosReceita = useMemo(() => pontosDiarios('receita'), [pontosDiarios])
   // "Adesões" = "Alunos fechados" (mesmo dado, métrica única desde 2026-09-13 — antes existiam
   // como duas metas separadas mostrando o mesmo número por baixo).
@@ -157,6 +160,17 @@ export default function AdministracaoGeral() {
   const realizadoResultadoFiltro = calcularPace(0, f.dtIni, f.dtFim, pontosResultado).realizado
   const margemFiltro = realizadoReceitaFiltro > 0 ? (realizadoResultadoFiltro / realizadoReceitaFiltro) * 100 : null
 
+  // Inadimplência: mesma leitura do Financeiro/Painel Financeiro (parcelas vencidas e não pagas).
+  const inadimplenciaPct =
+    agregado.aReceberEmAberto > 0 ? (agregado.inadimplencia / agregado.aReceberEmAberto) * 100 : 0
+
+  // Cobertura das contas (30 dias): pedido do Lucas no lugar do "ritmo R$/semana" — como as contas
+  // dele são concentradas no início do mês (não um fluxo diário parelho), o que importa é se o
+  // saldo em caixa dá conta do que vence nos próximos 30 dias, não um ritmo semanal de receita.
+  const ultimoSaldo = ultimoAte(HOJE)
+  const cobertura30 =
+    ultimoSaldo && agregado.aPagarProx30 > 0 ? (ultimoSaldo.valor / agregado.aPagarProx30) * 100 : null
+
   const [exportando, setExportando] = useState(false)
   const handleExportar = async () => {
     setExportando(true)
@@ -197,6 +211,29 @@ export default function AdministracaoGeral() {
             <FileDown className="w-3.5 h-3.5" /> {exportando ? 'Gerando PDF...' : 'Exportar PDF'}
           </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <KpiCard
+          label="Inadimplência"
+          value={`R$ ${Math.round(agregado.inadimplencia).toLocaleString('pt-BR')}`}
+          icon={AlertTriangle}
+          tom={inadimplenciaPct > 10 ? 'vermelho' : inadimplenciaPct > 5 ? 'ambar' : 'verde'}
+          sub={`${inadimplenciaPct.toFixed(1)}% do total a receber em aberto`}
+          ajuda="Parcelas com status 'atrasado' (venceram e não foram pagas). Referência saudável para o setor: abaixo de 5–10% do total a receber."
+        />
+        <KpiCard
+          label="Cobertura das contas (30 dias)"
+          value={cobertura30 === null ? '—' : `${cobertura30.toFixed(0)}%`}
+          icon={ShieldCheck}
+          tom={cobertura30 === null ? 'neutro' : cobertura30 >= 100 ? 'verde' : cobertura30 >= 70 ? 'ambar' : 'vermelho'}
+          sub={
+            ultimoSaldo
+              ? `saldo ${Math.round(ultimoSaldo.valor).toLocaleString('pt-BR')} vs. contas a pagar ${Math.round(agregado.aPagarProx30).toLocaleString('pt-BR')}`
+              : 'lance o saldo em caixa abaixo pra calcular'
+          }
+          ajuda="Último saldo em caixa lançado dividido pelas contas a pagar que vencem nos próximos 30 dias. Como as contas costumam ser concentradas no início do mês, isso diz melhor se dá pra cobrir do que um ritmo médio por semana."
+        />
       </div>
 
       <PeriodoFiltroBar {...f} />
