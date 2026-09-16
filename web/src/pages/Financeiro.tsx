@@ -26,6 +26,8 @@ interface Pagamento {
   data_pagamento: string | null
   turma_id: string | null
   empresa: string | null
+  pagador_nome: string | null
+  num_parcela: number | null
 }
 
 interface ContaPagar {
@@ -115,7 +117,9 @@ export default function Financeiro() {
         fetchAllRows<any>(() =>
           supabase
             .from('pagamentos')
-            .select('id, valor, valor_pago, status, data_vencimento, data_pagamento, turma_id, turmas(empresa)')
+            .select(
+              'id, valor, valor_pago, status, data_vencimento, data_pagamento, turma_id, pagador_nome, num_parcela, turmas(empresa)',
+            )
             .neq('status', 'cancelado')
             .order('data_vencimento', { ascending: false })
             .order('id'),
@@ -199,6 +203,55 @@ export default function Financeiro() {
     return { total_faturado, total_recebido, total_a_receber, total_inadimplente, total_custos }
   }, [pagamentos, pagamentosFiltrados, contasPagarFiltradas, selectedEmpresas, dtIni, dtFim])
 
+  // Inadimplência quebrada por Mês/Trimestre/Semestre/Ano, independente do filtro de período
+  // acima — pedido do Lucas pra comparar "dívida nova" (só parcelas que venceram dentro daquele
+  // recorte) com o total acumulado (que carrega parcelas antigas de recortes anteriores).
+  const pagamentosInadimplentesEmpresa = useMemo(
+    () =>
+      pagamentos.filter(
+        (p) =>
+          p.status === 'atrasado' &&
+          (selectedEmpresas.length === 0 || (!!p.empresa && selectedEmpresas.includes(p.empresa))),
+      ),
+    [pagamentos, selectedEmpresas],
+  )
+
+  const inadimplenciaPorPeriodo = useMemo(() => {
+    const hoje = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const iso = (ano: number, mes: number) => `${ano}-${pad(mes)}-01`
+    const janelas = [
+      { label: 'Mês', inicio: iso(hoje.getFullYear(), hoje.getMonth() + 1) },
+      { label: 'Trimestre', inicio: iso(hoje.getFullYear(), Math.floor(hoje.getMonth() / 3) * 3 + 1) },
+      { label: 'Semestre', inicio: iso(hoje.getFullYear(), hoje.getMonth() < 6 ? 1 : 7) },
+      { label: 'Ano', inicio: iso(hoje.getFullYear(), 1) },
+    ]
+    // "Com parcelas antigas" é o mesmo total nas 4 linhas — é a inadimplência acumulada até
+    // hoje, sem cortar pela data de início do recorte (por isso não muda entre mês/trim/etc,
+    // já que todos vão até hoje).
+    const comParcelasAntigas = pagamentosInadimplentesEmpresa.reduce(
+      (acc, p) => acc + (Number(p.valor || 0) - Number(p.valor_pago || 0)),
+      0,
+    )
+    return janelas.map(({ label, inicio }) => {
+      const semParcelasAntigas = pagamentosInadimplentesEmpresa
+        .filter((p) => p.data_vencimento >= inicio)
+        .reduce((acc, p) => acc + (Number(p.valor || 0) - Number(p.valor_pago || 0)), 0)
+      return { label, semParcelasAntigas, comParcelasAntigas }
+    })
+  }, [pagamentosInadimplentesEmpresa])
+
+  // Lista de quem está inadimplente só com parcela vencida DENTRO do mês atual — separado do
+  // acumulado histórico, pra ver quem gerou inadimplência nova agora, não dívida antiga arrastada.
+  const inadimplentesDoMes = useMemo(() => {
+    const hoje = new Date()
+    const inicioMes = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-01`
+    return pagamentosInadimplentesEmpresa
+      .filter((p) => p.data_vencimento >= inicioMes)
+      .map((p) => ({ ...p, aberto: Number(p.valor || 0) - Number(p.valor_pago || 0) }))
+      .sort((a, b) => b.aberto - a.aberto)
+  }, [pagamentosInadimplentesEmpresa])
+
   // "Recebido" conta pelo mês em que o dinheiro realmente entrou (data de
   // pagamento) — não pelo mês de vencimento original da parcela, senão uma
   // parcela atrasada paga meses depois aparece no mês errado do gráfico.
@@ -281,6 +334,62 @@ Fluxo de caixa (últimos meses, recebido vs previsto): ${fluxoCaixa.map((m) => `
         <KpiCard label="A Receber" value={brl(totais?.total_a_receber)} icon={Wallet} tone="orange" />
         <KpiCard label="Inadimplência" value={brl(totais?.total_inadimplente)} icon={AlertTriangle} tone="red" />
         <KpiCard label="Contas a Pagar" value={brl(totais?.total_custos)} icon={FileWarning} tone="yellow" />
+      </div>
+
+      <div className="bg-[#111820] border border-white/[0.06] rounded-xl p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-white">Inadimplência por período</h2>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            "Sem parcelas antigas" conta só parcelas que venceram dentro daquele recorte. "Com
+            parcelas antigas" é o total inadimplente acumulado até hoje (por isso é igual nas 4
+            colunas — todos os recortes vão até hoje).
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {inadimplenciaPorPeriodo.map((p) => (
+            <div key={p.label} className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-3">
+              <div className="text-[10px] font-medium text-slate-400 uppercase">{p.label}</div>
+              <div className="mt-1.5 text-sm font-bold text-rose-400">{brl(p.semParcelasAntigas)}</div>
+              <div className="text-[10px] text-slate-500">sem parcelas antigas</div>
+              <div className="mt-2 text-sm font-semibold text-slate-300">{brl(p.comParcelasAntigas)}</div>
+              <div className="text-[10px] text-slate-500">com parcelas antigas</div>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <h3 className="text-xs font-semibold text-white mb-2">
+            Inadimplentes do mês ({inadimplentesDoMes.length})
+          </h3>
+          {inadimplentesDoMes.length === 0 ? (
+            <p className="text-xs text-slate-500">Ninguém com parcela vencida dentro do mês atual.</p>
+          ) : (
+            <div className="overflow-x-auto max-h-72 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-[#111820]">
+                  <tr className="text-left text-slate-500 uppercase border-b border-white/[0.06]">
+                    <th className="px-3 py-2">Cliente</th>
+                    <th className="px-3 py-2">Parcela</th>
+                    <th className="px-3 py-2">Vencimento</th>
+                    <th className="px-3 py-2 text-right">Em aberto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inadimplentesDoMes.map((p) => (
+                    <tr key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                      <td className="px-3 py-2 text-slate-300">{p.pagador_nome || '—'}</td>
+                      <td className="px-3 py-2 text-slate-400">{p.num_parcela ?? '—'}</td>
+                      <td className="px-3 py-2 text-slate-400">
+                        {new Date(p.data_vencimento).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-3 py-2 text-right text-rose-400 font-semibold">{brl(p.aberto)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl overflow-hidden">
