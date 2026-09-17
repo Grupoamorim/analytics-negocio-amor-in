@@ -378,11 +378,19 @@ def coletar_contas_pagar():
         if cod in vistos:
             continue
         vistos.add(cod)
+        # "Categoria" quase sempre vem "000 - Não classificado" (99% dos casos, confirmado em
+        # 2026-09-17) - nesse caso é inútil, e cair nela via .get() com default só funcionaria se
+        # a chave estivesse AUSENTE, não com esse valor-placeholder presente. "Servico" é o plano
+        # de contas contábil real do SGE (~30 categorias tipo "Despesas com Pessoal- Salarios e
+        # Ordenados", "Custos com Eventos", "Pro Labore") e vem preenchido de verdade quase sempre -
+        # muito mais útil pro detalhamento do DRE do que "CentroCustos" (só 2 valores possíveis).
+        _categoria_bruta = str(p.get("Categoria") or "").strip()
+        _categoria_util = _categoria_bruta if _categoria_bruta and not _categoria_bruta.startswith("000") else ""
         registros.append({
             "codigo_sge":      cod,
             "fornecedor":      p.get("FornecedorNome", p.get("Fornecedor", "")),
             "descricao":       p.get("Descricao", p.get("Historico", "")),
-            "categoria":       p.get("Categoria", p.get("CentroCustos", p.get("Servico", ""))),
+            "categoria":       _categoria_util or p.get("Servico", p.get("CentroCustos", "")),
             "valor":           float(p.get("Valor", p.get("ValorParcela", p.get("ValorOriginal", 0))) or 0),
             "valor_pago":      float(p.get("ValorPago", 0) or 0),
             "data_vencimento": data_ou_none(p.get("DataVencimento", p.get("Vencimento", ""))),

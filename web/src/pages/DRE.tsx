@@ -93,6 +93,58 @@ const FORNECEDOR_OVERRIDES: Record<string, string> = {
   'lucas amorim - pf': 'Despesas com Pessoal e Administrativas',
 }
 
+// Achado em 2026-09-17 minerando o raw_data que o SGE já manda: o campo "Servico" é o plano de
+// contas contábil real de lá (ficava sem uso porque "Categoria" vinha "000 - Não classificado"
+// em 99% dos casos e o coletor nunca caía no fallback certo — corrigido em sge_collector.py,
+// backfill retroativo já aplicado em `categoria`). É mais confiável que adivinhar por palavra-
+// chave em descrição/fornecedor — usado ANTES do REGRAS_DRE, mas depois de grupo_dre/
+// FORNECEDOR_OVERRIDES (decisão manual do Lucas sempre vence). Mapeamento é uma PROPOSTA inicial
+// a partir da leitura do texto de cada categoria — revisar com o Lucas caso alguma pareça errada,
+// principalmente as de maior valor (Cartão de crédito, Pro Labore, emprestimo).
+const CATEGORIA_SGE_PARA_GRUPO: Record<string, string> = {
+  // Custos Diretos (Produção/Serviços) — ligado direto à entrega da formatura/evento
+  'custos com eventos': 'Custos Diretos (Produção/Serviços)',
+  'despesas com pessoal- freelancer': 'Custos Diretos (Produção/Serviços)',
+  'mao de obra': 'Custos Diretos (Produção/Serviços)',
+  'moveis e equipamentos': 'Custos Diretos (Produção/Serviços)',
+  'material grafico aplicado': 'Custos Diretos (Produção/Serviços)',
+  // Despesas com Pessoal e Administrativas — folha, pró-labore e operação do escritório
+  'despesas com pessoal- salarios e ordenados': 'Despesas com Pessoal e Administrativas',
+  'pro labore': 'Despesas com Pessoal e Administrativas',
+  'despesas com pessoal- ajuda de custo': 'Despesas com Pessoal e Administrativas',
+  'despesas c/pessoal-lanches e refeicoes': 'Despesas com Pessoal e Administrativas',
+  'despesas com pessoal- uniformes': 'Despesas com Pessoal e Administrativas',
+  'alugueis de imoveis': 'Despesas com Pessoal e Administrativas',
+  'algueis de imoveis- iptu': 'Despesas com Pessoal e Administrativas',
+  'telefone e internet': 'Despesas com Pessoal e Administrativas',
+  'conta de energia': 'Despesas com Pessoal e Administrativas',
+  'agua e esgoto': 'Despesas com Pessoal e Administrativas',
+  limpeza: 'Despesas com Pessoal e Administrativas',
+  'servicos de terceiros- servicos de informatica': 'Despesas com Pessoal e Administrativas',
+  'servicos de terceiros- seguranca': 'Despesas com Pessoal e Administrativas',
+  'servicos de terceiros- assistencia contabil': 'Despesas com Pessoal e Administrativas',
+  'despesas gerais- despesas com viagens': 'Despesas com Pessoal e Administrativas',
+  'despesas gerais- material de escritorio': 'Despesas com Pessoal e Administrativas',
+  'despesas gerais - material  p/ copa e cozinha': 'Despesas com Pessoal e Administrativas',
+  'despesas com transportes': 'Despesas com Pessoal e Administrativas',
+  correspondencias: 'Despesas com Pessoal e Administrativas',
+  'obras e reformas': 'Despesas com Pessoal e Administrativas',
+  // Despesas Financeiras — juros, tarifas, empréstimos
+  emprestimo: 'Despesas Financeiras',
+  'despesas financeiras - despesas bancarias': 'Despesas Financeiras',
+  'taxas e tarifas cartao de credito': 'Despesas Financeiras',
+  // Impostos e Taxas sobre Vendas
+  impostos: 'Impostos e Taxas sobre Vendas',
+  // Outras Despesas Operacionais — mesma lógica já usada pro cartão de crédito (fatura mistura
+  // vários gastos, sem detalhamento item a item não dá pra saber a natureza real de cada um) e
+  // pra investimento/capitalização (não é despesa operacional do período)
+  'cartao de credito': 'Outras Despesas Operacionais',
+  'investimentos depreciaveis': 'Outras Despesas Operacionais',
+  'titulo de capitalizacao': 'Outras Despesas Operacionais',
+  'transferencias e operacoes internas': 'Outras Despesas Operacionais',
+  'deducoes- devolucao de vendas': 'Outras Despesas Operacionais',
+}
+
 function normalizar(txt: string | null | undefined): string {
   if (!txt) return ''
   return txt
@@ -105,6 +157,8 @@ function classificar(c: ContaPagar): string {
   if (c.grupo_dre && GRUPOS_ORDEM.includes(c.grupo_dre)) return c.grupo_dre
   const fornecedorNorm = normalizar(c.fornecedor)
   if (fornecedorNorm && FORNECEDOR_OVERRIDES[fornecedorNorm]) return FORNECEDOR_OVERRIDES[fornecedorNorm]
+  const categoriaNorm = normalizar(c.categoria)
+  if (categoriaNorm && CATEGORIA_SGE_PARA_GRUPO[categoriaNorm]) return CATEGORIA_SGE_PARA_GRUPO[categoriaNorm]
   const base = normalizar(`${c.categoria || ''} ${c.descricao || ''} ${c.fornecedor || ''}`)
   for (const [grupo, palavras] of REGRAS_DRE) {
     if (palavras.some((p) => base.includes(normalizar(p)))) return grupo
