@@ -161,7 +161,7 @@ export default function Relatorios() {
   // continuam reais e turma-a-turma. O valor em R$ não vem mais daqui (ver pontosVgv acima).
   const leadsComFechamento: FechamentoInfo[] = useMemo(() => {
     return leads
-      .filter((l) => l.status === 'Convertido' || l.status === 'Perdido')
+      .filter((l) => !l.mesmaTurmaFisicaDe && (l.status === 'Convertido' || l.status === 'Perdido'))
       .map((l) => {
         const deal = dealByLeadId.get(l.id)
         return { lead: l, deal, closeDate: getCloseDate(l, deal) }

@@ -106,6 +106,7 @@ export function desfechos(leads: Lead[], periodo: Periodo): Desfechos {
   let perdidasNoPeriodo = 0
 
   for (const l of leads) {
+    if (l.mesmaTurmaFisicaDe) continue // não conta a turma-espelho de pacote separado
     const st = norm(l.status)
     const fech = dataFechamento(l)
     if (st === 'convertido') {
@@ -146,6 +147,7 @@ export function alunosFechadosNoPeriodo(leads: Lead[], periodo: Periodo): {
   let turmas = 0
   let semData = 0
   for (const l of leads) {
+    if (l.mesmaTurmaFisicaDe) continue // não conta a turma-espelho de pacote separado
     if (norm(l.status) !== 'convertido') continue
     const n = l.alunosFechados || 0
     const fech = dataFechamento(l)
@@ -188,6 +190,7 @@ function agrupar(
     { emAt: number; ganhas: number; perdidas: number; probSoma: number; probN: number; fech: number; totAlunosGanhas: number }
   >()
   for (const l of leads) {
+    if (l.mesmaTurmaFisicaDe) continue // não conta a turma-espelho de pacote separado
     const k = chaveDe(l) || '—'
     const e = map.get(k) || {
       emAt: 0,
@@ -296,6 +299,7 @@ export function pontosComerciais(
 ): { data: string; valor: number }[] {
   const out: { data: string; valor: number }[] = []
   for (const l of leads) {
+    if (l.mesmaTurmaFisicaDe) continue // não conta a turma-espelho de pacote separado
     if (norm(l.status) !== 'convertido') continue
     const d = dataFechamento(l)
     if (!d) continue

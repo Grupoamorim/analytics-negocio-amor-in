@@ -141,6 +141,44 @@ def montar_email(r: dict) -> tuple[str, bool]:
             f"ter parado de funcionar."
         )
 
+    # Blindagem adicionada em 2026-09-17 depois da auditoria geral de duplicação (Adesões
+    # mostrando 50 no lugar de 28) — mesma classe de bug (duas fontes/dois codigo_sge pro mesmo
+    # evento real) em 4 lugares diferentes. Checa aqui pra avisar ANTES de virar número errado
+    # na tela, em vez de descobrir por acaso de novo.
+    dup_turmas = r.get("turmas_duplicadas_sem_link") or 0
+    if dup_turmas > 0:
+        criticos.append(
+            f"{dup_turmas} turma(s) com curso+faculdade+turma+ano+cidade EXATAMENTE iguais mas "
+            f"codigo do SGE diferente, sem estar marcada como 'mesma turma física' de nenhuma outra "
+            f"— conta em dobro em qualquer lugar que soma 'turmas ganhas' (Market Share, ranking, "
+            f"Contratos Fechados). Ver Turmas (Leads.tsx) e usar o campo mesma_turma_fisica_de pra "
+            f"linkar, sem apagar nenhuma."
+        )
+
+    dup_adesoes = r.get("duplicatas_adesoes_manual_vs_sync") or 0
+    if dup_adesoes > 0:
+        criticos.append(
+            f"{dup_adesoes} adesão(ões) duplicada(s) entre a importação manual de 15/09 e o sync ao "
+            f"vivo do SGE (mesmo padrão corrigido em 2026-09-17) — o trigger "
+            f"trg_reconcilia_adesoes_manuais pode ter parado de rodar."
+        )
+
+    dup_clientes = r.get("duplicatas_clientes_mesma_turma") or 0
+    if dup_clientes > 0:
+        avisos.append(
+            f"{dup_clientes} cliente(s) duplicado(s) (mesma turma+nome, codigo_sge diferente) — "
+            f"infla contagem de alunos fechados e cria contato duplicado. Corrigido manualmente em "
+            f"2026-09-17; se voltar a aparecer, investigar de onde vem o codigo_sge não-CPF."
+        )
+
+    dup_receber = r.get("duplicatas_contas_receber_hash_vs_idlancamento") or 0
+    if dup_receber > 0:
+        avisos.append(
+            f"{dup_receber} parcela(s) duplicada(s) em contas a receber (código antigo de hash vs "
+            f"IdLancamento real do SGE) — mesmo padrão de 603 casos limpos em 2026-09-17. Infla "
+            f"contas a receber/projeções, não afeta receita já reconhecida (nenhuma paga até agora)."
+        )
+
     tem_alerta = bool(criticos or avisos)
 
     def bloco(titulo, itens, cor):

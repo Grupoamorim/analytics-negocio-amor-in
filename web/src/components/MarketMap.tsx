@@ -179,6 +179,7 @@ export default function MarketMap() {
   // Leads filtrados pelas seleções atuais (inclui filtro de estágio do funil)
   const filtered = useMemo(() => {
     return leads.filter((l) => {
+      if (l.mesmaTurmaFisicaDe) return false // não conta a turma-espelho de pacote separado
       for (const key of FILTER_DEFS.map((d) => d.key)) {
         if (filters[key] && l[key] !== filters[key]) return false
       }
@@ -192,6 +193,7 @@ export default function MarketMap() {
   // turmas do segmento (fechadas ou não) pra calcular participação real.
   const filteredForShare = useMemo(() => {
     return leads.filter((l) => {
+      if (l.mesmaTurmaFisicaDe) return false // não conta a turma-espelho de pacote separado
       for (const key of FILTER_DEFS.map((d) => d.key)) {
         if (filters[key] && l[key] !== filters[key]) return false
       }
