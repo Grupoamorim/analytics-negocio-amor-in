@@ -69,6 +69,7 @@ import {
 } from '@/components/SortControl'
 import { Button } from '@/components/ui/button'
 import ImportCsvModal from '@/components/ImportCsvModal'
+import WhatsAppButton from '@/components/WhatsAppButton'
 import { ColumnHeaderWithFilter, ColumnFilterKey } from '@/components/ColumnHeaderWithFilter'
 import { TableFilterPopover, type FilterVal } from '@/components/TableFilterPopover'
 import { downloadTemplateCsv } from '@/utils/csvImporter'
@@ -3023,11 +3024,16 @@ function SelectedLeadDetail({
                 defaultValue={lead.contatoNome || ''}
                 onSave={(v) => onPatch({ contatoNome: v })}
               />
-              <InlineField
-                label="Telefone"
-                defaultValue={lead.contatoTelefone || ''}
-                onSave={(v) => onPatch({ contatoTelefone: v })}
-              />
+              <div className="flex items-end gap-1.5">
+                <div className="flex-1 min-w-0">
+                  <InlineField
+                    label="Telefone"
+                    defaultValue={lead.contatoTelefone || ''}
+                    onSave={(v) => onPatch({ contatoTelefone: v })}
+                  />
+                </div>
+                <WhatsAppButton telefone={lead.contatoTelefone} className="mb-1.5" />
+              </div>
             </div>
           </div>
 

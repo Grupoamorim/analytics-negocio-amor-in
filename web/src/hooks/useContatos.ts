@@ -27,6 +27,8 @@ function mapRowToContact(
     isPrimary: false,
     notes: '',
     naoRespondeCount: row.nao_responde_count || 0,
+    origem: row.origem || undefined,
+    comissao: !!row.comissao,
     createdAt: row.created_at,
     updatedAt: row.updated_at || undefined,
     updatedByEmail: row.updated_by_profile?.email || undefined,

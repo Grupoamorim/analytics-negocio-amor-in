@@ -688,33 +688,39 @@ export type Database = {
       }
       contatos: {
         Row: {
+          comissao: boolean
           created_at: string
           email: string | null
           id: string
           nao_responde_count: number
           nome: string
+          origem: string | null
           telefone: string | null
           turma_id: string
           updated_at: string | null
           updated_by: string | null
         }
         Insert: {
+          comissao?: boolean
           created_at?: string
           email?: string | null
           id?: string
           nao_responde_count?: number
           nome: string
+          origem?: string | null
           telefone?: string | null
           turma_id: string
           updated_at?: string | null
           updated_by?: string | null
         }
         Update: {
+          comissao?: boolean
           created_at?: string
           email?: string | null
           id?: string
           nao_responde_count?: number
           nome?: string
+          origem?: string | null
           telefone?: string | null
           turma_id?: string
           updated_at?: string | null
@@ -1613,9 +1619,34 @@ export type Database = {
           },
         ]
       }
+      metas_chat_conversas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       metas_chat_mensagens: {
         Row: {
           conteudo: string
+          conversa_id: string
           created_at: string
           created_by: string | null
           id: string
@@ -1623,6 +1654,7 @@ export type Database = {
         }
         Insert: {
           conteudo: string
+          conversa_id: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1630,12 +1662,20 @@ export type Database = {
         }
         Update: {
           conteudo?: string
+          conversa_id?: string
           created_at?: string
           created_by?: string | null
           id?: string
           role?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "metas_chat_mensagens_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "metas_chat_conversas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "metas_chat_mensagens_created_by_fkey"
             columns: ["created_by"]

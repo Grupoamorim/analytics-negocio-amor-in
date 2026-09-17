@@ -6,6 +6,7 @@ import { matchesSearch } from '@/utils/searchMatch'
 import { useToast } from '@/hooks/use-toast'
 import LastEditedBy from '@/components/LastEditedBy'
 import InlineEditText from '@/components/InlineEditText'
+import WhatsAppButton from '@/components/WhatsAppButton'
 import { SortControl, sortByField, type SortDirection } from '@/components/SortControl'
 
 interface ContactFormData {
@@ -177,11 +178,30 @@ export default function Contatos() {
                         <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-300 flex items-center justify-center text-[11px] font-bold shrink-0">
                           {c.nome.substring(0, 2).toUpperCase()}
                         </div>
-                        <InlineEditText
-                          value={c.nome}
-                          onSave={(v) => v && updateContact(c.id, { nome: v })}
-                          className="font-semibold text-white"
-                        />
+                        <div className="min-w-0">
+                          <InlineEditText
+                            value={c.nome}
+                            onSave={(v) => v && updateContact(c.id, { nome: v })}
+                            className="font-semibold text-white"
+                          />
+                          {(c.origem || c.comissao) && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {c.origem && (
+                                <span
+                                  className="text-[10px] text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded px-1.5 py-0.5"
+                                  title="Veio de um formulário público de captação/evento"
+                                >
+                                  {c.origem}
+                                </span>
+                              )}
+                              {c.comissao && (
+                                <span className="text-[10px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 rounded px-1.5 py-0.5">
+                                  Comissão
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
@@ -198,10 +218,13 @@ export default function Contatos() {
                       </select>
                     </td>
                     <td className="py-3 px-4 text-slate-300" onClick={(e) => e.stopPropagation()}>
-                      <InlineEditText
-                        value={c.telefone}
-                        onSave={(v) => updateContact(c.id, { telefone: v })}
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <InlineEditText
+                          value={c.telefone}
+                          onSave={(v) => updateContact(c.id, { telefone: v })}
+                        />
+                        <WhatsAppButton telefone={c.telefone} />
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-slate-300" onClick={(e) => e.stopPropagation()}>
                       <InlineEditText
@@ -259,6 +282,20 @@ export default function Contatos() {
                       onSave={(v) => v && updateContact(c.id, { nome: v })}
                       className="font-bold text-white text-sm"
                     />
+                    {(c.origem || c.comissao) && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {c.origem && (
+                          <span className="text-[10px] text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded px-1.5 py-0.5">
+                            {c.origem}
+                          </span>
+                        )}
+                        {c.comissao && (
+                          <span className="text-[10px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 rounded px-1.5 py-0.5">
+                            Comissão
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {lead && (
                       <select
                         value={c.leadId}
@@ -295,6 +332,7 @@ export default function Contatos() {
                     value={c.telefone}
                     onSave={(v) => updateContact(c.id, { telefone: v })}
                   />
+                  <WhatsAppButton telefone={c.telefone} />
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Mail className="w-3 h-3 text-slate-400 shrink-0" />

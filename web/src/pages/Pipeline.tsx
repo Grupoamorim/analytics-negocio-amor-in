@@ -61,6 +61,7 @@ import {
 } from '@/types/crm'
 import { useToast } from '@/hooks/use-toast'
 import AIInsightsButton from '@/components/AIInsightsButton'
+import WhatsAppButton from '@/components/WhatsAppButton'
 import BotaoAnaliseIA from '@/components/BotaoAnaliseIA'
 import EmpresaFilterBar from '@/components/EmpresaFilterBar'
 import LastEditedBy from '@/components/LastEditedBy'
@@ -2210,6 +2211,7 @@ ${deal.notes ? `Notas registradas: """${deal.notes}"""` : ''}`}
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <WhatsAppButton telefone={c.telefone} size="w-3.5 h-3.5" className="p-1" />
                     {alertado ? (
                       <button
                         type="button"

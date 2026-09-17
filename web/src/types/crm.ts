@@ -517,6 +517,8 @@ export interface Contact {
   isPrimary?: boolean
   notes?: string
   naoRespondeCount?: number // quantas vezes marcaram que esse contato não respondeu (3 = volta a turma pra Prospecção)
+  origem?: string // de onde veio (slug da ação de captação/evento), quando veio de um formulário público
+  comissao?: boolean // marcou "faço parte da comissão" no formulário público
 }
 
 export type CallTranscript = Transcript
