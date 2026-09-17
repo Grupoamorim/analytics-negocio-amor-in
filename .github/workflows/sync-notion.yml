@@ -2,7 +2,9 @@ name: Sincronizacao Notion CRM
 
 on:
   schedule:
-    - cron: '0 * * * *'   # toda hora - dados de vendas/SDR sao inseridos manualmente o dia todo
+    - cron: '11 * * * *'   # toda hora, minuto 11 (nao ":00" - evita fila de pico do GitHub Actions,
+                            # mesmo motivo do offset em sync-fathom/sync-plaud) - vendas/SDR sao
+                            # inseridos manualmente o dia todo
   workflow_dispatch:
 
 jobs:

@@ -2,8 +2,25 @@ name: Sincronizacao Financeira SGE
 
 on:
   schedule:
-    - cron: '0 */12 * * *'   # a cada 12h (00:00 e 12:00 UTC = 21:00 e 09:00 em Brasilia)
+    # A cada 3h (era 12h ate 2026-09-17). O coletor sempre levou ~35min por execucao
+    # (delay proposital entre janelas pra nao estourar rate limit da API do SGE, nao
+    # tem relacao com o bug do timeout na trigger corrigido nessa mesma data) - 3h da
+    # boa folga sem sobreposicao e sem martelar a API do SGE com mais frequencia que
+    # o necessario pra um financeiro que muda algumas vezes por dia, nao em tempo real.
+    # Mesma cadencia ja usada em sync-funil.yml pra dado derivado do SGE.
+    # Minuto 41 (nao ":00") de proposito - cron em hora cheia disputa fila de pico do
+    # GitHub Actions e pode atrasar horas (foi o padrao observado nesse workflow) ou
+    # nem rodar (foi o que aconteceu com auditoria-diaria.yml, nunca disparou em ":00").
+    - cron: '41 */3 * * *'
   workflow_dispatch:
+
+concurrency:
+  # Evita dois coletores rodando ao mesmo tempo se uma execucao atrasar (GitHub Actions
+  # as vezes atrasa cron de repo com pouco trafego) e passar da hora da proxima - a que
+  # ja esta rodando termina normalmente, a nova fica na fila em vez de rodar em paralelo
+  # (cancel-in-progress: false = nao mata a que ja esta no meio do upsert).
+  group: sync-financeiro-sge
+  cancel-in-progress: false
 
 jobs:
   sync-sge:

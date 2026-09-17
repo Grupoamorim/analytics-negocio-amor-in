@@ -2,7 +2,8 @@ name: Estudo de Aprendizado por Curso/Faculdade
 
 on:
   schedule:
-    - cron: '0 6 * * 1'   # toda segunda-feira 06:00 UTC
+    - cron: '19 5 * * 1'   # toda segunda-feira ~05:19 UTC - minuto deslocado de proposito,
+                            # cron em hora cheia disputa fila de pico do GitHub Actions
   workflow_dispatch:
 
 jobs:

@@ -196,7 +196,7 @@ export default function AdministracaoGeral() {
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
             Receita, alunos fechados (adesões) e VGV são automáticos: puxam direto do SGE
-            (pagamentos e adesões reais), sincronizado sozinho a cada 3-12h. Só "Contratos
+            (pagamentos e adesões reais), sincronizado sozinho a cada 3h. Só "Contratos
             fechados" ainda depende da Data de Fechamento cadastrada em Turmas.
           </p>
         </div>

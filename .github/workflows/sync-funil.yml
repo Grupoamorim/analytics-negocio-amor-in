@@ -2,7 +2,8 @@ name: Deteccao Automatica de Turma Fechada (Auto-Win)
 
 on:
   schedule:
-    - cron: '0 */3 * * *'   # a cada 3h - substitui o botao manual "Sincronizar SGE"
+    - cron: '26 */3 * * *'   # a cada 3h, minuto 26 (nao ":00" - evita fila de pico do GitHub
+                              # Actions) - substitui o botao manual "Sincronizar SGE"
   workflow_dispatch:
 
 jobs:

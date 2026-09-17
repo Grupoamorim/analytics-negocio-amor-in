@@ -2,7 +2,8 @@ name: Conclusao Automatica de Turma + Turma Seguinte
 
 on:
   schedule:
-    - cron: '0 9 * * *'   # 1x por dia, 09:00 UTC (06:00 horario de Brasilia)
+    - cron: '34 8 * * *'   # 1x por dia, ~08:34 UTC (05:34 em Brasilia) - minuto deslocado de
+                            # proposito, cron em hora cheia disputa fila de pico do GitHub Actions
   workflow_dispatch:
 
 jobs:

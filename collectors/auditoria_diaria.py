@@ -36,9 +36,9 @@ LUCAS_EMAIL = "adm@lucasamorim.com.br"
 # tratada como crítico.
 TABELAS_RLS_CONHECIDAS_SEM_RISCO = {"metas", "notion_eventos", "sync_log"}
 
-# Sync do SGE roda a cada 12h (sync-financeiro.yml) — acima disso já é atraso
-# real (folga de 6h pra cobrir workflow lento/retry).
-LIMITE_ATRASO_SYNC_HORAS = 18
+# Sync do SGE roda a cada 3h (sync-financeiro.yml, era 12h até 2026-09-17) — acima
+# disso já é atraso real (folga de 2 execuções pra cobrir workflow lento/retry).
+LIMITE_ATRASO_SYNC_HORAS = 6
 
 
 def buscar_resend_key(sb):
@@ -119,7 +119,7 @@ def montar_email(r: dict) -> tuple[str, bool]:
         if h is None:
             avisos.append(f"{nome}: nunca sincronizado.")
         elif h > LIMITE_ATRASO_SYNC_HORAS:
-            avisos.append(f"{nome}: última atualização {fmt_horas(h)} (esperado a cada 12h) — possível falha no sync automático.")
+            avisos.append(f"{nome}: última atualização {fmt_horas(h)} (esperado a cada 3h) — possível falha no sync automático.")
         else:
             info.append(f"{nome}: ok, {fmt_horas(h)}.")
 

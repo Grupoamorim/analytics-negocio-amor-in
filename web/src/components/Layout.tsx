@@ -115,14 +115,14 @@ const PATHS_COM_FILTRO_RESPONSAVEL = new Set([
 ])
 
 /** Última sincronização do financeiro com o SGE, visível o tempo todo no topo — some sozinho
- * quando está em dia (< 18h), só chama atenção quando o sync automático parece ter parado. */
+ * quando está em dia (< 6h), só chama atenção quando o sync automático parece ter parado. */
 function IndicadorSync() {
   const { horasDesdeSync, atrasado, carregado } = useSyncStatus()
   if (!carregado || horasDesdeSync == null || !atrasado) return null
   const texto = horasDesdeSync < 24 ? `${horasDesdeSync.toFixed(0)}h` : `${Math.floor(horasDesdeSync / 24)}d`
   return (
     <span
-      title={`Última sincronização do SGE há ${texto} — normalmente roda a cada 12h. Pode ser um problema no workflow automático.`}
+      title={`Última sincronização do SGE há ${texto} — normalmente roda a cada 3h. Pode ser um problema no workflow automático.`}
       className="hidden lg:inline-flex items-center gap-1 text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded-full px-2 py-0.5"
     >
       <AlertTriangle className="w-3 h-3" /> Sync SGE há {texto}

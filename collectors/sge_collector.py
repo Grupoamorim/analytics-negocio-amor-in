@@ -13,6 +13,7 @@ Limites da API SGE (descobertos em producao):
 """
 
 import os
+import sys
 import base64
 import hashlib
 import json
@@ -24,6 +25,13 @@ from supabase import create_client, Client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("sge_api")
+
+# Falhas de upsert (ex: timeout na trigger de normalizacao) ficam aqui em vez de
+# só logadas e esquecidas - sem isso o script termina com exit 0 e o GitHub Actions
+# mostra "success" mesmo quando nenhum dado novo foi gravado (foi o que aconteceu
+# silenciosamente por 3 dias em 2026-09-14/17, ver memoria "Fix timeout na trigger
+# de sync SGE"). Populado por upsert()/upsert_fluxo(), checado no fim de main().
+ERROS_UPSERT: list[str] = []
 
 SGE_CNPJ     = os.getenv("SGE_CNPJ", "").strip()
 SGE_TOKEN    = os.getenv("SGE_TOKEN", "").strip()
@@ -497,6 +505,13 @@ def upsert(sb, tabela, dados, chave="codigo_sge"):
             total += len(res.data) if res.data else 0
         except Exception as e:
             log.error(f"  ERRO {tabela} lote {i}: {e}")
+            ERROS_UPSERT.append(f"{tabela} lote {i} ({len(lote)} registros): {e}")
+    if len(validos) > 0 and total == 0:
+        # Toda a tabela veio da API mas nada foi salvo - sinal forte de erro
+        # sistemico (ex: trigger de normalizacao estourando timeout), nao de
+        # "sem novidade", ja que teria pelo menos os registros ja existentes
+        # sendo re-upsertados.
+        ERROS_UPSERT.append(f"{tabela}: {len(validos)} registros recebidos da API mas 0 salvos")
     log.info(f"  OK {tabela}: {total} salvos")
     return total
 
@@ -516,6 +531,9 @@ def upsert_fluxo(sb, dados):
             total += len(res.data) if res.data else 0
         except Exception as e:
             log.error(f"  ERRO sge_fluxo_caixa: {e}")
+            ERROS_UPSERT.append(f"sge_fluxo_caixa lote {i} ({len(lote)} registros): {e}")
+    if len(validos) > 0 and total == 0:
+        ERROS_UPSERT.append(f"sge_fluxo_caixa: {len(validos)} registros recebidos da API mas 0 salvos")
     log.info(f"  OK sge_fluxo_caixa: {total} salvos")
     return total
 
@@ -592,20 +610,28 @@ def main():
         msg_final = str(e)
         log.error(f"ERRO GERAL: {e}")
 
-    finally:
-        duracao = time.time() - inicio
-        try:
-            sb.table("sync_log").insert({
-                "fonte": "sge_api",
-                "status": status_final,
-                "registros_atualizados": total,
-                "mensagem": msg_final,
-                "duracao_segundos": round(duracao, 2)
-            }).execute()
-        except Exception:
-            pass
-        log.info(f"\n{'OK' if status_final == 'sucesso' else 'ERRO'} {msg_final}")
-        log.info(f"Tempo total: {duracao:.1f}s")
+    if ERROS_UPSERT:
+        status_final = "erro"
+        msg_final = (msg_final + " | " if msg_final else "") + f"{len(ERROS_UPSERT)} erro(s) de upsert: " + " || ".join(ERROS_UPSERT[:5])
+
+    duracao = time.time() - inicio
+    try:
+        sb.table("sync_log").insert({
+            "fonte": "sge_api",
+            "status": status_final,
+            "registros_atualizados": total,
+            "mensagem": msg_final,
+            "duracao_segundos": round(duracao, 2)
+        }).execute()
+    except Exception:
+        pass
+    log.info(f"\n{'OK' if status_final == 'sucesso' else 'ERRO'} {msg_final}")
+    log.info(f"Tempo total: {duracao:.1f}s")
+
+    if status_final == "erro":
+        # Sai com erro de verdade - sem isso o GitHub Actions mostra "success"
+        # mesmo quando nada foi sincronizado (era exatamente o bug de 2026-09-17).
+        sys.exit(1)
 
 
 if __name__ == "__main__":

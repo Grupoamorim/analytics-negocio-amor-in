@@ -1,11 +1,14 @@
 // Indicador de "última sincronização" no cabeçalho — mesma ideia da auditoria diária por e-mail,
 // só que visível na hora pra qualquer usuário logado, sem precisar esperar o e-mail das 07h.
 // Usa sge_contas_receber como referência (é a tabela que mais recebe atualização, financeiro
-// puxado a cada 12h) — se ela está em dia, o resto do sync do SGE também está.
+// puxado a cada 3h) — se ela está em dia, o resto do sync do SGE também está.
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 
-const LIMITE_ATRASO_HORAS = 18
+// Sync automatico roda a cada 3h (sync-financeiro.yml) - 6h de limite da 2 execucoes
+// de folga antes de avisar, cobrindo um atraso ocasional de agendamento do GitHub
+// Actions sem disparar alarme falso.
+const LIMITE_ATRASO_HORAS = 6
 
 export function useSyncStatus() {
   const [ultimaSync, setUltimaSync] = useState<Date | null>(null)

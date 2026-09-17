@@ -2,7 +2,11 @@ name: Auditoria Diaria de Saude do Sistema
 
 on:
   schedule:
-    - cron: '0 10 * * *'   # 07:00 em Brasilia (UTC-3)
+    # Minuto deslocado (nao ":00") de proposito: cron exatamente em hora cheia disputa fila
+    # com todo mundo no GitHub Actions e pode atrasar horas ou nem rodar - foi exatamente o
+    # que aconteceu aqui, esse e-mail nunca disparou desde que foi criado em 2026-09-15
+    # porque cada execucao ficava na fila do "0 10 * * *" e o job nunca chegava a iniciar.
+    - cron: '48 9 * * *'   # ~07:48 em Brasilia (UTC-3), pouco depois do sync das 3h em 6h/9h
   workflow_dispatch:
 
 jobs:
