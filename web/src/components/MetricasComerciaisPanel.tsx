@@ -43,7 +43,7 @@ export default function MetricasComerciaisPanel({
   titulo?: string
   ajuda?: React.ReactNode
 }) {
-  const { deals, funilEventos } = useCRM()
+  const { deals, funilEventos, leads } = useCRM()
   const [episodios, setEpisodios] = useState<EpisodioSemResposta[]>([])
 
   useEffect(() => {
@@ -64,8 +64,8 @@ export default function MetricasComerciaisPanel({
   }, [])
 
   const m = useMemo(
-    () => calcularMetricasComerciais(deals, funilEventos, episodios),
-    [deals, funilEventos, episodios],
+    () => calcularMetricasComerciais(deals, funilEventos, episodios, leads),
+    [deals, funilEventos, episodios, leads],
   )
 
   const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v * 100)}%`)

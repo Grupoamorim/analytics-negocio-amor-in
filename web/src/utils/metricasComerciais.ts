@@ -1,7 +1,8 @@
 // Métricas comerciais do funil, calculadas dos dados que já existem:
 // deals (com stageHistory), funil_eventos e sem_resposta_episodios.
 // Usado no Dashboard, na Probabilidade e onde mais precisar de número comercial.
-import { FUNNEL_STAGES, daysBetween, type Deal, type FunilEvento } from '@/types/crm'
+import { FUNNEL_STAGES, daysBetween, type Deal, type FunilEvento, type Lead } from '@/types/crm'
+import { dataFechamento as dataFechamentoLead } from '@/utils/comercialMetrics'
 
 const ORDEM = FUNNEL_STAGES.map((s) => s.id) // ['stage-1'... 'stage-6']
 const idx = (stageId?: string) => (stageId ? ORDEM.indexOf(stageId) : -1)
@@ -40,8 +41,16 @@ export interface MetricasComerciais {
   }
 }
 
-/** Data em que a turma foi ganha (evento de desfecho, senão updatedAt). */
-function dataFechamento(deal: Deal, eventos: FunilEvento[]): string | null {
+/** Data em que a turma foi ganha — prioriza `turmas.fechamento_contrato` (calculado a partir da
+ * primeira assinatura/adesão real do aluno, ver sync_normalized_from_sge() no Supabase e
+ * comercialMetrics.ts:dataFechamento, 2026-09-17), caindo pro evento de desfecho do funil e por
+ * último updatedAt do deal só quando a turma ainda não tem esse dado real (turma sem nenhuma
+ * adesão/pagamento vinculado ainda). Sem essa prioridade, "prazo médio de fechamento" media a
+ * data em que alguém arrastou/editou o card no funil, não quando o aluno realmente assinou. */
+function dataFechamento(deal: Deal, eventos: FunilEvento[], leadById: Map<string, Lead>): string | null {
+  const lead = deal.leadId ? leadById.get(deal.leadId) : undefined
+  const real = lead ? dataFechamentoLead(lead) : null
+  if (real) return real
   const ev = eventos.find(
     (e) => e.tipo === 'desfecho' && e.outcome === 'ganho' && (e.dealId === deal.id || e.turmaId === deal.leadId),
   )
@@ -52,7 +61,9 @@ export function calcularMetricasComerciais(
   deals: Deal[],
   funilEventos: FunilEvento[],
   episodios: EpisodioSemResposta[] = [],
+  leads: Lead[] = [],
 ): MetricasComerciais {
+  const leadById = new Map(leads.map((l) => [l.id, l]))
   const ativas = deals.filter((d) => d.stageId !== 'stage-6' && !d.outcome)
   const ganhosArr = deals.filter((d) => d.outcome === 'ganho')
   const perdidosArr = deals.filter((d) => d.outcome === 'perdido')
@@ -60,7 +71,7 @@ export function calcularMetricasComerciais(
   // prazo médio entrada -> fechamento (ganho)
   const prazos: number[] = []
   for (const d of ganhosArr) {
-    const fim = dataFechamento(d, funilEventos)
+    const fim = dataFechamento(d, funilEventos, leadById)
     if (fim && d.createdAt) prazos.push(daysBetween(d.createdAt, fim))
   }
   const prazoMedio = prazos.length
