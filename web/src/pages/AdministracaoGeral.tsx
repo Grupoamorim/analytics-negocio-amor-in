@@ -55,16 +55,7 @@ export default function AdministracaoGeral() {
     [leads, selectedEmpresas],
   )
 
-  // Data de referência SÓ pra Inadimplência/Cobertura — são situação atual (o que venceu e não foi
-  // pago, o que vence nos próximos 30 dias), não período agregado como as metas abaixo. Por isso
-  // têm o próprio seletor de data, separado do PeriodoFiltroBar (esse sim de período).
-  const [dataInadimplencia, setDataInadimplencia] = useState(HOJE)
-
-  // dtIni/dtFim não afetam pontosDiarios (série completa, filtrada só por empresa) —
-  // usados aqui só pra satisfazer a assinatura do hook, igual ao restante do app. O
-  // recorte pro período escolhido no filtro acontece depois, dentro do calcularPace
-  // de cada PaceBand (via periodoOverride).
-  const { agregado, pontosDiarios } = useFinanceiroDashboard(HOJE, HOJE, selectedEmpresas, true, dataInadimplencia)
+  const { agregado, pontosDiarios } = useFinanceiroDashboard(f.dtIni, f.dtFim, selectedEmpresas)
   const { ultimoAte } = useCaixaSnapshots()
   const pontosReceita = useMemo(() => pontosDiarios('receita'), [pontosDiarios])
   // "Adesões" = "Alunos fechados" (mesmo dado, métrica única desde 2026-09-13 — antes existiam
@@ -165,14 +156,20 @@ export default function AdministracaoGeral() {
   const realizadoResultadoFiltro = calcularPace(0, f.dtIni, f.dtFim, pontosResultado).realizado
   const margemFiltro = realizadoReceitaFiltro > 0 ? (realizadoResultadoFiltro / realizadoReceitaFiltro) * 100 : null
 
-  // Inadimplência: mesma leitura do Financeiro/Painel Financeiro (parcelas vencidas e não pagas).
+  // Inadimplência: parcelas com vencimento dentro do período do filtro acima que já venceram e
+  // ainda não foram pagas — muda com o período escolhido em PeriodoFiltroBar (Mês/Trimestre/
+  // Semestre/Ano/Até Hoje), igual ao resto da página. % é sobre o faturado no período (pago +
+  // em aberto com vencimento nele) — taxa de inadimplência da "safra" do período, decisão do
+  // Lucas em 2026-09-17 (a alternativa óbvia, % do só-em-aberto no período, tende a 100% pra
+  // qualquer período já encerrado, porque quase tudo vencido-e-não-pago já está atrasado).
   const inadimplenciaPct =
-    agregado.aReceberEmAberto > 0 ? (agregado.inadimplencia / agregado.aReceberEmAberto) * 100 : 0
+    agregado.faturadoNoPeriodo > 0 ? (agregado.inadimplencia / agregado.faturadoNoPeriodo) * 100 : 0
 
   // Cobertura das contas (30 dias): pedido do Lucas no lugar do "ritmo R$/semana" — como as contas
   // dele são concentradas no início do mês (não um fluxo diário parelho), o que importa é se o
   // saldo em caixa dá conta do que vence nos próximos 30 dias, não um ritmo semanal de receita.
-  const ultimoSaldo = ultimoAte(dataInadimplencia)
+  // Sempre "a partir de hoje" (não do período do filtro) — é uma foto do momento, não histórica.
+  const ultimoSaldo = ultimoAte(HOJE)
   const cobertura30 =
     ultimoSaldo && agregado.aPagarProx30 > 0 ? (ultimoSaldo.valor / agregado.aPagarProx30) * 100 : null
 
@@ -229,46 +226,15 @@ export default function AdministracaoGeral() {
       />
 
       <div className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-white">
-              Situação de caixa {dataInadimplencia === HOJE ? 'hoje' : `em ${dataInadimplencia.split('-').reverse().join('/')}`}
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
-              Isso aqui é uma <strong className="text-slate-400">foto do momento</strong> (o que já venceu
-              e não foi pago, e o que vence nos próximos 30 dias a partir da data escolhida) —{' '}
-              <strong className="text-slate-400">não é o período</strong> do filtro das metas acima nem
-              abaixo, é sempre "a partir de uma data" pra frente/trás. Troque a data pra ver como estava
-              em outro dia, sem mexer no filtro de período.
-            </p>
-          </div>
-          <label className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
-            Ver como estava em
-            <input
-              type="date"
-              value={dataInadimplencia}
-              onChange={(e) => setDataInadimplencia(e.target.value || HOJE)}
-              className="bg-[#0a0f14] border border-white/10 rounded-lg px-2 py-1.5 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
-            />
-            {dataInadimplencia !== HOJE && (
-              <button
-                type="button"
-                onClick={() => setDataInadimplencia(HOJE)}
-                className="text-orange-400 hover:underline whitespace-nowrap"
-              >
-                voltar pra hoje
-              </button>
-            )}
-          </label>
-        </div>
+        <h3 className="text-sm font-semibold text-white">Situação de caixa</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <KpiCard
             label="Inadimplência"
             value={`R$ ${Math.round(agregado.inadimplencia).toLocaleString('pt-BR')}`}
             icon={AlertTriangle}
             tom={inadimplenciaPct > 10 ? 'vermelho' : inadimplenciaPct > 5 ? 'ambar' : 'verde'}
-            sub={`${inadimplenciaPct.toFixed(1)}% do total a receber em aberto`}
-            ajuda={`Parcelas que já tinham vencido até ${dataInadimplencia === HOJE ? 'hoje' : dataInadimplencia.split('-').reverse().join('/')} e ainda não foram pagas. Referência saudável para o setor: abaixo de 5–10% do total a receber.`}
+            sub={`${inadimplenciaPct.toFixed(1)}% do faturado — ${rotuloFiltro}`}
+            ajuda={`Parcelas com vencimento dentro do período escolhido no filtro acima (${rotuloFiltro}) que já venceram e ainda não foram pagas, comparadas com tudo que venceu no período (pago + em aberto) — a taxa de inadimplência da "safra" desse período. Muda o número trocando o período ali em cima (Mês, Trimestre, Semestre, Ano ou Até Hoje). Referência saudável para o setor: abaixo de 5–10% do faturado.`}
           />
           <KpiCard
             label="Cobertura das contas (30 dias)"
@@ -277,10 +243,10 @@ export default function AdministracaoGeral() {
             tom={cobertura30 === null ? 'neutro' : cobertura30 >= 100 ? 'verde' : cobertura30 >= 70 ? 'ambar' : 'vermelho'}
             sub={
               ultimoSaldo
-                ? `saldo ${Math.round(ultimoSaldo.valor).toLocaleString('pt-BR')} vs. contas a pagar ${Math.round(agregado.aPagarProx30).toLocaleString('pt-BR')}`
+                ? `saldo ${Math.round(ultimoSaldo.valor).toLocaleString('pt-BR')} vs. contas a pagar ${Math.round(agregado.aPagarProx30).toLocaleString('pt-BR')} — hoje`
                 : 'lance o saldo em caixa abaixo pra calcular'
             }
-            ajuda={`Último saldo em caixa lançado até ${dataInadimplencia === HOJE ? 'hoje' : dataInadimplencia.split('-').reverse().join('/')}, dividido pelas contas a pagar que vencem nos 30 dias seguintes. Como as contas costumam ser concentradas no início do mês, isso diz melhor se dá pra cobrir do que um ritmo médio por semana.`}
+            ajuda="Último saldo em caixa lançado até hoje, dividido pelas contas a pagar que vencem nos 30 dias seguintes a partir de hoje — sempre uma foto do momento atual, independente do período escolhido no filtro acima (diferente da Inadimplência ao lado). Como as contas costumam ser concentradas no início do mês, isso diz melhor se dá pra cobrir do que um ritmo médio por semana."
           />
         </div>
       </div>

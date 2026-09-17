@@ -48,6 +48,7 @@ export interface FinanceiroDashboardAgregado {
   contasPagas: number
   resultado: number
   inadimplencia: number
+  faturadoNoPeriodo: number
   aReceberEmAberto: number
   aPagarProx30: number
   adesoesQtd: number
@@ -65,11 +66,6 @@ export function useFinanceiroDashboard(
   dtFim: string,
   empresas: string[],
   ativo = true,
-  /** "Hoje" pra inadimplência/cobertura (situação atual — não é filtro de período, é uma data de
-   * referência) — default é o dia real de hoje. Passar uma data no passado responde "como estava
-   * a inadimplência/cobertura naquela data", em vez de recalcular como se o app estivesse rodando
-   * naquele dia (dado histórico continua o real, só a régua "venceu ou não" muda de referência). */
-  dataReferencia?: string,
 ) {
   const [pagamentos, setPagamentos] = useState<PagamentoRow[]>([])
   const [contasPagar, setContasPagar] = useState<ContaPagarRow[]>([])
@@ -124,13 +120,13 @@ export function useFinanceiroDashboard(
     const noPeriodo = (d: string | null, ini = dtIni, fim = dtFim) => !!d && d >= ini && d <= fim
     const ant = periodoAnoAnterior(dtIni, dtFim)
 
-    // Régua de "venceu ou não" pra inadimplência/cobertura — hoje de verdade por padrão, ou a data
-    // de referência escolhida (ver comentário no parâmetro dataReferencia acima).
-    const refHoje = dataReferencia || hoje()
+    // Régua de "venceu ou não" pra inadimplência/cobertura — sempre o dia real de hoje.
+    const refHoje = hoje()
 
     let recebido = 0
     let recebidoAnterior = 0
     let inadimplencia = 0
+    let faturadoNoPeriodo = 0
     let aReceberEmAberto = 0
     for (const p of pagamentos) {
       if (!daEmpresa(p.empresa)) continue
@@ -139,9 +135,19 @@ export function useFinanceiroDashboard(
         if (noPeriodo(p.data_pagamento, ant.ini, ant.fim))
           recebidoAnterior += Number(p.valor_pago || 0)
       } else {
-        const aberto = Number(p.valor || 0) - Number(p.valor_pago || 0)
-        aReceberEmAberto += aberto
-        if (p.data_vencimento && p.data_vencimento < refHoje) inadimplencia += aberto
+        // "a receber em aberto" continua todas as datas (snapshot de tudo que está contratado e
+        // não foi pago, não só o que vence dentro do período do filtro).
+        aReceberEmAberto += Number(p.valor || 0) - Number(p.valor_pago || 0)
+      }
+      // "faturadoNoPeriodo" (pago + em aberto, só o que venceu dentro do período do filtro) vira a
+      // base de uma taxa de inadimplência de "safra" — quanto do que venceu nesse período ainda
+      // está em aberto e vencido — em vez de comparar com o saldo aberto de qualquer época (o que
+      // faz a % beirar 100% pra qualquer período já encerrado).
+      if (noPeriodo(p.data_vencimento)) {
+        faturadoNoPeriodo += Number(p.valor || 0)
+        if (p.status !== 'pago' && p.data_vencimento && p.data_vencimento < refHoje) {
+          inadimplencia += Number(p.valor || 0) - Number(p.valor_pago || 0)
+        }
       }
     }
 
@@ -233,6 +239,7 @@ export function useFinanceiroDashboard(
       contasPagas,
       resultado: recebido - contasPagas,
       inadimplencia,
+      faturadoNoPeriodo,
       aReceberEmAberto,
       aPagarProx30,
       adesoesQtd,
@@ -244,7 +251,7 @@ export function useFinanceiroDashboard(
       adesoesMensal,
       receitaPorMarca,
     }
-  }, [pagamentos, contasPagar, adesoes, dtIni, dtFim, empresas, dataReferencia])
+  }, [pagamentos, contasPagar, adesoes, dtIni, dtFim, empresas])
 
   const daEmpresaFn = useMemo(
     () => (emp: string | null) => empresas.length === 0 || (!!emp && empresas.includes(emp)),

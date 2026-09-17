@@ -73,8 +73,10 @@ export default function PainelFinanceiro() {
     [a.adesoesMensal],
   )
 
+  // % sobre o faturado no período (pago + em aberto com vencimento nele) — taxa de inadimplência
+  // da "safra" do período, não do saldo total em aberto (esse não muda com o filtro de período).
   const inadimplenciaPct =
-    a.aReceberEmAberto > 0 ? (a.inadimplencia / a.aReceberEmAberto) * 100 : 0
+    a.faturadoNoPeriodo > 0 ? (a.inadimplencia / a.faturadoNoPeriodo) * 100 : 0
 
   const fluxoChart = useMemo(
     () =>
@@ -104,7 +106,7 @@ Analise o caixa do período abaixo (base caixa, comparado ao mesmo período do a
 
 Recebido no período: ${brl(a.recebido)} (variação vs ano passado: ${variacao(a.recebido, a.recebidoAnterior) === null ? 'sem comparativo' : `${variacao(a.recebido, a.recebidoAnterior)!.toFixed(1)}%`})
 Resultado do período: ${brl(a.resultado)} (recebido ${brlK(a.recebido)} − contas pagas ${brlK(a.contasPagas)})
-Inadimplência: ${brl(a.inadimplencia)} (${inadimplenciaPct.toFixed(1)}% do a receber em aberto)
+Inadimplência: ${brl(a.inadimplencia)} (${inadimplenciaPct.toFixed(1)}% do faturado no período)
 A receber em aberto: ${brl(a.aReceberEmAberto)}
 Contas a pagar nos próximos 30 dias: ${brl(a.aPagarProx30)}
 Adesões no período: ${a.adesoesQtd} (${brl(a.adesoesValor)}, ticket ${brl(a.adesoesTicket)})
@@ -160,8 +162,8 @@ Receita recebida por marca: ${a.receitaPorMarca.map((r) => `${r.marca}: ${brl(r.
               value={brl(a.inadimplencia)}
               icon={AlertTriangle}
               tom={inadimplenciaPct > 10 ? 'vermelho' : inadimplenciaPct > 5 ? 'ambar' : 'verde'}
-              sub={`${inadimplenciaPct.toFixed(1)}% do total a receber em aberto`}
-              ajuda="Parcelas com status 'atrasado' (venceram e não foram pagas). Referência saudável para o setor: abaixo de 5–10% do total a receber."
+              sub={`${inadimplenciaPct.toFixed(1)}% do faturado no período`}
+              ajuda="Parcelas com vencimento dentro do período do filtro que já venceram e não foram pagas, comparadas com tudo que venceu no período (pago + em aberto). Referência saudável para o setor: abaixo de 5–10% do faturado."
             />
             <KpiCard
               label="A receber em aberto"
