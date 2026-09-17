@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bot, Send, Loader2, User, Sparkles, Key, BookOpen, Check, X, Target, AlertTriangle } from 'lucide-react'
+import { Bot, Send, Loader2, User, Sparkles, Key, BookOpen, Check, X, Target, AlertTriangle, Plus, MessageSquare, Trash2 } from 'lucide-react'
 import { useCRM } from '@/context/CRMContext'
 import { useToast } from '@/hooks/use-toast'
 import { useFinanceiroDashboard } from '@/hooks/useFinanceiroDashboard'
@@ -30,11 +30,11 @@ Definições financeiras que você NUNCA pode confundir:
 - Nunca some ou trate valor de adesões como se fosse receita/faturamento do período — são conceitos diferentes (venda assinada vs. dinheiro que já entrou). Se alguém confundir isso na conversa, corrija educadamente.
 
 Seu jeito de trabalhar, sempre:
-1. Nunca responda só com uma recomendação seca. Faça pelo menos uma pergunta de volta pra entender o contexto completo antes de aconselhar às cegas.
+1. Pergunta objetiva (quantidade, contagem, valor, status, "quantos/quantas/qual/quando") = resposta direta e seca, sem preâmbulo ("Lucas, entendo...", "Excelente ponto..."), sem elogiar a pergunta, sem pergunta de volta se os DADOS REAIS abaixo já respondem — cheque a seção "Turmas cadastradas" pra qualquer pergunta sobre curso/faculdade/cidade/status de funil ANTES de dizer que falta dado. Reserve pergunta de volta e tom consultivo só pra decisão estratégica genuína (a resposta depende de um julgamento que só o Lucas pode fazer, não de um dado que já está nos DADOS REAIS).
 2. Questione decisões e trade-offs em vez de só concordar — se algo parecer arriscado, incompleto ou na contramão da melhor prática de mercado, diga isso claramente.
-3. Seja comunicativa: converse, não solte um relatório frio.
-4. Baseie-se SEMPRE nos dados reais fornecidos abaixo (metas, pace, ranking, marcos do Painel de Conquistas, conhecimento já registrado da empresa). Nunca invente número, nome, decisão ou fato que não esteja explicitamente ali — se faltar dado pra responder algo, diga que falta e pergunte pelo dado.
-5. ANTES de perguntar qualquer coisa a Lucas, primeiro cheque se a resposta já está nos dados reais fornecidos abaixo. Só pergunte o que genuinamente não está disponível ali — nunca pergunte algo que já dá pra responder sozinho lendo o que já foi passado.
+3. Seja objetiva. Nada de preâmbulo, nada de repetir a pergunta antes de responder, nada de fechar com um resumo do que você acabou de dizer.
+4. Baseie-se SEMPRE nos dados reais fornecidos abaixo (metas, pace, ranking, turmas/funil, marcos do Painel de Conquistas, conhecimento já registrado da empresa). Nunca invente número, nome, decisão ou fato que não esteja explicitamente ali — se faltar dado pra responder algo, diga que falta e pergunte pelo dado (isso sim vale perguntar).
+5. ANTES de dizer que falta dado ou perguntar qualquer coisa a Lucas, primeiro cheque TODAS as seções de DADOS REAIS abaixo, inclusive a lista de turmas — ela cobre curso, faculdade, cidade, empresa, ano de formatura e status do funil de cada turma cadastrada, é a fonte pra qualquer pergunta tipo "quantas turmas de X curso/faculdade ainda estão em aberto". Nunca peça pra Lucas ir checar o SGE ou outro sistema manualmente — se o dado não está nos DADOS REAIS abaixo, diga isso e pare, não devolva a pergunta pra ele ir buscar em outro lugar.
 6. Responda em português do Brasil.
 7. Convenção de trimestre do sistema: T1-T4. Se o usuário usar "Q1"-"Q4" (inglês), trate como sinônimo.
 
@@ -112,7 +112,17 @@ export default function ConsultorMetas() {
   const { visitas } = useEscolasVisitadas()
   const { registros: conhecimento, salvar: salvarConhecimento } = useConhecimentoEmpresa()
   const { marcos, salvar: salvarMarco, aplicarDecisao: aplicarDecisaoMarco } = useMetasMarcos()
-  const { mensagens, loading: carregandoHistorico, enviar } = useMetasChat()
+  const {
+    conversas,
+    conversaId,
+    mensagens,
+    loading: carregandoHistorico,
+    enviar,
+    novaConversa,
+    selecionarConversa,
+    excluirConversa,
+    excluirMensagem,
+  } = useMetasChat()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -127,6 +137,8 @@ export default function ConsultorMetas() {
   const [itemEmDiscussao, setItemEmDiscussao] = useState<ItemEmDiscussao | null>(null)
   const [novoPrazoDecisao, setNovoPrazoDecisao] = useState('')
   const [decidindoItem, setDecidindoItem] = useState(false)
+  const [listaConversasAberta, setListaConversasAberta] = useState(false)
+  const [apagandoMensagemId, setApagandoMensagemId] = useState<string | null>(null)
   const fimRef = useRef<HTMLDivElement>(null)
   const tempoPensando = useTempoDecorrido(enviando)
   const iniciouAutoEnvioRef = useRef(false)
@@ -185,7 +197,7 @@ export default function ConsultorMetas() {
     setInput('')
     try {
       const msgUsuario = await enviar('user', texto)
-      const snapshot = buildMetasSnapshot({ metas, pontosPorMetrica, ranking, conhecimento, marcos })
+      const snapshot = buildMetasSnapshot({ metas, pontosPorMetrica, ranking, conhecimento, marcos, leads, deals })
       const customPrompt = getCustomSystemPrompt()
       const systemInstruction = `${PERSONA}\n\nDADOS REAIS DA EMPRESA (atualizados agora):\n${snapshot}${
         customPrompt ? `\n\nINSTRUÇÕES ADICIONAIS DO ADMIN:\n${customPrompt}` : ''
@@ -197,6 +209,40 @@ export default function ConsultorMetas() {
       setErro(err?.message || 'Erro ao consultar o Gemini.')
     } finally {
       setEnviando(false)
+    }
+  }
+
+  function handleNovaConversa() {
+    novaConversa()
+    setListaConversasAberta(false)
+    setErro(null)
+  }
+
+  async function handleSelecionarConversa(id: string) {
+    await selecionarConversa(id)
+    setListaConversasAberta(false)
+    setErro(null)
+  }
+
+  async function handleExcluirConversa(id: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!window.confirm('Apagar essa conversa e todas as mensagens dela? Não tem como desfazer.')) return
+    try {
+      await excluirConversa(id)
+    } catch (err: any) {
+      toast({ title: 'Erro ao apagar conversa', description: err?.message, variant: 'destructive' })
+    }
+  }
+
+  async function handleExcluirMensagem(id: string) {
+    if (!window.confirm('Apagar essa mensagem?')) return
+    setApagandoMensagemId(id)
+    try {
+      await excluirMensagem(id)
+    } catch (err: any) {
+      toast({ title: 'Erro ao apagar mensagem', description: err?.message, variant: 'destructive' })
+    } finally {
+      setApagandoMensagemId(null)
     }
   }
 
@@ -362,16 +408,60 @@ ${transcricao}`
             <Bot className="w-6 h-6 text-orange-400" /> Consultor de Metas
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Chat só sobre metas e estratégia, sempre com os números reais de PACE por perto. Conversa
-            contínua e salva — não se perde ao recarregar.
+            Chat só sobre metas e estratégia, sempre com os números reais de PACE por perto. Cada
+            conversa fica salva — troque entre elas ou comece uma nova quando quiser.
           </p>
         </div>
-        <Link
-          to="/conhecimento-empresa"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded-lg px-3 py-2 hover:bg-orange-500/20 whitespace-nowrap"
-        >
-          <BookOpen className="w-3.5 h-3.5" /> Ver base de conhecimento
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setListaConversasAberta((v) => !v)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 hover:bg-white/[0.08] whitespace-nowrap"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Conversas ({conversas.length})
+            </button>
+            {listaConversasAberta && (
+              <div className="absolute right-0 mt-1 w-72 max-h-80 overflow-y-auto bg-[#111820] border border-white/[0.1] rounded-lg shadow-xl z-20 p-1.5">
+                {conversas.length === 0 && (
+                  <p className="text-[11px] text-slate-500 px-2 py-2">Nenhuma conversa guardada ainda.</p>
+                )}
+                {conversas.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => handleSelecionarConversa(c.id)}
+                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs cursor-pointer group ${
+                      c.id === conversaId ? 'bg-orange-500/15 text-orange-200' : 'text-slate-300 hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <span className="flex-1 truncate">{c.titulo}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleExcluirConversa(c.id, e)}
+                      className="shrink-0 text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100"
+                      title="Apagar conversa"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleNovaConversa}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-500 rounded-lg px-3 py-2 whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" /> Nova conversa
+          </button>
+          <Link
+            to="/conhecimento-empresa"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-300 bg-orange-500/10 border border-orange-500/25 rounded-lg px-3 py-2 hover:bg-orange-500/20 whitespace-nowrap"
+          >
+            <BookOpen className="w-3.5 h-3.5" /> Ver base de conhecimento
+          </Link>
+        </div>
       </div>
 
       <div className="bg-[#111820] border border-white/[0.06] rounded-xl flex flex-col h-[65vh] min-h-[420px]">
@@ -380,17 +470,28 @@ ${transcricao}`
             <p className="text-slate-500 text-xs">Carregando conversa...</p>
           ) : mensagens.length === 0 ? (
             <p className="text-slate-400 text-xs">
-              Comece a conversa — conte como está a empresa, uma decisão que está pensando em tomar, ou
-              pergunte sobre o ritmo das metas atuais.
+              {conversaId ? 'Nenhuma mensagem nessa conversa ainda.' : 'Nova conversa —'} conte como está a
+              empresa, uma decisão que está pensando em tomar, ou pergunte sobre o ritmo das metas atuais.
             </p>
           ) : null}
 
           {mensagens.map((m) => (
-            <div key={m.id} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={m.id} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
               {m.role === 'model' && (
                 <div className="w-6 h-6 rounded-full bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0 text-orange-400 mt-0.5">
                   <Bot className="w-3.5 h-3.5" />
                 </div>
+              )}
+              {m.role === 'model' && (
+                <button
+                  type="button"
+                  onClick={() => handleExcluirMensagem(m.id)}
+                  disabled={apagandoMensagemId === m.id}
+                  className="self-center text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                  title="Apagar mensagem"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
               )}
               <div
                 className={`max-w-[80%] rounded-xl px-3 py-2 whitespace-pre-wrap text-xs ${
@@ -399,6 +500,17 @@ ${transcricao}`
               >
                 {m.conteudo}
               </div>
+              {m.role === 'user' && (
+                <button
+                  type="button"
+                  onClick={() => handleExcluirMensagem(m.id)}
+                  disabled={apagandoMensagemId === m.id}
+                  className="self-center text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                  title="Apagar mensagem"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
               {m.role === 'user' && (
                 <div className="w-6 h-6 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0 text-slate-300 mt-0.5">
                   <User className="w-3.5 h-3.5" />

@@ -18,6 +18,41 @@ import {
 import type { LinhaRanking } from './comercialMetrics'
 import type { ConhecimentoEmpresa } from '@/hooks/useConhecimentoEmpresa'
 import { marcoEstaAtrasado, type MetaMarco } from '@/hooks/useMetasMarcos'
+import { FUNNEL_STAGES, type Deal, type Lead } from '@/types/crm'
+
+/** Nome do estágio atual de uma turma pro consultor conseguir responder "quantas turmas de X
+ * estão sem contato / em negociação / fechadas" sem precisar que o Lucas vá checar o SGE na mão —
+ * era exatamente isso que faltava e fazia a IA devolver a pergunta em vez de responder. */
+function estagioDaTurma(l: Lead, stageByLeadId: Map<string, string>): string {
+  if (l.concluida) return 'Formado (já passou do semestre de formatura)'
+  const st = (l.status || '').trim().toLowerCase()
+  if (st === 'convertido') return 'Convertido (fechado)'
+  if (st === 'perdido') return 'Perdido'
+  const stageId = stageByLeadId.get(l.id) || 'stage-1'
+  const stage = FUNNEL_STAGES.find((s) => s.id === stageId)
+  if (stageId === 'stage-1') return 'Prospecção (sem contato ainda)'
+  return stage ? stage.name : 'Em atendimento'
+}
+
+/** Lista compacta de turmas (curso/faculdade/cidade/empresa/ano/estágio) — é a base pra qualquer
+ * pergunta tipo "quantas turmas de Direito na FAINOR ainda estão pra fechar". Sem isso o consultor
+ * só via números agregados de PACE e nunca conseguia responder pergunta por curso/faculdade/cidade. */
+function buildTurmasSnapshot(leads: Lead[], deals: Deal[]): string {
+  const stageByLeadId = new Map<string, string>()
+  for (const d of deals) {
+    if (!d.leadId) continue
+    const atual = stageByLeadId.get(d.leadId)
+    if (!atual) stageByLeadId.set(d.leadId, d.stageId)
+  }
+  const linhas = leads
+    .slice()
+    .sort((a, b) => (a.curso || '').localeCompare(b.curso || '', 'pt-BR') || (a.faculdade || '').localeCompare(b.faculdade || '', 'pt-BR'))
+    .map(
+      (l) =>
+        `- ${l.curso || '(sem curso)'} | ${l.faculdade || '(sem faculdade)'} | ${l.cidade || '(sem cidade)'} | ${l.empresa || '(sem empresa)'} | ${l.anoFormatura || '(sem ano)'} | ${estagioDaTurma(l, stageByLeadId)}`,
+    )
+  return linhas.join('\n')
+}
 
 function fmt(v: number, unidade: 'R$' | 'un'): string {
   if (unidade === 'R$') return `R$ ${Math.round(v).toLocaleString('pt-BR')}`
@@ -30,12 +65,16 @@ export function buildMetasSnapshot({
   ranking,
   conhecimento,
   marcos = [],
+  leads = [],
+  deals = [],
 }: {
   metas: MetaNegocio[]
   pontosPorMetrica: Partial<Record<MetricaMeta, PontoDiario[]>>
   ranking: LinhaRanking[]
   conhecimento: ConhecimentoEmpresa[]
   marcos?: MetaMarco[]
+  leads?: Lead[]
+  deals?: Deal[]
 }): string {
   const hoje = new Date().toISOString().slice(0, 10)
   const ano = new Date().getFullYear()
@@ -106,6 +145,8 @@ export function buildMetasSnapshot({
       return `- "${m.titulo}" [${statusTxt}]${m.prazo ? ` — prazo ${m.prazo}` : ' — sem prazo'}: ${m.descricao}`
     })
 
+  const turmasSnapshot = buildTurmasSnapshot(leads, deals)
+
   return `## Metas e PACE (hoje: ${hoje})
 ${linhasMetas.join('\n') || 'Nenhuma meta cadastrada ainda.'}
 
@@ -114,6 +155,11 @@ ${linhasMetasPendentes.join('\n') || 'Nenhuma.'}
 
 ## Ranking de desempenho comercial (top 5 por turmas ganhas)
 ${linhasRanking.join('\n') || 'Sem dados de ranking.'}
+
+## Turmas cadastradas (mapa de mercado / funil completo, ${leads.length} turmas — formato: curso | faculdade | cidade | empresa | ano de formatura | estágio atual)
+Use esta lista pra QUALQUER pergunta sobre quantidade/status de turmas por curso, faculdade, cidade ou empresa — inclusive "quantas ainda faltam fechar", "quantas estão sem contato", "quantas estão em negociação". Conte as linhas que batem com o filtro pedido em vez de dizer que falta dado.
+Estágio de cada linha é um destes: "Prospecção (sem contato ainda)", "Qualificação/Contato", ou outro nome de fase do funil (todos = AINDA EM ABERTO/pra fechar) | "Convertido (fechado)" (já fechou) | "Perdido" (não vai fechar) | "Formado (já passou do semestre de formatura)" (não conta mais como oportunidade). "Quantas ainda estão em aberto/pra fechar/sem contato" SEMPRE exclui "Convertido (fechado)", "Perdido" e "Formado" — não conte essas junto, mesmo que a pergunta seja só "quantas turmas de X existem" sem especificar status (turma perdida/fechada/formada não é mais uma oportunidade em aberto).
+${turmasSnapshot || 'Nenhuma turma cadastrada ainda.'}
 
 ## Marcos e conquistas já registrados no Painel de Conquistas (não proponha de novo o que já está aqui)
 ${linhasMarcos.join('\n') || 'Nenhum marco cadastrado ainda.'}
