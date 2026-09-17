@@ -65,6 +65,11 @@ export function useFinanceiroDashboard(
   dtFim: string,
   empresas: string[],
   ativo = true,
+  /** "Hoje" pra inadimplência/cobertura (situação atual — não é filtro de período, é uma data de
+   * referência) — default é o dia real de hoje. Passar uma data no passado responde "como estava
+   * a inadimplência/cobertura naquela data", em vez de recalcular como se o app estivesse rodando
+   * naquele dia (dado histórico continua o real, só a régua "venceu ou não" muda de referência). */
+  dataReferencia?: string,
 ) {
   const [pagamentos, setPagamentos] = useState<PagamentoRow[]>([])
   const [contasPagar, setContasPagar] = useState<ContaPagarRow[]>([])
@@ -119,6 +124,10 @@ export function useFinanceiroDashboard(
     const noPeriodo = (d: string | null, ini = dtIni, fim = dtFim) => !!d && d >= ini && d <= fim
     const ant = periodoAnoAnterior(dtIni, dtFim)
 
+    // Régua de "venceu ou não" pra inadimplência/cobertura — hoje de verdade por padrão, ou a data
+    // de referência escolhida (ver comentário no parâmetro dataReferencia acima).
+    const refHoje = dataReferencia || hoje()
+
     let recebido = 0
     let recebidoAnterior = 0
     let inadimplencia = 0
@@ -132,14 +141,14 @@ export function useFinanceiroDashboard(
       } else {
         const aberto = Number(p.valor || 0) - Number(p.valor_pago || 0)
         aReceberEmAberto += aberto
-        if (p.status === 'atrasado') inadimplencia += aberto
+        if (p.data_vencimento && p.data_vencimento < refHoje) inadimplencia += aberto
       }
     }
 
     let contasPagas = 0
     let aPagarProx30 = 0
-    const h = hoje()
-    const em30 = new Date()
+    const h = refHoje
+    const em30 = new Date(`${refHoje}T00:00:00`)
     em30.setDate(em30.getDate() + 30)
     const lim30 = em30.toISOString().slice(0, 10)
     for (const c of contasPagar) {
@@ -235,7 +244,7 @@ export function useFinanceiroDashboard(
       adesoesMensal,
       receitaPorMarca,
     }
-  }, [pagamentos, contasPagar, adesoes, dtIni, dtFim, empresas])
+  }, [pagamentos, contasPagar, adesoes, dtIni, dtFim, empresas, dataReferencia])
 
   const daEmpresaFn = useMemo(
     () => (emp: string | null) => empresas.length === 0 || (!!emp && empresas.includes(emp)),
