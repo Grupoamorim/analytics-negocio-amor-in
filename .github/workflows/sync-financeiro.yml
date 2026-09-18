@@ -12,6 +12,14 @@ on:
     # GitHub Actions e pode atrasar horas (foi o padrao observado nesse workflow) ou
     # nem rodar (foi o que aconteceu com auditoria-diaria.yml, nunca disparou em ":00").
     - cron: '41 */3 * * *'
+    # Retry de backup, 1h15min depois de cada horario principal (2026-09-18): o schedule
+    # do GitHub Actions nao garante disparo - em repo com pouco trafego o evento pode
+    # simplesmente nao disparar num horario (nao é atraso, é o tick inteiro sumindo, sem
+    # fila/erro visivel) e so o proximo ciclo de 3h roda. Esse segundo cron cobre esse
+    # buraco: se o principal (H:41) rodou normal, esse aqui so re-sincroniza (idempotente,
+    # upsert por conteudo - nao duplica nada) e termina rapido por nao ter novidade; se o
+    # principal sumiu, esse vira o unico que roda naquele ciclo, em vez de esperar +3h.
+    - cron: '56 1,4,7,10,13,16,19,22 * * *'
   workflow_dispatch:
 
 concurrency:
