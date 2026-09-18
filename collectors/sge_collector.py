@@ -546,6 +546,20 @@ def upsert_fluxo(sb, dados):
     return total
 
 
+def sincronizar_normalizado(sb):
+    """Chama a reconciliacao normalizada (pagamentos, contas_pagar, clientes, turmas) UMA
+    vez, depois que todo o dado bruto do SGE ja foi salvo. Antes disparava via trigger a
+    cada lote de upsert (~25-35x por execucao) - ver migration
+    remove_triggers_excessivos_sync_normalized, 2026-09-18. Erro aqui vira ERROS_UPSERT
+    igual aos outros, pra nao passar batido como "sucesso" no GitHub Actions."""
+    try:
+        sb.rpc("sync_normalized_from_sge").execute()
+        log.info("  OK sync_normalized_from_sge")
+    except Exception as e:
+        log.error(f"  ERRO sync_normalized_from_sge: {e}")
+        ERROS_UPSERT.append(f"sync_normalized_from_sge: {e}")
+
+
 # ══════════════════════════════════════════════════════════════
 # PRINCIPAL
 # ══════════════════════════════════════════════════════════════
@@ -581,6 +595,8 @@ def main():
             pagar = coletar_contas_pagar()
             total += upsert(sb, "sge_contas_pagar", pagar)
 
+            sincronizar_normalizado(sb)
+
             msg_final = f"Backfill concluido: {total} registros (contas a receber + a pagar)"
         else:
             # 1. Contas bancarias (necessario antes do fluxo)
@@ -610,6 +626,13 @@ def main():
             # 7. Fluxo de caixa (6 meses atras + 6 meses a frente)
             fluxo = coletar_fluxo_caixa(codigos_conta)
             total += upsert_fluxo(sb, fluxo)
+
+            # 8. Reconciliacao normalizada (pagamentos, contas_pagar, clientes, turmas) —
+            # UMA vez só, aqui no fim, depois que todo o dado bruto do SGE já está salvo.
+            # Antes disparava via trigger a cada lote de upsert (~25-35x por execucao, ver
+            # migration remove_triggers_excessivos_sync_normalized, 2026-09-18) — cada
+            # disparo é uma chance de estourar o timeout de 30s sozinho.
+            sincronizar_normalizado(sb)
 
             msg_final = f"Concluido: {total} registros de 7 endpoints"
 
